@@ -58,6 +58,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 无线调试配对页：教程、服务发现、输码、结果；独立页面避免弹窗在前后台切换时丢失 -->
+        <activity
+            android:name=".PairingActivity"
+            android:exported="false"
+            android:label="@string/pairing_title"
+            android:windowSoftInputMode="adjustResize" />
+
         <activity
             android:name=".SettingsActivity"
             android:exported="false"

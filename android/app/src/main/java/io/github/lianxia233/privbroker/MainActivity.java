@@ -35,7 +35,6 @@ import java.util.function.Consumer;
 public final class MainActivity extends Activity {
     private static final int REQ_PICK = 1001;
     private static final int REQ_NOTIF = 1002;
-    private static final int REQ_NOTIF_PAIR = 1003;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
@@ -53,9 +52,6 @@ public final class MainActivity extends Activity {
     private String installLabel = "安装包";
     private String currentState = "UNAVAILABLE";
     private boolean syncingPrefs;
-    private boolean resumed;
-    private boolean awaitingPorts;
-    private String pendingCode;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,22 +103,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        resumed = true;
         refreshStatus();
-        // 用户可能刚去开发者选项点开了配对弹窗再切回来：端口已由探测单例缓存，
-        // 直接接手，不必重新搜索。
-        if (awaitingPorts) {
-            int port = MdnsProbe.get(this).pairingPort();
-            if (port > 0) {
-                onPorts(port, MdnsProbe.get(this).connectPort());
-            }
-        }
-    }
-
-    @Override
-    protected void onPause() {
-        resumed = false;
-        super.onPause();
     }
 
     @Override
@@ -133,10 +114,6 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        // 探测单例是静态的，必须主动断开回调，否则持有已销毁的 Activity。
-        MdnsProbe.get(this).clearCallback();
-        awaitingPorts = false;
-        pendingCode = null;
         BrokerBridge.setProgressListener(null);
         worker.shutdownNow();
         super.onDestroy();
@@ -189,234 +166,13 @@ public final class MainActivity extends Activity {
         syncingPrefs = false;
     }
 
+    /** 打开独立的无线调试配对页：教程、发现、输码、结果都在那一页完成。 */
     private void onPermissionAction() {
-        showWirelessGuide();
-    }
-
-    /** 无电脑自助启用：开发者选项 → 无线调试 → 应用内输入 6 位配对码。 */
-    private void showWirelessGuide() {
-        boolean miui = RomCompat.isMiuiLike();
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.wireless_guide_title)
-                .setMessage(miui ? R.string.wireless_guide_text_miui : R.string.wireless_guide_text)
-                .setPositiveButton(R.string.wireless_guide_start,
-                        (d, w) -> beginWirelessPairing())
-                .setNeutralButton(R.string.wireless_guide_open_settings,
-                        (d, w) -> openWirelessAdbSettings())
-                .setNegativeButton(R.string.dialog_cancel, null)
-                .show();
-    }
-
-    private void beginWirelessPairing() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            toast(getString(R.string.wireless_requires_android11));
-            return;
-        }
-        // 应用内输码不依赖通知，先把发现跑起来，再顺带申请通知权限。
-        startPairingFlow();
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIF_PAIR);
-        }
-    }
-
-    /**
-     * 应用内输码主路径：先起 mDNS 探测，配对服务就绪后直接弹输入框。
-     * 通知栏输码并行尝试，但整条配对能力不依赖通知是否显示——
-     * 部分 ROM 会静默隐藏前台服务通知，通知不能作为唯一入口。
-     */
-    private void startPairingFlow() {
-        awaitingPorts = true;
-        pendingCode = null;
-        MdnsProbe.get(this).restart(this::onPorts);
-        toast(getString(R.string.wireless_searching_toast));
-        startPairingNotificationService();
-        scheduleSearchHint();
-    }
-
-    private void startPairingNotificationService() {
-        if (!notificationsEnabled()) {
-            return;
-        }
         try {
-            startForegroundService(WirelessPairingService.startIntent(this));
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /**
-     * 用户很可能还没点「使用配对码配对设备」，此时配对服务根本不存在，
-     * mDNS 永远等不到。等 10 秒仍无端口就主动把话说明白，而不是干等。
-     */
-    private void scheduleSearchHint() {
-        new android.os.Handler(getMainLooper()).postDelayed(() -> {
-            if (!awaitingPorts || isFinishing() || isDestroyed() || !resumed) {
-                return;
-            }
-            new AlertDialog.Builder(this)
-                    .setTitle(R.string.wireless_no_service_title)
-                    .setMessage(R.string.wireless_no_service_text)
-                    .setPositiveButton(R.string.wireless_guide_open_settings,
-                            (d, w) -> openWirelessAdbSettings())
-                    .setNegativeButton(R.string.dialog_cancel, null)
-                    .show();
-        }, 10000);
-    }
-
-    private void onPorts(int pairingPort, int connectPort) {
-        // 用户去系统设置开配对弹窗期间本 Activity 在后台，此时不能弹窗：
-        // 端口留在 MdnsProbe 单例里，回到前台由 onResume 接手。
-        if (isFinishing() || isDestroyed() || !resumed) {
-            return;
-        }
-        if (awaitingPorts && pairingPort > 0) {
-            awaitingPorts = false;
-            showCodeInput(pairingPort, connectPort);
-            return;
-        }
-        // 已输码但在等连接服务端口：端口就绪后自动继续
-        if (pendingCode != null && pairingPort > 0 && connectPort > 0) {
-            String code = pendingCode;
-            pendingCode = null;
-            runWirelessPairing(code, pairingPort, connectPort);
-        }
-    }
-
-    private void showCodeInput(int pairingPort, int connectPort) {
-        final android.widget.EditText input = new android.widget.EditText(this);
-        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        input.setHint(R.string.wireless_code_hint);
-        input.setTextSize(20);
-        int pad = (int) (20 * getResources().getDisplayMetrics().density);
-        input.setPadding(pad, pad / 2, pad, pad / 2);
-
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.wireless_input_dialog_title)
-                .setMessage(RomCompat.miuiNotificationStyleLikely()
-                        ? R.string.wireless_input_dialog_text_miui
-                        : R.string.wireless_input_dialog_text)
-                .setView(input)
-                .setPositiveButton(R.string.wireless_input_do, (d, w) -> {
-                    String code = input.getText().toString().trim();
-                    if (!code.matches("\\d{6}")) {
-                        toast(getString(R.string.wireless_bad_code));
-                        return;
-                    }
-                    if (connectPort <= 0) {
-                        pendingCode = code;
-                        toast(getString(R.string.wireless_waiting_connect));
-                        return;
-                    }
-                    runWirelessPairing(code, pairingPort, connectPort);
-                })
-                .setNeutralButton(R.string.wireless_guide_open_settings,
-                        (d, w) -> openWirelessAdbSettings())
-                .setNegativeButton(R.string.dialog_cancel, null)
-                .show();
-    }
-
-    private void runWirelessPairing(final String code, final int pairingPort, final int connectPort) {
-        toast(getString(R.string.wireless_pairing_now));
-        worker.execute(() -> {
-            String raw;
-            try {
-                JSONObject args = new JSONObject();
-                args.put("host", "127.0.0.1");
-                args.put("pairingPort", pairingPort);
-                args.put("pairingCode", code);
-                args.put("connectPort", connectPort);
-                args.put("keyPath", new java.io.File(getFilesDir(), "adb_key.pk8").getAbsolutePath());
-                args.put("apkPath", getApplicationInfo().sourceDir);
-                args.put("nativeLibDir", getApplicationInfo().nativeLibraryDir);
-                args.put("token", BrokerClient.token(this));
-                args.put("client", BrokerClient.clientId(this));
-                args.put("endpoint", BrokerClient.endpoint(this));
-                WirelessCore.ensureLoaded(null);
-                raw = WirelessCore.run(args.toString());
-            } catch (Throwable t) {
-                raw = "{\"ok\":false,\"stage\":\"bridge\",\"code\":\"BRIDGE\",\"message\":"
-                        + JSONObject.quote(String.valueOf(t)) + "}";
-            }
-            final String f = raw;
-            ui(() -> onPairingResult(f));
-        });
-    }
-
-    private void onPairingResult(String raw) {
-        boolean ok = false;
-        String stage = "";
-        String code = "";
-        String message = "";
-        try {
-            JSONObject j = new JSONObject(raw);
-            ok = j.optBoolean("ok", false);
-            stage = j.optString("stage", "");
-            code = j.optString("code", "");
-            message = j.optString("message", "");
+            startActivity(new Intent(this, PairingActivity.class));
         } catch (Throwable t) {
-            message = getString(R.string.wireless_result_parse_failed);
-        }
-        if (ok) {
-            awaitingPorts = false;
-            pendingCode = null;
-            MdnsProbe.get(this).stop();
-            new AlertDialog.Builder(this)
-                    .setTitle(R.string.wireless_success_title)
-                    .setMessage(R.string.wireless_success_dialog_text)
-                    .setPositiveButton(android.R.string.ok, (d, w) -> refreshStatus())
-                    .show();
-            return;
-        }
-        String detail = stage.isEmpty() ? message : (stage + ": " + message);
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.wireless_fail_title)
-                .setMessage(getString(R.string.wireless_fail_dialog_text, code, detail))
-                .setPositiveButton(R.string.wireless_retry, (d, w) -> startPairingFlow())
-                .setNegativeButton(R.string.dialog_cancel, null)
-                .show();
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_NOTIF_PAIR) {
-            if (grantResults.length > 0
-                    && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                // 发现流程已经在跑，这里只补上通知通道，不重复启动
-                startPairingNotificationService();
-            } else {
-                // 通知被拒不影响应用内输码，只提示一次
-                toast(getString(R.string.wireless_notif_denied_still_ok));
-            }
-        }
-    }
-
-    private boolean notificationsEnabled() {
-        NotificationManager nm = getSystemService(NotificationManager.class);
-        if (nm == null || !nm.areNotificationsEnabled()) {
-            return false;
-        }
-        NotificationChannel channel = nm.getNotificationChannel(WirelessPairingService.CHANNEL);
-        return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
-    }
-
-    private void openWirelessAdbSettings() {
-        Intent intent = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        intent.putExtra(":settings:fragment_args_key", "toggle_adb_wireless");
-        try {
-            startActivity(intent);
-        } catch (ActivityNotFoundException e) {
-            toast(getString(R.string.wireless_settings_unavailable));
-        }
-    }
-
-    private void openNotificationSettings() {
-        Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-        intent.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
-        try {
-            startActivity(intent);
-        } catch (ActivityNotFoundException ignored) {
+            Log.w("MainActivity", "open pairing page failed", t);
+            toast(getString(R.string.pairing_open_failed));
         }
     }
 

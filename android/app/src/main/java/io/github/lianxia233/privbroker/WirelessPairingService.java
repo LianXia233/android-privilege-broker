@@ -21,26 +21,36 @@ import android.util.Log;
 
 import org.json.JSONObject;
 
-import java.io.File;
-
 /**
- * 无电脑自助启用链路。
+ * 通知栏输码通道（可选）。
  *
- * 前台服务持续发现无线调试的配对服务与连接服务，通知栏直接输入 6 位配对码，
- * 交由 native 层完成 TLS 握手、SPAKE2 配对、公钥注册、ADB TLS 连接与 shell 启动。
- * 全程不需要电脑、不需要 USB，也不需要任何第三方特权框架。
+ * 主路径是 PairingActivity 里的页面内输码，本服务只在用户显式点「改用通知栏输码」
+ * 时启动。形态与同类成熟实现一致：清单里只声明 shortService，发现配对服务端口后
+ * 才发带 RemoteInput 的通知，回复以前台服务方式投递，端口放进 Intent 以免服务
+ * 被回收后丢失。
+ *
+ * 配对与启动同样解耦：配对阶段只依赖配对服务端口；成功后系统可能重分配连接
+ * 服务端口，需重新发现该端口再执行连接与 shell 启动。
+ *
+ * 一类必须防御的系统行为：调用 startForegroundService 后若服务没能在 5 秒内
+ * 成功 startForeground，系统会抛 ForegroundServiceDidNotStartInTimeException
+ * 直接终止应用进程。因此 startForeground 一旦失败，立即 notify + stopSelf，
+ * 让系统撤销这次前台启动；绝不允许服务带着未完成的 FGS 启动挂着。
  */
 public final class WirelessPairingService extends Service {
 
     public static final String CHANNEL = "wireless_pairing";
 
     private static final String TAG = "WirelessPairing";
-
     private static final String ACTION_START = "start";
     private static final String ACTION_STOP = "stop";
     private static final String ACTION_REPLY = "reply";
     private static final String KEY_CODE = "pairing_code";
+    private static final String KEY_PORT = "pairing_port";
     private static final int NOTIFICATION_ID = 42;
+    private static final int REQ_REPLY = 1;
+    private static final int REQ_STOP = 2;
+    private static final long CONNECT_WAIT_MS = 8000L;
 
     private static final String SERVICE_PAIRING = "_adb-tls-pairing._tcp";
     private static final String SERVICE_CONNECT = "_adb-tls-connect._tcp";
@@ -54,9 +64,11 @@ public final class WirelessPairingService extends Service {
 
     private volatile int pairingPort = -1;
     private volatile int connectPort = -1;
-    private volatile String pendingCode;
+    private volatile int lastConnectPort = -1;
     private volatile boolean working;
+    private volatile boolean awaitingConnect;
     private volatile boolean discovering;
+    private volatile Runnable connectTimeout;
 
     public static Intent startIntent(Context c) {
         return new Intent(c, WirelessPairingService.class).setAction(ACTION_START);
@@ -79,47 +91,82 @@ public final class WirelessPairingService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
+        Notification notification;
         if (ACTION_STOP.equals(action)) {
             stopAll();
             return START_NOT_STICKY;
-        }
-        if (ACTION_REPLY.equals(action)) {
+        } else if (ACTION_REPLY.equals(action)) {
             Bundle results = RemoteInput.getResultsFromIntent(intent);
             CharSequence code = results == null ? null : results.getCharSequence(KEY_CODE);
-            if (code != null) {
-                onCode(code.toString().trim());
-            }
+            int port = intent.getIntExtra(KEY_PORT, -1);
+            notification = code == null ? onStart() : onInput(code.toString().trim(), port);
+        } else if (ACTION_START.equals(action) || action == null) {
+            notification = onStart();
+        } else {
+            return START_NOT_STICKY;
         }
-        startInForeground(currentNotification());
-        toast(getString(R.string.wireless_service_running));
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !discovering && nsd != null) {
-            startDiscovery();
+
+        if (notification != null) {
+            startInForeground(notification);
         }
         return START_REDELIVER_INTENT;
     }
 
-    private void toast(String text) {
+    /**
+     * 传 FOREGROUND_SERVICE_TYPE_MANIFEST 由系统按清单取值；失败立即收尾，
+     * 避免系统在 5 秒后因 FGS 未启动而终止进程。
+     */
+    private void startInForeground(Notification n) {
         try {
-            android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_LONG).show();
-        } catch (Throwable ignored) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST);
+            } else {
+                startForeground(NOTIFICATION_ID, n);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "startForeground failed, falling back to plain notification", t);
+            try {
+                notifications.notify(NOTIFICATION_ID, n);
+            } catch (Throwable ignored) {
+            }
+            // 关键：撤销这次前台启动，否则系统会以超时异常杀掉整个进程
+            try {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } catch (Throwable ignored) {
+            }
+            stopSelf();
         }
     }
 
-    @Override
-    public void onDestroy() {
-        stopDiscovery();
-        super.onDestroy();
+    private Notification onStart() {
+        startDiscovery();
+        return currentNotification();
     }
 
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
+    private Notification onInput(String code, int port) {
+        if (working || awaitingConnect) {
+            return workingNotification();
+        }
+        if (!code.matches("\\d{6}")) {
+            return inputNotification(getString(R.string.wireless_bad_code));
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return inputNotification(getString(R.string.wireless_requires_android11));
+        }
+        if (port > 0) {
+            pairingPort = port;
+        }
+        if (pairingPort <= 0) {
+            return inputNotification(getString(R.string.wireless_no_pairing_service));
+        }
+        startPair(code);
+        return workingNotification();
     }
 
     // ------------------------------------------------------------ mDNS 发现
 
     private void startDiscovery() {
-        if (discovering) {
+        if (discovering || nsd == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             return;
         }
         discovering = true;
@@ -127,11 +174,13 @@ public final class WirelessPairingService extends Service {
         connectListener = makeListener(false);
         try {
             nsd.discoverServices(SERVICE_PAIRING, NsdManager.PROTOCOL_DNS_SD, pairingListener);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Log.w(TAG, "discover pairing service failed", t);
         }
         try {
             nsd.discoverServices(SERVICE_CONNECT, NsdManager.PROTOCOL_DNS_SD, connectListener);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Log.w(TAG, "discover connect service failed", t);
         }
     }
 
@@ -170,6 +219,9 @@ public final class WirelessPairingService extends Service {
 
             @Override
             public void onServiceLost(NsdServiceInfo serviceInfo) {
+                if (!isPairing) {
+                    main.post(() -> connectPort = -1);
+                }
             }
 
             @Override
@@ -183,10 +235,9 @@ public final class WirelessPairingService extends Service {
                         @Override
                         public void onServiceResolved(final NsdServiceInfo resolved) {
                             final int port = resolved.getPort();
-                            if (port <= 0) {
-                                return;
+                            if (MdnsFilter.accept(resolved, port)) {
+                                main.post(() -> onPort(isPairing, port));
                             }
-                            main.post(() -> onPort(isPairing, port));
                         }
                     });
                 } catch (Throwable ignored) {
@@ -200,120 +251,106 @@ public final class WirelessPairingService extends Service {
             pairingPort = port;
         } else {
             connectPort = port;
+            lastConnectPort = port;
         }
-        if (!working) {
-            if (isPairing && pendingCode == null) {
-                pushNotification();
-            }
-            if (!isPairing && pendingCode != null) {
-                String code = pendingCode;
-                pendingCode = null;
-                startWork(code);
-            }
+        // 配对成功后等的是「新的」连接服务端口
+        if (awaitingConnect && !isPairing && port > 0 && !working) {
+            startConnect(port);
+            return;
+        }
+        if (working || awaitingConnect) {
+            return;
+        }
+        // 与参考实现一致：只有发现配对服务后才推送可输码的通知
+        if (isPairing) {
+            push(inputNotification(null));
         }
     }
 
-    // ------------------------------------------------------------ 配对与启动
+    // ------------------------------------------------------------ 阶段一：配对
 
-    private void onCode(String code) {
-        if (working) {
-            return;
-        }
-        if (code.length() != 6 || !code.matches("\\d{6}")) {
-            showInputHint(getString(R.string.wireless_bad_code));
-            return;
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            showInputHint(getString(R.string.wireless_requires_android11));
-            return;
-        }
-        if (pairingPort <= 0) {
-            showInputHint(getString(R.string.wireless_no_pairing_service));
-            return;
-        }
-        if (connectPort <= 0) {
-            pendingCode = code;
-            pushNotification();
-            return;
-        }
-        startWork(code);
-    }
-
-    private void startWork(final String code) {
+    private void startPair(final String code) {
         working = true;
-        pendingCode = null;
-        pushNotification();
+        push(workingNotification());
         final int pPort = pairingPort;
-        final int cPort = connectPort;
         new Thread(() -> {
-            String result;
-            try {
-                JSONObject args = new JSONObject();
-                args.put("host", "127.0.0.1");
-                args.put("pairingPort", pPort);
-                args.put("pairingCode", code);
-                args.put("connectPort", cPort);
-                args.put("keyPath", new File(getFilesDir(), "adb_key.pk8").getAbsolutePath());
-                args.put("apkPath", getApplicationInfo().sourceDir);
-                args.put("nativeLibDir", getApplicationInfo().nativeLibraryDir);
-                args.put("token", BrokerClient.token(WirelessPairingService.this));
-                args.put("client", BrokerClient.clientId(WirelessPairingService.this));
-                args.put("endpoint", BrokerClient.endpoint(WirelessPairingService.this));
-                WirelessCore.ensureLoaded(null);
-                result = WirelessCore.run(args.toString());
-            } catch (Throwable t) {
-                result = errorJson("BRIDGE", "本地调用失败: " + t.getMessage());
-            }
-            showResult(result);
+            String raw = WirelessRunner.pair(WirelessPairingService.this, pPort, code);
+            main.post(() -> handleResult(raw));
         }, "wireless-pairing").start();
     }
 
-    private static String errorJson(String code, String message) {
-        try {
-            return new JSONObject()
-                    .put("ok", false)
-                    .put("stage", "config")
-                    .put("code", code)
-                    .put("message", message)
-                    .toString();
-        } catch (Throwable t) {
-            return "{\"ok\":false,\"stage\":\"config\",\"code\":\"PROTOCOL\",\"message\":\"结果异常\"}";
+    // ------------------------------------------------------------ 阶段二：连接并启动
+
+    private void startConnect(final int port) {
+        cancelConnectTimeout();
+        awaitingConnect = false;
+        working = true;
+        push(workingNotification());
+        new Thread(() -> {
+            String raw = WirelessRunner.start(WirelessPairingService.this, port);
+            main.post(() -> handleResult(raw));
+        }, "wireless-start").start();
+    }
+
+    private void scheduleConnectTimeout() {
+        cancelConnectTimeout();
+        connectTimeout = () -> {
+            if (!awaitingConnect) {
+                return;
+            }
+            if (lastConnectPort > 0) {
+                startConnect(lastConnectPort);
+            } else {
+                awaitingConnect = false;
+                push(inputNotification(getString(R.string.wireless_no_connect_service)));
+            }
+        };
+        main.postDelayed(connectTimeout, CONNECT_WAIT_MS);
+    }
+
+    private void cancelConnectTimeout() {
+        if (connectTimeout != null) {
+            main.removeCallbacks(connectTimeout);
+            connectTimeout = null;
         }
     }
 
-    private void showResult(String resultJson) {
-        main.post(() -> {
-            boolean ok = false;
-            String code = "";
-            String message = "";
-            String stage = "";
-            try {
-                JSONObject j = new JSONObject(resultJson);
-                ok = j.optBoolean("ok", false);
-                code = j.optString("code", "");
-                message = j.optString("message", "");
-                stage = j.optString("stage", "");
-            } catch (Throwable ignored) {
-                message = "结果解析失败";
-            }
-            working = false;
-            if (ok) {
-                Notification done = new Notification.Builder(this, CHANNEL)
-                        .setSmallIcon(R.drawable.ic_action_broker)
-                        .setContentTitle(getString(R.string.wireless_success_title))
-                        .setContentText(getString(R.string.wireless_success_text))
-                        .setStyle(new Notification.BigTextStyle()
-                                .bigText(getString(R.string.wireless_success_text)))
-                        .setAutoCancel(true)
-                        .build();
-                notifications.notify(NOTIFICATION_ID, done);
-                stopDiscovery();
-                stopForeground(STOP_FOREGROUND_REMOVE);
-                stopSelf();
-            } else {
-                showInputHint(friendlyMessage(code, message, stage));
-            }
-        });
+    private void handleResult(String resultJson) {
+        boolean ok = false;
+        String code = "";
+        String message = "";
+        String stage = "";
+        try {
+            JSONObject j = new JSONObject(resultJson);
+            ok = j.optBoolean("ok", false);
+            code = j.optString("code", "");
+            message = j.optString("message", "");
+            stage = j.optString("stage", "");
+        } catch (Throwable ignored) {
+            message = "结果解析失败";
+        }
+        working = false;
+
+        if (ok && WirelessRunner.STAGE_PAIRED.equals(stage)) {
+            // 配对成功：丢弃旧连接端口，等待系统重新广播连接服务
+            awaitingConnect = true;
+            connectPort = -1;
+            push(waitingNotification());
+            scheduleConnectTimeout();
+            return;
+        }
+        if (ok && WirelessRunner.STAGE_STARTED.equals(stage)) {
+            stopDiscovery();
+            notifyResult(getString(R.string.wireless_success_title),
+                    getString(R.string.wireless_success_text), true);
+            stopForeground(STOP_FOREGROUND_REMOVE);
+            cancelConnectTimeout();
+            stopSelf();
+            return;
+        }
+        awaitingConnect = false;
+        cancelConnectTimeout();
+        push(inputNotification(friendlyMessage(code, message, stage)));
     }
 
     private String friendlyMessage(String code, String message, String stage) {
@@ -326,8 +363,6 @@ public final class WirelessPairingService extends Service {
                 return getString(R.string.wireless_tls_error);
             case "KEY":
                 return getString(R.string.wireless_key_error) + message;
-            case "PROTOCOL":
-                return (stage.isEmpty() ? "" : stage + ": ") + message;
             default:
                 return (stage.isEmpty() ? "" : stage + ": ") + message;
         }
@@ -335,53 +370,32 @@ public final class WirelessPairingService extends Service {
 
     // ------------------------------------------------------------ 通知
 
-    private void startInForeground(Notification n) {
-        // 清单里只声明 shortService：它没有运行时前置条件（不需要网络/设备类权限，
-        // 也不受 Android 14 对 connectedDevice 的严格校验影响），是无电脑配对场景
-        // 唯一稳定的类型。代价是约 3 分钟时限，超时由 onTimeout 收尾。
-        // 传 FOREGROUND_SERVICE_TYPE_MANIFEST 让系统按清单取值，避免手动拼类型时
-        // 在部分 ROM 上被判为非法组合而抛异常。
+    private void push(Notification n) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST);
-            } else {
-                startForeground(NOTIFICATION_ID, n);
-            }
-        } catch (Throwable t) {
-            Log.w(TAG, "startForeground failed", t);
-            // 兜底：以普通通知呈现。不保证显示，但绝不因 startForeground 失败而崩溃。
             notifications.notify(NOTIFICATION_ID, n);
+        } catch (Throwable t) {
+            Log.w(TAG, "notify failed", t);
         }
     }
 
-    @Override
-    public void onTimeout(int startId) {
-        // shortService 约 3 分钟时限到达：停止服务并提示重新发起，避免系统 ANR。
-        stopDiscovery();
-        Notification timeout = new Notification.Builder(this, CHANNEL)
+    private void notifyResult(String title, String text, boolean autoCancel) {
+        Notification n = new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_action_broker)
-                .setContentTitle(getString(R.string.wireless_timeout_title))
-                .setContentText(getString(R.string.wireless_timeout_text))
-                .setAutoCancel(true)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setAutoCancel(autoCancel)
                 .build();
-        notifications.notify(NOTIFICATION_ID + 1, timeout);
-        stopForeground(STOP_FOREGROUND_REMOVE);
-        stopSelf();
-    }
-
-    private void pushNotification() {
-        notifications.notify(NOTIFICATION_ID, currentNotification());
-    }
-
-    private void showInputHint(String text) {
-        notifications.notify(NOTIFICATION_ID, inputNotification(text));
+        try {
+            notifications.notify(NOTIFICATION_ID + 1, n);
+        } catch (Throwable ignored) {
+        }
     }
 
     private Notification currentNotification() {
         if (working) {
             return workingNotification();
         }
-        if (pendingCode != null) {
+        if (awaitingConnect) {
             return waitingNotification();
         }
         if (pairingPort > 0) {
@@ -398,7 +412,7 @@ public final class WirelessPairingService extends Service {
 
     private Notification searchingNotification() {
         Intent stop = new Intent(this, WirelessPairingService.class).setAction(ACTION_STOP);
-        PendingIntent pi = PendingIntent.getService(this, 3, stop, immutableFlags());
+        PendingIntent pi = PendingIntent.getService(this, REQ_STOP, stop, immutableFlags());
         return base()
                 .setContentTitle(getString(R.string.wireless_searching_title))
                 .setContentText(getString(R.string.wireless_searching_text))
@@ -411,14 +425,15 @@ public final class WirelessPairingService extends Service {
         RemoteInput remoteInput = new RemoteInput.Builder(KEY_CODE)
                 .setLabel(getString(R.string.wireless_code_hint))
                 .build();
-        Intent reply = new Intent(this, WirelessPairingService.class).setAction(ACTION_REPLY);
+        // 端口放进 Intent：服务可能在用户输码前被回收，重启后仍能拿到端口
+        Intent reply = new Intent(this, WirelessPairingService.class)
+                .setAction(ACTION_REPLY)
+                .putExtra(KEY_PORT, pairingPort);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             flags |= PendingIntent.FLAG_MUTABLE;
         }
-        // 与参考行为一致：输码时服务可能已被系统回收，须以前台服务方式重新拉起；
-        // 通知栏点击属于用户交互，满足前台服务启动豁免。
-        PendingIntent pi = PendingIntent.getForegroundService(this, 1, reply, flags);
+        PendingIntent pi = PendingIntent.getForegroundService(this, REQ_REPLY, reply, flags);
         String text = hint == null ? getString(R.string.wireless_input_text) : hint;
         return base()
                 .setContentTitle(getString(R.string.wireless_input_title))
@@ -451,10 +466,38 @@ public final class WirelessPairingService extends Service {
         return PendingIntent.FLAG_UPDATE_CURRENT;
     }
 
-    private void stopAll() {
+    @Override
+    public void onTimeout(int startId) {
+        // shortService 约 3 分钟时限到达：只收尾，不再发常驻提示
         stopDiscovery();
         stopForeground(STOP_FOREGROUND_REMOVE);
-        notifications.cancel(NOTIFICATION_ID);
+        cancelConnectTimeout();
+        stopSelf();
+    }
+
+    @Override
+    public void onDestroy() {
+        cancelConnectTimeout();
+        stopDiscovery();
+        super.onDestroy();
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    private void stopAll() {
+        cancelConnectTimeout();
+        stopDiscovery();
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } catch (Throwable ignored) {
+        }
+        try {
+            notifications.cancel(NOTIFICATION_ID);
+        } catch (Throwable ignored) {
+        }
         stopSelf();
     }
 }
