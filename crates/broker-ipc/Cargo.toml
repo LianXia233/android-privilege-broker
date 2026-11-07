@@ -1,0 +1,14 @@
+[package]
+name = "broker-ipc"
+description = "独立 IPC 传输：长度前缀帧读写、Unix/TCP 监听抽象、连接生命周期"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+broker-protocol = { workspace = true }
+libc = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

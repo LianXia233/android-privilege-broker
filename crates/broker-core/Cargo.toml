@@ -1,0 +1,16 @@
+[package]
+name = "broker-core"
+description = "Tokio Broker 服务主体：连接调度、握手状态机、会话管理与请求分发"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+broker-protocol = { workspace = true }
+broker-auth = { workspace = true }
+broker-exec = { workspace = true }
+broker-process = { workspace = true }
+broker-ipc = { workspace = true }
+broker-android = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }

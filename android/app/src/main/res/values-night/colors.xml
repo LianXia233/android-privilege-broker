@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="window_bg">#0B1122</color>
+    <color name="card_bg">#151D36</color>
+    <color name="card_soft">#111A31</color>
+    <color name="input_bg">#101830</color>
+    <color name="chip_bg">#1B2647</color>
+    <color name="log_bg">#0E1730</color>
+
+    <color name="text_primary">#EAF0FF</color>
+    <color name="text_secondary">#9EAAD0</color>
+    <color name="text_muted">#7280A6</color>
+    <color name="divider">#243154</color>
+    <color name="ripple_soft">#33FFFFFF</color>
+
+    <color name="badge_ok_bg">#12382F</color>
+    <color name="badge_warn_bg">#3A2B13</color>
+</resources>

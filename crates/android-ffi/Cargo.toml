@@ -1,0 +1,17 @@
+[package]
+name = "installer-android-ffi"
+description = "JNI bridge: exposes installer-core to the thin Android Java glue layer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "installer_core"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[dependencies]
+installer-core = { path = "../core" }
+serde_json = { workspace = true }
+jni = { workspace = true }

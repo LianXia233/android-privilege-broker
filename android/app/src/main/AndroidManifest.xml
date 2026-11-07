@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Android 13+ 通知权限 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 可选：指示器与跨应用授权卡片使用不打断前台的系统悬浮窗；可经自主通道以 shell 身份开启 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- 授权询问期间的短时前台服务，保证入口 Activity 立即 finish 后弹窗仍能弹出 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 设置页与卸载选择器需要完整枚举系统应用列表（非 Google Play 分发，仅本机授权用途） -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- Android 11+ 包可见性 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="application/octet-stream" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".App"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme"
+        tools:targetApi="36">
+
+        <!-- 用户主动点图标时才会出现的主界面 -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings_title" />
+
+        <activity
+            android:name=".LogActivity"
+            android:exported="false"
+            android:label="@string/logs_title" />
+
+        <activity
+            android:name=".AboutActivity"
+            android:exported="false"
+            android:label="@string/about_title" />
+
+        <!-- 卸载应用选择器：读取应用列表，按系统 / 用户应用筛选 -->
+        <activity
+            android:name=".AppPickerActivity"
+            android:exported="false"
+            android:label="@string/picker_title"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!--
+          外部安装 / 卸载意图的入口。
+
+          使用 @style/SilentEntryTheme（1x1 透明、不聚焦、不可触摸窗口）：
+          普通调用仍在 onCreate 内立即 finish，framework 因 mFinished=true
+          跳过 wm.addView，实际零窗口；等待结果的调用方则驻留约 1400ms，
+          把 onActivityResult 推过调用方在 MIUI 上 1 秒的结果忽略窗口，
+          使其走 checkInstallationResult + finish 的正常分支，
+          不再留下永久停留的透明中转 Activity。
+
+          之所以不能继续用 Theme.NoDisplay：该主题要求 onResume 前 finish，
+          无法驻留到 1 秒之后。窗口属性由 SilentInstallActivity.configureWindow()
+          在 onCreate / onResume / addView 后三次申明，防止 ROM 重算覆盖。
+
+          刻意不声明 android:noHistory：需要正常的 ActivityRecord 承载并回传结果；
+          配合 excludeFromRecents / autoRemoveFromRecents 不会留在最近任务。
+
+          intent-filter 分五组：
+           1) MIME 组：覆盖文件管理器 / 下载管理器 / 系统「打开方式」给出的
+              APK 与归档类 MIME（带 content/file scheme）。末尾用 */* 兜底，
+              覆盖社交软件把安装包标成未知类型的情况；入口会二次过滤。
+           1b) 分享组：ACTION_SEND / SEND_MULTIPLE 不带 scheme，mimeType 用
+              */* 兜底，保证系统分享菜单、第三方应用分享与多文件分享都能拉起；
+           2) 扩展名组：显式声明全部支持格式（apk / apks / xapk / akp /
+              apkm / apkmx / zip，含大写），适配只给路径不给 MIME 的调用方；
+           2b) 备份后缀组：社交软件转发时追加的 .1 / .2 / .bin 等后缀
+              （xxx.apk.1），单独成组便于审计；
+           3) 卸载意图组：DELETE / UNINSTALL_PACKAGE + package scheme。
+          入口 parseIntent() 会对非安装包做扩展名校验，不会误处理其它类型。
+        -->
+        <activity
+            android:name=".SilentInstallActivity"
+            android:exported="true"
+            android:theme="@style/SilentEntryTheme"
+            android:excludeFromRecents="true"
+            android:autoRemoveFromRecents="true"
+            android:taskAffinity=""
+            android:windowSoftInputMode="stateAlwaysHidden|adjustNothing">
+
+            <!-- 1) MIME 组：文件管理器 / 下载管理器的「打开方式」与安装意图 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.INSTALL_PACKAGE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/vnd.android.package-archive" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="application/x-apk" />
+                <data android:mimeType="application/vnd.apkm" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+            <!--
+              1b) 系统分享组：刻意不声明 scheme。ACTION_SEND / SEND_MULTIPLE
+              的 URI 在 EXTRA_STREAM 里，Intent 自身通常没有 data；若在此 filter
+              声明 scheme，会因「Intent 无 data」而不匹配，系统分享菜单里就
+              看不到本应用。mimeType 用 */* 兜底，覆盖把安装包标成未知类型的
+              文件管理器；入口 parseIntent() 会按扩展名过滤，不会误处理其它文件。
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.android.package-archive" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+            <!-- 2) 扩展名组：声明全部支持格式，大小写各一份 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.INSTALL_PACKAGE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.apk" />
+                <data android:pathPattern=".*\\.apks" />
+                <data android:pathPattern=".*\\.xapk" />
+                <data android:pathPattern=".*\\.akp" />
+                <data android:pathPattern=".*\\.apkm" />
+                <data android:pathPattern=".*\\.apkmx" />
+                <data android:pathPattern=".*\\.zip" />
+                <data android:pathPattern=".*\\.APK" />
+                <data android:pathPattern=".*\\.APKS" />
+                <data android:pathPattern=".*\\.XAPK" />
+                <data android:pathPattern=".*\\.AKP" />
+                <data android:pathPattern=".*\\.APKM" />
+                <data android:pathPattern=".*\\.APKMX" />
+                <data android:pathPattern=".*\\.ZIP" />
+            </intent-filter>
+
+            <!--
+              2b) 备份后缀组：微信 / QQ 等社交软件转发 APK 时会把文件名改成
+              xxx.apk.1（也有 .2、多位数字、.bin、.download 等），文件本体
+              仍是原 APK。Android pathPattern 不支持字符组，这里用 .* 通配
+              后缀内容，并为最常见的 .apk.1 显式列一条大小写声明。
+              入口 FileNames.normalize() 会剥掉这层后缀，Rust kind_of()
+              同样做了归一化，xxx.apk.1 因此按单个 APK 正常安装。
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.INSTALL_PACKAGE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.apk\\.1" />
+                <data android:pathPattern=".*\\.APK\\.1" />
+                <data android:pathPattern=".*\\.apk\\..*" />
+                <data android:pathPattern=".*\\.APK\\..*" />
+                <data android:pathPattern=".*\\.apks\\..*" />
+                <data android:pathPattern=".*\\.APKS\\..*" />
+                <data android:pathPattern=".*\\.xapk\\..*" />
+                <data android:pathPattern=".*\\.XAPK\\..*" />
+                <data android:pathPattern=".*\\.akp\\..*" />
+                <data android:pathPattern=".*\\.AKP\\..*" />
+                <data android:pathPattern=".*\\.apkm\\..*" />
+                <data android:pathPattern=".*\\.APKM\\..*" />
+                <data android:pathPattern=".*\\.apkmx\\..*" />
+                <data android:pathPattern=".*\\.APKMX\\..*" />
+                <data android:pathPattern=".*\\.zip\\..*" />
+                <data android:pathPattern=".*\\.ZIP\\..*" />
+            </intent-filter>
+
+            <!-- 3) 卸载意图 -->
+            <intent-filter>
+                <action android:name="android.intent.action.DELETE" />
+                <action android:name="android.intent.action.UNINSTALL_PACKAGE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          通知点击后的授权页。刻意使用普通不透明主题（AppTheme），而不是 Dialog 主题：
+          Dialog 窗口在部分 ROM 上会被铺成整屏半透明背板，表现为「一层遮罩弹窗、
+          屏幕点不动」。普通页面有自己的不透明窗口，不存在任何浮层。
+          它是跨应用悬浮卡片（AuthPrompt）拿不到悬浮窗权限时的兜底路径。
+        -->
+        <activity
+            android:name=".CallerAuthActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"
+            android:excludeFromRecents="true" />
+
+        <!--
+          授权询问期间的短时前台服务：只负责「保活 + 通知」，不画任何界面。
+          外部调用拉起 SilentInstallActivity 后入口会立即 finish，进程随即
+          降为 cached；悬浮卡片需要异步申请 SYSTEM_ALERT_WINDOW 再 addView，
+          国产 ROM 上常表现为「弹窗根本没弹出来」。前台服务把进程钉在前台
+          优先级，卡片才能稳定浮在当前应用之上。用户决策或 90 秒超时后
+          立即 stopForeground + stopSelf，通知同步移除，不做任何常驻。
+        -->
+        <service
+            android:name=".AuthForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="shortService"
+            android:stopWithTask="true" />
+
+        <!-- 自家只读安装包容器：切断外部 content:// 临时授权的生命周期依赖 -->
+        <provider
+            android:name=".StagedProvider"
+            android:authorities="${applicationId}.staged"
+            android:exported="false"
+            android:grantUriPermissions="true"
+            android:multiprocess="false" />
+
+    </application>
+</manifest>

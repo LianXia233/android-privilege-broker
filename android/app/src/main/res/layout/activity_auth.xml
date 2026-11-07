@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  授权页：普通、不透明、全屏页面的 Activity。
+
+  刻意不再使用 Dialog 主题。Dialog 的窗口在部分 ROM 上会被铺成整屏半透明背板，
+  表现为「一层遮罩弹窗、屏幕点不动」；而普通页面拥有自己的不透明窗口与明确背景，
+  不存在任何浮层，也不会让前台应用看起来被蒙了一层。
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/window_bg"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <LinearLayout
+            android:id="@+id/authRoot"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:elevation="8dp"
+            android:padding="20dp">
+
+            <TextView
+                android:id="@+id/authTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/auth_dialog_title"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
+
+            <TextView
+                android:id="@+id/authMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/text_secondary"
+                android:layout_marginTop="12dp" />
+
+            <TextView
+                android:id="@+id/authCaller"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:singleLine="true"
+                android:ellipsize="middle"
+                android:textColor="@color/text_muted"
+                android:layout_marginTop="8dp" />
+
+            <CheckBox
+                android:id="@+id/authRemember"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="40dp"
+                android:text="@string/auth_remember"
+                android:textSize="13sp"
+                android:textColor="@color/text_primary"
+                android:layout_marginTop="10dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="10dp">
+
+                <Button
+                    android:id="@+id/btnDeny"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="@string/auth_deny"
+                    android:textSize="14sp"
+                    android:textAllCaps="false"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:stateListAnimator="@null"
+                    android:background="@drawable/btn_secondary"
+                    android:textColor="@color/text_primary" />
+
+                <Space
+                    android:layout_width="10dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/btnAllow"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="@string/auth_allow"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="false"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:stateListAnimator="@null"
+                    android:background="@drawable/btn_primary"
+                    android:textColor="@color/on_brand" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:text="@string/auth_page_hint"
+            android:textColor="@color/text_muted"
+            android:textSize="11sp" />
+    </LinearLayout>
+</ScrollView>

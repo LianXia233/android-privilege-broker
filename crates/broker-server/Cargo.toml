@@ -1,0 +1,17 @@
+[package]
+name = "broker-server"
+description = "由用户经无线调试显式启动的独立特权进程入口"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "privilege-broker"
+path = "src/main.rs"
+
+[dependencies]
+broker-protocol = { workspace = true }
+broker-core = { workspace = true }
+broker-android = { workspace = true }
+broker-ipc = { workspace = true }
+tokio = { workspace = true }

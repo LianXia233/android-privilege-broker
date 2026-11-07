@@ -1,0 +1,543 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  设置页布局（v1.0.4）
+
+  关键约束：整个页面是 match_parent 的 LinearLayout，没有外层 ScrollView，
+  因此「上方固定内容」与「应用列表」直接争夺同一份垂直空间。1.0.3 把 5 个
+  开关、说明、分隔线全部展开放在列表上方，合计约 400dp，把 weight=1 的
+  应用列表卡片压到只剩一行，列表实际上无法滚动使用。
+
+  修复：把「授权与安装行为」与「高级白名单」都做成默认折叠的两行卡片，
+  应用列表卡片 weight=1 占满剩余空间，内部 ListView 再 weight=1，
+  并给列表容器加 minHeight 兜底，保证任何屏幕下至少能显示数条并可滚动。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:fitsSystemWindows="true"
+    android:background="@color/window_bg"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <!-- 标题栏 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/settings_back"
+            android:padding="8dp"
+            android:src="@drawable/ic_action_back"
+            android:tint="@color/text_primary" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginStart="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_title"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_subtitle"
+                android:textSize="11sp"
+                android:textColor="@color/text_secondary"
+                android:layout_marginTop="1dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 「授权与安装行为」：默认折叠，只占两行，把高度让给应用列表 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_card"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:layout_marginTop="8dp">
+
+        <LinearLayout
+            android:id="@+id/optionsToggle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:minHeight="36dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:attr/selectableItemBackground">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/auth_card_title"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/auth_card_desc"
+                    android:textSize="10sp"
+                    android:singleLine="true"
+                    android:ellipsize="end"
+                    android:textColor="@color/text_muted"
+                    android:layout_marginTop="1dp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/optionsArrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/advanced_expand"
+                android:textSize="12sp"
+                android:textColor="@color/brand_primary"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvAuthWarn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/auth_disabled_warn"
+            android:textSize="11sp"
+            android:textColor="@color/danger"
+            android:visibility="gone"
+            android:layout_marginTop="4dp" />
+
+        <!-- 折叠体：5 个安装行为开关 -->
+        <LinearLayout
+            android:id="@+id/optionsBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card_soft"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:visibility="gone"
+            android:layout_marginTop="6dp">
+
+            <Switch
+                android:id="@+id/swCallerAuth"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="38dp"
+                android:text="@string/opt_caller_auth"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"
+                android:checked="true" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/opt_caller_auth_hint"
+                android:textSize="11sp"
+                android:textColor="@color/text_muted"
+                android:layout_marginStart="4dp"
+                android:layout_marginBottom="6dp" />
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+            <Switch
+                android:id="@+id/swFloating"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="38dp"
+                android:text="@string/opt_floating"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"
+                android:checked="true" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/opt_floating_hint"
+                android:textSize="11sp"
+                android:textColor="@color/text_muted"
+                android:layout_marginStart="4dp"
+                android:layout_marginBottom="6dp" />
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+            <Switch
+                android:id="@+id/swFallback"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="38dp"
+                android:text="@string/opt_fallback"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"
+                android:checked="true" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/opt_fallback_hint"
+                android:textSize="11sp"
+                android:textColor="@color/text_muted"
+                android:layout_marginStart="4dp"
+                android:layout_marginBottom="6dp" />
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+            <Switch
+                android:id="@+id/swAutoOpen"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="38dp"
+                android:text="@string/opt_auto_open"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"
+                android:checked="false" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/opt_auto_open_hint"
+                android:textSize="11sp"
+                android:textColor="@color/text_muted"
+                android:layout_marginStart="4dp"
+                android:layout_marginBottom="6dp" />
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+
+            <Switch
+                android:id="@+id/swConfirm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="38dp"
+                android:text="@string/opt_confirm"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"
+                android:checked="false" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/opt_confirm_hint"
+                android:textSize="11sp"
+                android:textColor="@color/text_muted"
+                android:layout_marginStart="4dp"
+                android:layout_marginBottom="2dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 应用授权列表：页面主体，占据全部剩余空间 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:background="@drawable/bg_card"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="8dp"
+        android:layout_marginTop="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/auth_app_list_title"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
+
+            <TextView
+                android:id="@+id/tvAllowedCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textColor="@color/brand_primary" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/auth_app_list_hint"
+            android:textSize="10sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textColor="@color/text_secondary"
+            android:layout_marginTop="1dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
+
+            <Button
+                android:id="@+id/btnFilterAll"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:text="@string/filter_all"
+                android:textSize="12sp"
+                android:textAllCaps="false"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null"
+                android:background="@drawable/bg_filter_active"
+                android:textColor="@color/on_brand" />
+
+            <Space android:layout_width="6dp" android:layout_height="1dp" />
+
+            <Button
+                android:id="@+id/btnFilterUser"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:text="@string/filter_user"
+                android:textSize="12sp"
+                android:textAllCaps="false"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null"
+                android:background="@drawable/btn_secondary"
+                android:textColor="@color/text_primary" />
+
+            <Space android:layout_width="6dp" android:layout_height="1dp" />
+
+            <Button
+                android:id="@+id/btnFilterSystem"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:text="@string/filter_system"
+                android:textSize="12sp"
+                android:textAllCaps="false"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null"
+                android:background="@drawable/btn_secondary"
+                android:textColor="@color/text_primary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
+
+            <EditText
+                android:id="@+id/etSearch"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1"
+                android:hint="@string/auth_search_hint"
+                android:textSize="12sp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_muted"
+                android:background="@drawable/bg_input"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:inputType="text"
+                android:imeOptions="actionDone"
+                android:importantForAutofill="no" />
+
+            <Space android:layout_width="6dp" android:layout_height="1dp" />
+
+            <Button
+                android:id="@+id/btnRevokeAll"
+                android:layout_width="78dp"
+                android:layout_height="38dp"
+                android:text="@string/auth_revoke_all"
+                android:textSize="12sp"
+                android:textAllCaps="false"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null"
+                android:background="@drawable/btn_secondary"
+                android:textColor="@color/text_primary" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/auth_system_tip"
+            android:textSize="10sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textColor="@color/text_muted"
+            android:layout_marginTop="4dp" />
+
+        <!-- minHeight 是兜底：即使极小屏幕或字体放大导致上方内容变高，
+             列表也至少保留可显示数条的高度，而不是被压成一条缝 -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:minHeight="180dp"
+            android:layout_marginTop="4dp">
+
+            <ListView
+                android:id="@+id/appList"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:divider="@null"
+                android:dividerHeight="0dp"
+                android:scrollbars="none"
+                android:fastScrollEnabled="true"
+                android:choiceMode="none" />
+
+            <TextView
+                android:id="@+id/appEmpty"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="@string/auth_loading"
+                android:textSize="12sp"
+                android:textColor="@color/text_muted" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- 高级：免确认包名白名单，默认折叠 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_card"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:layout_marginTop="8dp">
+
+        <LinearLayout
+            android:id="@+id/advancedToggle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:minHeight="32dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:attr/selectableItemBackground">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/advanced_title"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
+
+            <TextView
+                android:id="@+id/advancedArrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/advanced_expand"
+                android:textSize="12sp"
+                android:textColor="@color/brand_primary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/advancedBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginTop="6dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/etPackage"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_weight="1"
+                    android:hint="@string/allow_hint"
+                    android:textSize="13sp"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_muted"
+                    android:background="@drawable/bg_input"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:inputType="text"
+                    android:importantForAutofill="no" />
+
+                <Space android:layout_width="8dp" android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/btnAdd"
+                    android:layout_width="68dp"
+                    android:layout_height="42dp"
+                    android:text="@string/allow_add"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="false"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:stateListAnimator="@null"
+                    android:background="@drawable/btn_primary"
+                    android:textColor="@color/on_brand" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnClear"
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:text="@string/allow_clear"
+                android:textSize="13sp"
+                android:textAllCaps="false"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@null"
+                android:background="@drawable/btn_secondary"
+                android:textColor="@color/text_primary"
+                android:layout_marginTop="8dp" />
+
+            <LinearLayout
+                android:id="@+id/list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

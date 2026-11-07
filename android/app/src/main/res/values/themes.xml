@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/brand_primary</item>
+        <item name="android:colorAccent">@color/brand_accent</item>
+        <item name="android:colorControlActivated">@color/brand_primary</item>
+        <item name="android:colorControlNormal">@color/brand_primary</item>
+        <item name="android:windowBackground">@color/window_bg</item>
+        <item name="android:statusBarColor">@color/brand_primary</item>
+        <item name="android:navigationBarColor">@color/window_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+
+    <!--
+      等待结果的调用方专用的「不可感知短窗口」主题。
+
+      背景：Mihon/Tachiyomi 的 ExtensionInstallActivity 在 MIUI 上会忽略
+      1 秒内到达的 onActivityResult，并只靠后续 onStart() 兜底 finish；
+      零窗口安装器 2ms 内结束，让它永远等不到那次 onStart，透明窗口便
+      永久停在栈顶。因此入口需要在结果回传前驻留约 1.4 秒，而
+      Theme.NoDisplay 要求 onResume 前 finish，不能驻留 —— 只能换主题。
+
+      这里刻意不用 floating，也不带 dim：floating + translucent 在 MIUI 上
+      会被铺成整屏半透明背板。窗口尺寸、flags 与系统栏颜色由
+      SilentInstallActivity.configureWindow() 在代码里进一步压到 1x1、
+      NOT_FOCUSABLE、NOT_TOUCHABLE、全透明。
+    -->
+    <style name="SilentEntryTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+
+    <!--
+      授权页不再使用 Dialog 主题。
+      Dialog 窗口会自带一层浮层，在部分 ROM 上被铺成整屏半透明背板，正是
+      「一层遮罩弹窗、屏幕点不动」的来源。授权页改用普通不透明的 AppTheme，
+      并且不在安装链路上启动（未授权调用只发通知，用户点通知才打开）。
+    -->
+
+</resources>

@@ -1,0 +1,17 @@
+[package]
+name = "broker-client"
+description = "Broker 客户端 SDK：握手、状态查询、命令执行、取消与撤销"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+broker-protocol = { workspace = true }
+broker-auth = { workspace = true }
+broker-ipc = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+broker-core = { workspace = true }
+broker-android = { workspace = true }

@@ -1,0 +1,13 @@
+[package]
+name = "broker-process"
+description = "特权进程执行：参数数组、stdin 注入、超时取消、句柄回收"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+broker-protocol = { workspace = true }
+broker-exec = { workspace = true }
+libc = { workspace = true }
+tokio = { workspace = true }
+hex = { workspace = true }

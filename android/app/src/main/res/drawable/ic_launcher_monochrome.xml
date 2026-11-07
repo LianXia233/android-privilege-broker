@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- APK 文档轮廓 -->
+    <path android:pathData="M34,26 L62,26 L76,40 L76,82 L34,82 Z M62,26 L62,40 L76,40"
+        android:strokeColor="#FFFFFF" android:strokeWidth="4"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="#00000000"/>
+    <!-- 文档内的标识条 -->
+    <path android:pathData="M40,52 L70,52" android:strokeColor="#FFFFFF"
+        android:strokeWidth="5" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <path android:pathData="M40,64 L58,64" android:strokeColor="#FFFFFF"
+        android:strokeWidth="4" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    <!-- 静默落位箭头 -->
+    <path android:pathData="M88,30 L88,52 M79,44 L88,53 L97,44"
+        android:strokeColor="#FFFFFF" android:strokeWidth="4"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="#00000000"/>
+</vector>

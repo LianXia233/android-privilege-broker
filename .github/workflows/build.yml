@@ -1,0 +1,110 @@
+# 运行时说明（2026-11-07 核验）：
+# GitHub Actions 已把 JavaScript action 强制切到 Node.js 24；仍声明
+# runs.using: node20 的旧版 action 会触发 "Node.js 20 is deprecated" 警告。
+# 下列版本均按各仓库 action.yml 的 runs.using 实测选定：
+#   actions/checkout@v5        -> node24
+#   actions/setup-java@v5      -> node24
+#   actions/upload-artifact@v6 -> node24（注意 v5 仍是 node20，不能只升到 v5）
+# 均选「首个 node24 主版本」，避免跨多个主版本引入无关的行为变更。
+# 发布步骤使用 runner 预装的 gh CLI，不引入新的 JavaScript action。
+name: build-apk
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# gh release create 需要写权限；默认的只读 GITHUB_TOKEN 无法创建 Release / tag。
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Rust toolchain + Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # GitHub 托管 runner 已预装 Android SDK 与 cmdline-tools。
+      # 不使用 android-actions/setup-android@v3：该 action 内部会执行
+      # `sdkmanager tools`，而新版 cmdline-tools 已移除 tools 包，直接以 exit 1 失败。
+      - name: Android SDK / NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "$SDK_ROOT" || ! -d "$SDK_ROOT" ]]; then
+            SDK_ROOT=/usr/local/lib/android/sdk
+          fi
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [[ -z "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -path '*/bin/sdkmanager' -type f 2>/dev/null | sort -V | tail -n 1 || true)"
+          fi
+          if [[ -z "$SDKMANAGER" || ! -x "$SDKMANAGER" ]]; then
+            echo "::error::未找到 sdkmanager（SDK_ROOT=$SDK_ROOT）"
+            exit 1
+          fi
+          echo "SDK root    : $SDK_ROOT"
+          echo "sdkmanager  : $SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install \
+            "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;27.2.12479018"
+          {
+            echo "ANDROID_HOME=$SDK_ROOT"
+            echo "ANDROID_SDK_ROOT=$SDK_ROOT"
+            echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/27.2.12479018"
+          } >> "$GITHUB_ENV"
+
+      - name: cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Python dependencies
+        run: python3 -m pip install --quiet pillow
+
+      - name: Build
+        run: bash scripts/build.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: PrivilegeBroker
+          path: PrivilegeBroker.apk
+
+      # 每次构建默认发布到 Releases：tag 带 run_number 保证唯一，
+      # 同名版本反复构建也不会因 tag 已存在而失败。发布用 gh CLI（runner 预装），
+      # 不引入第三方 release action，避免再次出现 Node.js 运行时弃用警告。
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' android/app/build.gradle.kts | head -n 1)"
+          if [[ -z "$VERSION" || ! -f PrivilegeBroker.apk ]]; then
+            echo "::error::缺少 versionName 或 APK 产物"
+            exit 1
+          fi
+          TAG="v${VERSION}-build.${GITHUB_RUN_NUMBER}"
+          NOTES="自动构建于 $(date -u +%Y-%m-%dT%H:%M:%SZ)，提交 ${GITHUB_SHA::7}。产物：PrivilegeBroker.apk"
+          echo "RELEASE_TAG=$TAG VERSION=$VERSION APK_BYTES=$(stat -c %s PrivilegeBroker.apk)"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # 重跑同一 run 时 tag 已存在：覆盖上传资产即可，避免整次构建失败。
+            gh release upload "$TAG" PrivilegeBroker.apk \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" PrivilegeBroker.apk \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Privilege Broker v${VERSION} build ${GITHUB_RUN_NUMBER}" \
+              --notes "$NOTES"
+          fi

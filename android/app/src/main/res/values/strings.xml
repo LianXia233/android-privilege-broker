@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">特权安装器</string>
+    <string name="app_tagline">自主特权代理 · Rust 核心</string>
+    <string name="header_subtitle">静默安装 · 无需确认 · 后台完成</string>
+    <string name="settings_title">设置</string>
+    <string name="settings_subtitle">授权、安装行为与应用管理</string>
+    <string name="settings_back">返回</string>
+
+    <string name="section_service">服务状态</string>
+    <string name="section_install">安装</string>
+    <string name="section_install_hint">支持 APK / 多 split / APKS / XAPK / APKM / ZIP，含社交软件追加的 .apk.1 后缀，后台静默完成</string>
+    <string name="section_manage">卸载与启动</string>
+    <string name="section_quick">快捷入口</string>
+    <string name="footer">Rust core · 自主 Broker v2 · targetSdk 36</string>
+
+    <string name="status_title">特权代理状态</string>
+    <string name="status_checking">正在检查…</string>
+    <string name="status_badge_ready">已就绪</string>
+    <string name="status_badge_attention">需要处理</string>
+    <string name="btn_check">刷新状态</string>
+    <string name="btn_request">请求授权</string>
+
+    <string name="btn_install">选择安装包并安装</string>
+    <string name="btn_uninstall">卸载应用</string>
+    <string name="btn_settings">设置</string>
+    <string name="btn_logs">安装日志</string>
+    <string name="btn_launch">启动应用</string>
+    <string name="btn_about">关于</string>
+
+    <string name="about_title">关于</string>
+    <string name="about_back">返回</string>
+    <string name="about_version">版本 %1$s</string>
+    <string name="about_desc">基于 Rust 核心与自主特权代理实现的 Android 静默安装器。特权代理由用户经无线调试显式启动一次，以 shell 身份运行；应用与代理之间通过长度前缀帧协议通信，含挑战响应认证、会话隔离、超时与撤销。安装包由调用方交给本应用后，在后台线程经代理执行 pm install，全程不弹确认框、不跳转应用界面，进度与结果通过通知与安装日志反馈。</string>
+    <string name="about_repo_label">开源仓库</string>
+    <string name="about_repo_url">https://github.com/LianXia233/android-privilege-broker</string>
+    <string name="about_repo_hint">点击在浏览器中打开，可查看源码、提交记录与版本发布</string>
+    <string name="about_dev_label">开发者</string>
+    <string name="about_dev_name">LianXia233 · 开发与维护</string>
+    <string name="about_license_label">开源许可与致谢</string>
+    <string name="about_license_badge">GPL-3.0-only</string>
+    <string name="about_license_desc">本项目的全部源码以 GNU General Public License v3.0 授权发布。你可以自由地运行、研究、修改与再分发本软件；若分发修改版或衍生作品，必须以同一许可公开完整源码，并保留版权声明与许可文本。</string>
+    <string name="about_license_third_title">随应用使用的开源组件</string>
+    <string name="about_license_third_hint">下列组件按其自身许可条款使用；点击条目可打开上游仓库查看许可全文</string>
+    <string name="about_license_note">完整条款见仓库根目录 LICENSE 文件。各第三方组件的许可以其上游仓库声明为准；构建工具链仅在编译期使用，不随 APK 分发。</string>
+    <string name="about_footer">Privilege Broker · Rust core · GPL-3.0-only</string>
+
+    <string name="opt_confirm">安装前确认</string>
+    <string name="opt_confirm_hint">默认关闭，直接静默执行</string>
+    <string name="opt_delete_after">成功后删除安装包</string>
+    <string name="opt_downgrade">允许降级安装</string>
+
+    <string name="log_title">执行日志</string>
+
+    <string name="logs_title">安装日志</string>
+    <string name="logs_subtitle">每一次静默安装与卸载都会自动记录</string>
+    <string name="logs_empty">还没有记录，先安装一个应用吧。</string>
+    <string name="logs_hint">记录仅保存在本机，可导出为文本</string>
+    <string name="logs_cleared">日志已清空</string>
+    <string name="logs_share_title">导出安装日志</string>
+    <string name="logs_share_failed">分享失败</string>
+    <string name="btn_log_clear">清空</string>
+    <string name="btn_log_share">导出</string>
+    <string name="log_op_install">安装</string>
+    <string name="log_op_uninstall">卸载</string>
+    <string name="log_source_silent">后台静默</string>
+    <string name="log_source_ui">应用内</string>
+    <string name="log_success">成功</string>
+    <string name="log_fail">失败</string>
+    <string name="log_unknown">未知记录</string>
+    <string name="log_error_code">原因 %1$s</string>
+    <string name="log_caller">调用方 %1$s</string>
+
+    <string name="allow_title">免确认包名白名单</string>
+    <string name="allow_hint">输入完整包名</string>
+    <string name="allow_add">添加</string>
+    <string name="allow_clear">清空白名单</string>
+    <string name="allow_empty">（空）</string>
+    <string name="allow_remove">移除</string>
+
+    <!-- 静默安装授权 -->
+    <string name="auth_card_title">授权与安装行为</string>
+    <string name="auth_card_desc">勾选后可直接静默安装 · 点击展开安装行为设置</string>
+    <string name="opt_caller_auth">外部调用需授权</string>
+    <string name="opt_caller_auth_hint">推荐开启 · 未授权来源首次调用会当场询问</string>
+    <string name="opt_floating">安装进度悬浮指示器</string>
+    <string name="opt_floating_hint">左上角小圆点，不遮挡屏幕、不抢焦点</string>
+    <string name="opt_fallback">失败时提供系统安装器入口</string>
+    <string name="opt_fallback_hint">默认只发通知，点按后才打开系统安装器</string>
+    <string name="opt_auto_open">失败时自动打开系统安装器</string>
+    <string name="opt_auto_open_hint">会打断当前操作，默认关闭</string>
+    <string name="auto_open_title">会打断当前操作</string>
+    <string name="auto_open_warn">开启后，静默安装失败时会自动弹出系统安装界面：它会覆盖当前应用、把状态栏与导航栏变黑，并需要按返回或手动确认才能继续操作。默认关闭时只发一条通知，点击才进入系统安装器。</string>
+    <string name="auto_open_keep">仍然开启</string>
+    <string name="auto_open_cancel">保持关闭</string>
+    <string name="auth_disabled_warn">已关闭授权：任何应用都可发起静默安装</string>
+
+    <string name="auth_app_list_title">允许静默安装的应用</string>
+    <string name="auth_app_list_hint">读取系统已安装应用，勾选后该应用可直接发起静默安装</string>
+    <string name="auth_search_hint">搜索应用名称或包名</string>
+    <string name="auth_revoke_all">全部取消</string>
+    <string name="auth_loading">正在读取应用列表…</string>
+    <string name="auth_no_match">没有匹配的应用</string>
+    <string name="auth_empty_filter">该分类下没有应用</string>
+    <string name="auth_tag_system">系统</string>
+    <string name="auth_tag_user">用户</string>
+    <string name="auth_tag_allowed">已授权</string>
+    <string name="auth_system_tip">系统应用由设备预置，授权与卸载都请谨慎操作</string>
+    <string name="auth_allowed_count">已授权 %1$d 个 · 共 %2$d 个应用</string>
+    <string name="auth_toggle_failed">设置失败，请重试</string>
+    <string name="filter_all">全部</string>
+    <string name="filter_user">用户应用</string>
+    <string name="filter_system">系统应用</string>
+
+    <string name="advanced_title">高级：免确认包名白名单</string>
+    <string name="advanced_expand">展开</string>
+    <string name="advanced_collapse">收起</string>
+
+    <string name="caller_unknown">未知来源</string>
+    <string name="error_unknown">未知错误</string>
+    <string name="auth_dialog_title">允许静默安装？</string>
+    <string name="auth_dialog_install">%1$s 请求通过本应用静默安装 APK。未授权的来源无法在后台安装应用。</string>
+    <string name="auth_dialog_uninstall">%1$s 请求通过本应用静默卸载应用。</string>
+    <string name="auth_remember">记住本次选择（之后不再询问）</string>
+    <string name="auth_remember_anonymous">匿名来源无法被记住，每次调用都会询问</string>
+    <string name="auth_overlay_hint">此卡片浮在当前应用之上，不会切换应用或遮挡屏幕；卡片外区域仍可正常操作</string>
+    <string name="auth_overlay_allow_once">仅允许本次</string>
+    <string name="auth_deny">拒绝</string>
+    <string name="auth_allow">允许</string>
+    <string name="auth_denied">已阻止 %1$s 的静默安装请求</string>
+    <string name="notify_auth_denied_title">已阻止静默安装</string>
+    <string name="notify_auth_pending_title">静默安装请求已拦截</string>
+    <string name="notify_auth_pending">%1$s 请求静默安装，但未获授权。点击查看并授权后，回到该应用重新发起安装即可。</string>
+    <string name="auth_page_pending">本次安装已被拦截。授权后请回到该应用重新发起安装。</string>
+    <string name="auth_page_hint">授权页由你主动打开，不会在安装过程中自动弹出。</string>
+    <string name="notify_fallback_title">%1$s 静默安装未成功</string>
+    <string name="notify_fallback_text">点击此通知可改用系统安装器手动安装；不会自动弹出任何界面</string>
+
+    <string name="overlay_perm_title">悬浮窗权限（可选）</string>
+    <string name="overlay_perm_msg">安装指示器以系统悬浮窗显示，完全不打断前台应用。应用会尝试经自主通道以 shell 身份开启该权限；若设备限制导致失败，可在此手动开启。未开启时安装照常进行，仅以通知反馈进度，绝不会遮挡屏幕或切换应用。</string>
+    <string name="overlay_perm_grant">去授权</string>
+    <string name="overlay_perm_skip">暂不</string>
+
+    <string name="dialog_confirm_title">确认安装</string>
+    <string name="dialog_confirm_btn">开始安装</string>
+    <string name="dialog_cancel">取消</string>
+    <string name="dialog_uninstall_title">卸载应用</string>
+    <string name="dialog_uninstall_hint">输入包名</string>
+    <string name="dialog_uninstall_btn">卸载</string>
+    <string name="dialog_keep_data">保留数据与缓存</string>
+    <string name="no_launcher_package">请先完成一次安装</string>
+    <string name="notify_channel">安装结果</string>
+    <string name="notify_channel_desc">安装与卸载的结果通知</string>
+
+    <!-- 卸载：应用列表选择器 -->
+    <string name="picker_title">选择要卸载的应用</string>
+    <string name="picker_subtitle">从已安装应用中选择，支持按系统 / 用户应用筛选</string>
+    <string name="picker_search_hint">搜索应用名称或包名</string>
+    <string name="picker_loading">正在读取应用列表…</string>
+    <string name="picker_no_match">没有匹配的应用</string>
+    <string name="picker_manual">输入包名</string>
+    <string name="picker_confirm_title">卸载 %1$s？</string>
+    <string name="picker_confirm_msg">包名：%1$s%2$s卸载后将无法直接恢复。</string>
+    <string name="picker_confirm_system">\n这是系统预置应用，卸载可能失败或影响系统功能。</string>
+    <string name="picker_confirm_user">\n这是用户安装的应用。</string>
+    <string name="picker_tag_system">系统应用</string>
+    <string name="picker_tag_user">用户应用</string>
+    <string name="picker_submitted">正在卸载 %1$s</string>
+    <string name="picker_back">返回</string>
+
+    <string name="notify_channel_progress">安装进度</string>
+    <string name="notify_channel_progress_desc">静默安装过程中的实时进度提示</string>
+    <string name="notify_installing">%1$s 正在安装中</string>
+    <string name="notify_uninstalling">%1$s 正在卸载中</string>
+    <string name="notify_stage_prepare">正在准备安装包…</string>
+    <string name="notify_stage_create">正在创建安装会话</string>
+    <string name="notify_stage_write">正在写入安装包</string>
+    <string name="notify_stage_commit">正在提交安装</string>
+    <string name="notify_stage_done">即将完成</string>
+    <string name="notify_install_ok">%1$s 安装完成</string>
+    <string name="notify_install_fail">%1$s 安装失败</string>
+    <string name="notify_uninstall_ok">%1$s 卸载完成</string>
+    <string name="notify_uninstall_fail">%1$s 卸载失败</string>
+    <string name="notify_action_launch">启动</string>
+    <string name="notify_action_logs">查看日志</string>
+
+    <!-- 跨应用授权：前台服务保活 + 悬浮卡片，兜底为可当场决策的横幅通知 -->
+    <string name="auth_channel">安装授权</string>
+    <string name="auth_channel_desc">其他应用发起静默安装时的授权提示</string>
+    <string name="auth_fg_title">等待安装授权</string>
+    <string name="auth_fg_text">请在浮于当前应用之上的卡片中选择允许或拒绝</string>
+    <string name="auth_heads_up_title">%1$s 请求静默安装</string>
+    <string name="auth_heads_up_text">无需切回本应用，直接在此选择；允许后会立即继续本次安装。</string>
+    <string name="auth_heads_up_allow">允许并继续</string>
+    <string name="auth_heads_up_deny">拒绝</string>
+    <string name="auth_heads_up_channel">安装授权（横幅）</string>
+    <string name="auth_heads_up_channel_desc">无法使用悬浮窗时，以横幅通知当场授权</string>
+</resources>
