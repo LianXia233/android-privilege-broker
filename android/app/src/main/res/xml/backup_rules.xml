@@ -2,4 +2,6 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="privilege_broker_config.xml" />
     <exclude domain="sharedpref" path="privilege_broker_link.xml" />
+    <!-- 无线调试配对用的 RSA 私钥，禁止随备份外泄 -->
+    <exclude domain="file" path="adb_key.pk8" />
 </full-backup-content>

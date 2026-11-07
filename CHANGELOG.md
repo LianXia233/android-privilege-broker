@@ -5,6 +5,39 @@
 
 ---
 
+## v2.1.0
+
+### 应用内无线调试启用与配对（无需电脑）
+
+- **新增 `broker-wireless`（第 12 个 crate）**：覆盖 mDNS 拿到端口之后的全部字节级工作。
+  `key.rs` 管理 RSA 2048 密钥、ADB 公钥结构编码与 TLS 客户端证书；
+  `spake2.rs` 实现 Edwards25519 上的 SPAKE2（含 password scalar 低 3 位处理）；
+  `crypto.rs` 提供 HMAC/HKDF-SHA256 与 AES-128-GCM 序列密码；
+  `pairing.rs` 完成 TLS 1.3 握手、密钥导出、SPAKE2 交换与 PeerInfo 公钥注册；
+  `adb.rs` / `tls.rs` 实现 24 字节小端 A_* 帧、`A_STLS` 升级、`A_AUTH` 回退与 `shell:` 通道；
+  `orchestrate.rs` 把「配对 → 连接 → 启动」串成单次调用并返回稳定 JSON。
+- **Java 侧自助链路**：新增 `WirelessPairingService`（前台服务 + mDNS 发现 +
+  通知栏 RemoteInput 输入 6 位配对码）、`WirelessCore`（native 桥）与
+  `ServiceStarter`（app_process 入口）。主界面「启用无线调试」改为引导开启无线调试
+  并启动配对，不再需要电脑、USB 或任何第三方特权框架。
+- **启动改为 app_process**：`broker-server` 抽出可复用的 `run()`；`android-ffi` 新增
+  `WirelessCore.run` / `startBroker` 两个 JNI 入口。特权进程以 shell(2000) 在 APK 内
+  加载 `libinstaller_core.so` 并常驻运行，仍保留启动即实测 uid、非 2000 退出码 3 的约束。
+- **密钥与备份**：配对私钥保存在 `filesDir/adb_key.pk8`，备份规则与数据导出规则均排除。
+- **文案与状态引导**：`state.rs` 的 guidance、关于页简介与通知文案统一为应用内自助流程；
+  关于页开源组件清单补充 rustls / rcgen / rsa / aes-gcm / curve25519-dalek / base64。
+- **测试**：`broker-wireless` 27 项单测，含 SPAKE2 固定向量、HKDF RFC 5869、
+  本地 TLS 端到端配对与公钥注册、错误配对码失败路径、`A_STLS` 升级与 `shell:` 通道。
+  全 workspace `cargo test` 通过，Android Java 与资源编译通过。
+
+### 验证边界
+
+真机的无线调试服务发现、通知栏配对码交互、设备端 TLS 实现差异、
+`app_process` 加载 APK 内 native 库、SELinux 下的 abstract socket 连通性
+与最终安装链路仍待设备验证，UI 与关于页已如实标注。
+
+---
+
 ## v2.0.0
 
 ### 架构：迁移到自主 ADB-only 特权代理

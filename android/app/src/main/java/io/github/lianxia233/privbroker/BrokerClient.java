@@ -129,15 +129,6 @@ final class BrokerClient {
         }
     }
 
-    /** 展示给用户的启动命令（在无线调试的 shell 中执行）。 */
-    static String startupCommand(Context c) {
-        String ep = endpoint(c);
-        String epArg = "abstract".equals(ep) ? "abstract" : ep;
-        return "privilege-broker --token " + token(c)
-                + " --client " + clientId(c)
-                + " --endpoint " + epArg;
-    }
-
     // ------------------------------------------------------------ 连接与握手
 
     static BrokerClient connect(Context c) throws Exception {

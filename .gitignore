@@ -17,5 +17,5 @@ local.properties
 # 例外：随仓库分发的固定签名密钥，保证本地与云编译证书一致（公开自签名，非私有发布密钥）
 !android/app/signing/release.keystore
 
-# 仅本地的过程文档与临时报告，不进入公开仓库
+# 仅本地的临时材料，不进入公开仓库
 docs/

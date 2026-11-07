@@ -86,3 +86,58 @@ pub extern "system" fn Java_io_github_lianxia233_privbroker_RustCore_dispatch<'l
         Err(_) => std::ptr::null_mut(),
     }
 }
+
+/// `WirelessCore.run(String argsJson): String`
+///
+/// 在应用进程中完成无线调试配对、ADB TLS 连接与特权进程启动，返回 JSON 结果。
+#[no_mangle]
+pub extern "system" fn Java_io_github_lianxia233_privbroker_WirelessCore_run<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    args: JString<'local>,
+) -> jstring {
+    let a: String = env.get_string(&args).map(|x| x.into()).unwrap_or_default();
+    let out = broker_wireless::run(&a);
+    match env.new_string(out) {
+        Ok(s) => s.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// `WirelessCore.startBroker(String argsJson): void`
+///
+/// 由 `app_process` 以 shell 身份加载并调用；此调用阻塞直到服务停止，
+/// 从而让特权进程保持常驻。uid 校验在运行时内部完成，不接受任何绕过。
+#[no_mangle]
+pub extern "system" fn Java_io_github_lianxia233_privbroker_WirelessCore_startBroker<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    args: JString<'local>,
+) {
+    let a: String = env.get_string(&args).map(|x| x.into()).unwrap_or_default();
+    let v: Value = serde_json::from_str(&a).unwrap_or(Value::Null);
+    let text = |key: &str| -> String {
+        v.get(key).and_then(Value::as_str).unwrap_or("").to_string()
+    };
+    let client = text("client");
+    let mut allowed_clients: Vec<String> = client
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if allowed_clients.is_empty() {
+        allowed_clients.push("installer".to_string());
+    }
+    let endpoint = text("endpoint");
+    let cfg = broker_android::StartupConfig {
+        token: text("token"),
+        allowed_clients,
+        endpoint: if endpoint.is_empty() { "abstract".to_string() } else { endpoint },
+        session_ttl_ms: v.get("sessionTtlMs").and_then(Value::as_u64).unwrap_or(60_000),
+        require_shell_uid: true,
+    };
+    let code = broker_server::run(cfg);
+    if code != 0 {
+        eprintln!("特权代理异常退出，代码 {code}");
+    }
+}

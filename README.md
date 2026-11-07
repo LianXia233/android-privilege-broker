@@ -1,22 +1,22 @@
 # android-privilege-broker
 
-基于 **Rust 核心 + 自主 ADB 特权代理** 的 Android 静默安装器。特权进程由用户经无线调试显式启动一次，以 shell(uid 2000) 身份运行；应用与代理之间用自研的长度前缀帧协议通信，安装 / 卸载时无需拉起系统安装界面，也不会跳到应用主界面，每一次后台操作都会写入本地安装日志。
+基于 **Rust 核心 + 自主 ADB 特权代理** 的 Android 静默安装器。特权进程由应用内的无线调试自助链路以 shell(uid 2000) 身份启动一次，全程不需要电脑或 USB；应用与代理之间用自研的长度前缀帧协议通信，安装 / 卸载时无需拉起系统安装界面，也不会跳到应用主界面，每一次后台操作都会写入本地安装日志。
 
 | 项目 | 值 |
 |---|---|
 | 包名 | `io.github.lianxia233.privbroker`（v2.0.0 启用，与历史版本不互通） |
 | 系统要求 | minSdk **26**（Android 8+）/ targetSdk **36**（Android 16）/ compileSdk **36** |
 | 权限来源 | 自主 Broker，**ADB Shell / uid 2000 唯一后端**；不提供 root 后端，不引入第三方特权框架 |
-| 架构 | 业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，11 个 crate） |
+| 架构 | 业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate），无线调试链路在 `broker-wireless` |
 | 产物 | 四 ABI（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、16KB 页对齐、v2 签名 |
 | 许可 | **GNU GPL-3.0-only**，见 `LICENSE` |
-| 版本 | **2.0.0**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
+| 版本 | **2.1.0**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
 
 ## 1. 功能
 
 | 编号 | 功能 | 实现位置 |
 |---|---|---|
-| F-01 | 特权代理状态检查、连接探测、启动引导 | `crates/core/src/state.rs`, `BrokerBridge`, `BrokerClient`, `broker-android` |
+| F-01 | 特权代理状态检查、连接探测、**应用内无线调试启用与配对**（无需电脑） | `crates/core/src/state.rs`, `WirelessPairingService`, `WirelessCore`, `ServiceStarter`, `broker-wireless`, `BrokerClient`, `broker-android` |
 | F-02 | 静默安装（无确认、不弹界面）：单 APK / 多 split / 归档格式，含社交软件追加的 `.apk.1` 后缀 | `install.rs`, `archive.rs`, `plan.rs`, `util.rs`, `FileNames` |
 | F-03 | 静默卸载（含保留数据），从应用列表选择目标 | `uninstall.rs`, `AppPickerActivity`, `Uninstaller` |
 | F-04 | 免确认包名白名单；安装前确认为可选开关（默认关闭） | `config.rs`, `SettingsActivity` |
@@ -65,8 +65,8 @@
 ## 3. 架构
 
 ```
-   用户（开发者选项 → 无线调试 → adb shell，显式启动一次）
-                    │
+   用户（应用内：开启无线调试 → 通知栏输入 6 位配对码）
+                    │  mDNS 发现 → TLS 配对 → ADB TLS → shell 启动
                     ▼
 ┌────────── broker-server：独立特权进程 ──────────────────────────┐
 │  Rust + Tokio，启动即 getuid() 实测；非 shell(2000) 退出码 3     │
@@ -82,6 +82,8 @@
 ┌───────────────────────┴────────── Android App ───────────────────┐
 │  MainActivity / SettingsActivity / AppPickerActivity / AboutActivity│
 │  LogActivity · SilentInstallActivity (零/短窗口入口)               │
+│  WirelessPairingService · WirelessCore · ServiceStarter            │
+│  broker-wireless：mDNS 后的 TLS / SPAKE2 / ADB TLS / shell 启动     │
 │  AuthPrompt · AuthForegroundService · StagedFiles · StagedProvider │
 │  TaskLauncher · SilentTask · FloatingIndicator · Notifier          │
 │        │  RustCore.dispatch(method, argsJson) : String             │
@@ -102,7 +104,9 @@
 只有一个 JNI 入口、一个平台桥接原语，便于审计与测试。业务 core 的
 `exec / stat / archiveEntries / readBytes / deleteSource / config…` JSON 契约在
 v1 → v2 迁移中保持不变，只替换「特权状态 / 授权 / 执行」三个入口。
-Broker 相关 crate 不是 `android-ffi` 的依赖，Tokio 不进入 APK 的 native 库。
+`broker-wireless` 与 `broker-server` 由 `android-ffi` 链接进 APK 的 native 库：
+配对 / 启动桥与业务 JNI 入口共用同一个 `libinstaller_core.so`，Tokio 运行时只在
+shell 身份的特权进程里启动。
 
 ## 4. 关键行为
 
@@ -162,35 +166,47 @@ Broker 相关 crate 不是 `android-ffi` 的依赖，Tokio 不进入 APK 的 nat
   失败原因显示中文说明并保留原始错误码；日志同样以中文名作为标题。
 - 主界面不再展示「本次执行日志」，完整记录由独立的「安装日志」页承担。
 
-## 5. 启动特权代理
+## 5. 应用内启用特权代理（无需电脑）
 
-普通应用无法自行获得 shell 身份，因此代理必须由用户在无线调试 shell 中显式启动一次。
-`broker-server` 启动即调用 `getuid()`，非 2000 直接以退出码 3 拒绝，不提供任何执行能力。
+普通应用无法自行获得 shell 身份，代理必须由设备上的无线调试以 shell(uid 2000)
+启动一次。本应用把「启用无线调试 + 配对 + 启动」做成无需电脑的自助链路，
+由 `broker-wireless`（Rust）与 `WirelessPairingService`（Java 前台服务）协作完成。
 
-1. 编译 Android 目标的代理可执行文件（`aarch64-linux-android` 等），部署到设备可写目录：
+### 用户步骤
 
-   ```bash
-   cargo build --release -p broker-server --target aarch64-linux-android
-   adb push target/aarch64-linux-android/release/broker-server /data/local/tmp/privilege-broker
-   adb shell chmod +x /data/local/tmp/privilege-broker
-   ```
+1. 主界面点「启用无线调试」→「去设置」，打开「开发者选项 → 无线调试」并开启开关。
+2. 在无线调试页点「使用配对码配对设备」，记下系统显示的 6 位配对码。
+3. 回到应用点「开始配对」；应用启动前台服务，通知栏出现常驻提示。
+4. 下拉通知栏，直接在通知里输入 6 位配对码并发送。
+5. 应用自动完成剩余步骤：注册 ADB 公钥、建立 ADB TLS 通道、以 shell 身份启动特权代理。
+6. 返回应用点「刷新状态」，状态变为「已就绪」即可使用。
 
-2. 打开本应用主界面，点「请求授权」查看本机的配对令牌与启动命令，点「复制命令」。
-   命令形如：
+全程不需要电脑、USB 数据线或任何第三方特权框架。配对用 RSA 私钥保存在应用私有目录
+`filesDir/adb_key.pk8`，已在备份规则中排除，不会随备份或云端同步外泄。
+`broker-server` 启动即调用 `getuid()`，非 2000 以退出码 3 拒绝，不提供任何绕过开关。
 
-   ```text
-   privilege-broker --token <TOKEN> --client installer --endpoint abstract
-   ```
+### 链路分层
 
-3. 在 `adb shell` 中执行该命令（用设备上实际路径，例如
-   `/data/local/tmp/privilege-broker --token <TOKEN> ...`），保持进程运行。
-   默认使用 Linux abstract Unix socket，名称由令牌经 SHA-256 派生；
-   也可用 `--endpoint tcp:127.0.0.1:PORT` 配合 `adb forward` 走 TCP loopback。
-4. 返回本应用点「刷新状态」。令牌仅保存在本机，用于校验发起方，不上传到任何服务器。
+| 层 | 位置 | 职责 |
+|---|---|---|
+| 服务发现 | `WirelessPairingService` | mDNS 发现 `_adb-tls-pairing._tcp` 与 `_adb-tls-connect._tcp`，通知栏 RemoteInput 收配对码 |
+| 密钥 | `broker-wireless/src/key.rs` | RSA 2048、ADB 公钥结构编码、TLS 客户端证书、认证签名 |
+| 配对 | `broker-wireless/src/pairing.rs` | TLS 1.3 握手、密钥导出、SPAKE2 交换、AES-128-GCM 序列帧、PeerInfo 公钥注册 |
+| 密码学 | `broker-wireless/src/spake2.rs`, `crypto.rs` | Edwards25519 SPAKE2、HMAC/HKDF-SHA256、GCM nonce 序列 |
+| 传输 | `broker-wireless/src/adb.rs`, `tls.rs` | 24 字节小端 A_* 帧、`A_STLS` 升级、`A_AUTH` 回退、`shell:` 通道 |
+| 编排 | `broker-wireless/src/orchestrate.rs`, `WirelessCore` | 单次 JNI 调用返回稳定 JSON（ok / stage / code / message） |
+| 启动 | `ServiceStarter`, `broker-server` | `app_process` 以 shell 身份加载 native 库并阻塞运行 Tokio 服务 |
+
+### 验证状态
+
+沙箱内已验证：SPAKE2 与固定测试向量逐字节一致、HKDF 符合 RFC 5869、
+本地 TLS 端到端配对与公钥注册、`A_STLS` 升级与 `shell:` 通道、帧协议与错误码。
+
+**待设备验证**：真机的无线调试服务发现、通知栏配对码交互、设备端 TLS 实现差异、
+`app_process` 加载 APK 内 native 库、SELinux 下的 abstract socket 连通性，
+以及最终的安装链路。这些环节无法在沙箱中模拟，UI 与关于页已如实标注。
 
 > 协议细节见 `crates/broker-protocol`，执行规格见 `crates/broker-exec`。
-> 无线调试启动、SELinux 下的 socket 连通性与真机安装链路需在设备上验证，
-> 沙箱内只完成单元测试、交叉编译与打包校验。
 
 ## 6. 构建
 
@@ -264,7 +280,7 @@ python3 scripts/gen_axml_fixture.py              # 重新生成测试样本
 ## 9. 目录
 
 ```
-Cargo.toml                  Cargo workspace（11 个 crate）
+Cargo.toml                  Cargo workspace（12 个 crate）
 crates/core/                纯 Rust 业务逻辑 installer-core + 单元测试
 crates/android-ffi/         JNI cdylib installer-android-ffi
 crates/broker-protocol/     协议 v2、帧格式、错误码、会话

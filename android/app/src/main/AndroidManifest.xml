@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- 授权询问期间的短时前台服务，保证入口 Activity 立即 finish 后弹窗仍能弹出 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 无线调试发现与配对的前台服务（Android 14+ 需显式声明类型权限） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <!-- 设置页与卸载选择器需要完整枚举系统应用列表（非 Google Play 分发，仅本机授权用途） -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
@@ -241,6 +243,17 @@
             android:exported="false"
             android:foregroundServiceType="shortService"
             android:stopWithTask="true" />
+
+        <!--
+          无电脑自助启用链路：发现无线调试服务、通知栏输入配对码、配对并启动特权代理。
+          使用 connectedDevice 类型而非 shortService，避免用户尚未输入配对码时
+          前台服务被系统按短时服务超时终止。
+        -->
+        <service
+            android:name=".WirelessPairingService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"
+            android:stopWithTask="false" />
 
         <!-- 自家只读安装包容器：切断外部 content:// 临时授权的生命周期依赖 -->
         <provider

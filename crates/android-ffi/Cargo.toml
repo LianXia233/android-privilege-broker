@@ -13,5 +13,8 @@ doctest = false
 
 [dependencies]
 installer-core = { path = "../core" }
+broker-wireless = { workspace = true }
+broker-server = { workspace = true }
+broker-android = { workspace = true }
 serde_json = { workspace = true }
 jni = { workspace = true }

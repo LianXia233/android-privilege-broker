@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+name = "broker_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "privilege-broker"
 path = "src/main.rs"

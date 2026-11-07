@@ -27,18 +27,18 @@ pub fn guidance(status: BrokerStatus) -> Guidance {
     let (title, action, hint) = match status {
         BrokerStatus::Unavailable => (
             "特权代理服务未运行",
-            "查看启动步骤",
-            "请在「开发者选项 → 无线调试」打开后用 adb 连接设备，按主界面提示执行一次启动命令，然后返回刷新状态。",
+            "查看启用步骤",
+            "请在应用内点「启用无线调试」，按引导打开开发者选项的无线调试，并在通知栏输入 6 位配对码完成配对；完成后返回刷新状态。",
         ),
         BrokerStatus::NeedPermission => (
             "尚未完成配对",
-            "查看启动步骤",
-            "请核对配对令牌与启动命令是否一致；令牌只保存在本机，用于校验发起方。",
+            "查看启用步骤",
+            "请在通知栏重新输入 6 位配对码；配对公钥与令牌仅保存在本机。",
         ),
         BrokerStatus::Denied => (
             "连接被拒绝",
-            "查看启动步骤",
-            "请确认启动命令中的客户端标识与本应用一致，并重新执行一次启动命令。",
+            "查看启用步骤",
+            "请确认无线调试仍处于开启状态，并在应用内重新完成一次配对。",
         ),
         BrokerStatus::Authorized => (
             "特权代理已就绪",
@@ -83,9 +83,11 @@ mod tests {
     }
 
     #[test]
-    fn unavailable_points_at_wireless_debugging() {
+    fn unavailable_points_at_in_app_pairing() {
         let g = guidance(BrokerStatus::Unavailable);
         assert!(g.hint.contains("无线调试"));
-        assert!(g.hint.contains("adb"));
+        assert!(g.hint.contains("通知栏"));
+        assert!(!g.hint.contains("adb"), "不应再引导用户依赖电脑 adb");
+        assert!(!g.hint.contains("电脑"));
     }
 }

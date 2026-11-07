@@ -135,7 +135,7 @@ impl StartupConfig {
         Ok(c)
     }
 
-    /// 生成给用户看的启动命令（无线调试 / adb shell 下执行）。
+    /// 生成启动参数摘要，供日志与诊断使用。
     pub fn startup_hint(&self) -> String {
         format!(
             "端点: {} · 客户端白名单: {} · 会话 TTL: {}ms · 令牌前缀: {}… · 要求实测 shell uid 2000",

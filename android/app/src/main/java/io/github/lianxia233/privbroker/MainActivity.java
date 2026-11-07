@@ -3,6 +3,9 @@ package io.github.lianxia233.privbroker;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.Intent;
 import android.database.Cursor;
@@ -10,6 +13,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
+import android.provider.Settings;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.CompoundButton;
@@ -163,35 +167,72 @@ public final class MainActivity extends Activity {
     }
 
     private void onPermissionAction() {
-        showStartupGuide();
-        runAsync("requestAuthorization", "{}", r -> {
-            log("已尝试连接特权代理，状态即将刷新。");
-            refreshStatus();
-        });
+        showWirelessGuide();
     }
 
-    /** 展示本应用的配对令牌与启动命令：用户需在无线调试 shell 中执行一次。 */
-    private void showStartupGuide() {
-        String cmd = BrokerClient.startupCommand(this);
-        String msg = "本应用不依赖任何第三方特权框架。\n\n"
-                + "在「开发者选项 → 无线调试」打开后，用 adb 连接设备，"
-                + "在 shell 中执行以下命令启动特权代理：\n\n"
-                + cmd + "\n\n"
-                + "随后返回本应用点击「刷新状态」。令牌仅保存在本机，"
-                + "用于校验发起方，不会上传到任何服务器。";
+    /** 无电脑自助启用：开发者选项 → 无线调试 → 通知栏输入配对码。 */
+    private void showWirelessGuide() {
         new AlertDialog.Builder(this)
-                .setTitle("启动特权代理")
-                .setMessage(msg)
-                .setPositiveButton("复制命令", (d, w) -> {
-                    android.content.ClipboardManager cm =
-                            (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                    if (cm != null) {
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("启动命令", cmd));
-                        toast("启动命令已复制");
-                    }
-                })
+                .setTitle(R.string.wireless_guide_title)
+                .setMessage(R.string.wireless_guide_text)
+                .setPositiveButton(R.string.wireless_guide_start,
+                        (d, w) -> beginWirelessPairing())
+                .setNeutralButton(R.string.wireless_guide_open_settings,
+                        (d, w) -> openWirelessAdbSettings())
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .show();
+    }
+
+    private void beginWirelessPairing() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            toast(getString(R.string.wireless_requires_android11));
+            return;
+        }
+        if (!notificationsEnabled()) {
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.wireless_notif_title)
+                    .setMessage(R.string.wireless_notif_text)
+                    .setPositiveButton(R.string.wireless_guide_open_settings,
+                            (d, w) -> openNotificationSettings())
+                    .setNegativeButton(R.string.dialog_cancel, null)
+                    .show();
+            return;
+        }
+        try {
+            startForegroundService(WirelessPairingService.startIntent(this));
+            toast(getString(R.string.wireless_service_started));
+        } catch (Throwable t) {
+            toast(getString(R.string.wireless_service_failed));
+        }
+    }
+
+    private boolean notificationsEnabled() {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (nm == null || !nm.areNotificationsEnabled()) {
+            return false;
+        }
+        NotificationChannel channel = nm.getNotificationChannel(WirelessPairingService.CHANNEL);
+        return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
+    }
+
+    private void openWirelessAdbSettings() {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        intent.putExtra(":settings:fragment_args_key", "toggle_adb_wireless");
+        try {
+            startActivity(intent);
+        } catch (ActivityNotFoundException e) {
+            toast(getString(R.string.wireless_settings_unavailable));
+        }
+    }
+
+    private void openNotificationSettings() {
+        Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+        intent.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+        try {
+            startActivity(intent);
+        } catch (ActivityNotFoundException ignored) {
+        }
     }
 
     // ------------------------------------------------------------------ 安装

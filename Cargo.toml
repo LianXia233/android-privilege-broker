@@ -11,11 +11,12 @@ members = [
     "crates/broker-core",
     "crates/broker-client",
     "crates/broker-server",
+    "crates/broker-wireless",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 license = "GPL-3.0-only"
 repository = "https://github.com/LianXia233/android-privilege-broker"
@@ -29,6 +30,13 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time"
 libc = "0.2"
 sha2 = "0.10"
 hex = "0.4"
+base64 = "0.22"
+aes-gcm = "0.11.1"
+curve25519-dalek = "5.0.0"
+rcgen = "0.14.10"
+rsa = "0.9.10"
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "tls12", "std", "logging"] }
+broker-wireless = { path = "crates/broker-wireless" }
 broker-protocol = { path = "crates/broker-protocol" }
 broker-auth = { path = "crates/broker-auth" }
 broker-exec = { path = "crates/broker-exec" }
@@ -37,6 +45,7 @@ broker-ipc = { path = "crates/broker-ipc" }
 broker-android = { path = "crates/broker-android" }
 broker-core = { path = "crates/broker-core" }
 broker-client = { path = "crates/broker-client" }
+broker-server = { path = "crates/broker-server" }
 
 [profile.release]
 opt-level = "z"
