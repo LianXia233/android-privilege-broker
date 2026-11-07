@@ -8,12 +8,9 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- 授权询问期间的短时前台服务，保证入口 Activity 立即 finish 后弹窗仍能弹出 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- 无线调试发现与配对的前台服务（Android 14+ 需显式声明类型权限） -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- 无线调试发现与配对的前台服务，清单中只声明 shortService，无额外类型权限 -->
     <!--
-      mDNS 服务发现需要组播；同时该权限的清单声明满足 Android 14+ 对
-      connectedDevice 前台服务类型的运行时前置条件之一。
+      mDNS 服务发现需要组播。
     -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- 设置页与卸载选择器需要完整枚举系统应用列表（非 Google Play 分发，仅本机授权用途） -->
@@ -252,20 +249,15 @@
 
         <!--
           无电脑自助启用链路：发现无线调试服务、通知栏输入配对码、配对并启动特权代理。
-          shortService：无运行时前置条件，Android 14+ 上 startForeground 必然成功，
-          约 3 分钟时限由 onTimeout 处理（配对本就是短操作）；
-          connectedDevice：时限内优先使用（CHANGE_WIFI_MULTICAST_STATE 清单声明满足
-          其前置条件）；specialUse：部分 ROM 校验更严时的兜底。
+          只声明 shortService：它没有运行时前置条件，Android 14+ 上 startForeground
+          不会因权限/前置条件被拒；约 3 分钟时限由 onTimeout 处理（配对本就是短操作）。
+          应用内输码不依赖本服务，服务被回收也不影响配对能力。
         -->
         <service
             android:name=".WirelessPairingService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice|shortService|specialUse"
-            android:stopWithTask="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="mdns_discovery_and_local_wireless_debugging_pairing" />
-        </service>
+            android:foregroundServiceType="shortService"
+            android:stopWithTask="false" />
 
         <!-- 自家只读安装包容器：切断外部 content:// 临时授权的生命周期依赖 -->
         <provider

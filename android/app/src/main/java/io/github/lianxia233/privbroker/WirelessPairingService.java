@@ -17,6 +17,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.util.Log;
 
 import org.json.JSONObject;
 
@@ -32,6 +33,8 @@ import java.io.File;
 public final class WirelessPairingService extends Service {
 
     public static final String CHANNEL = "wireless_pairing";
+
+    private static final String TAG = "WirelessPairing";
 
     private static final String ACTION_START = "start";
     private static final String ACTION_STOP = "stop";
@@ -333,31 +336,19 @@ public final class WirelessPairingService extends Service {
     // ------------------------------------------------------------ 通知
 
     private void startInForeground(Notification n) {
-        // 首选 shortService：无运行时前置条件，Android 14+ 上必然成功，
-        // 代价是约 3 分钟时限——配对本就是短操作，超时后重新发起即可。
-        // connectedDevice 需要满足前置条件（本应用以 CHANGE_WIFI_MULTICAST_STATE
-        // 清单声明满足），部分 ROM 校验更严时再退 specialUse。
+        // 清单里只声明 shortService：它没有运行时前置条件（不需要网络/设备类权限，
+        // 也不受 Android 14 对 connectedDevice 的严格校验影响），是无电脑配对场景
+        // 唯一稳定的类型。代价是约 3 分钟时限，超时由 onTimeout 收尾。
+        // 传 FOREGROUND_SERVICE_TYPE_MANIFEST 让系统按清单取值，避免手动拼类型时
+        // 在部分 ROM 上被判为非法组合而抛异常。
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                try {
-                    startForeground(NOTIFICATION_ID, n,
-                            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
-                } catch (Throwable strict) {
-                    try {
-                        startForeground(NOTIFICATION_ID, n,
-                                ServiceInfo.FOREGROUND_SERVICE_TYPE_SHORT_SERVICE);
-                    } catch (Throwable strict2) {
-                        startForeground(NOTIFICATION_ID, n,
-                                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-                    }
-                }
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, n,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST);
             } else {
                 startForeground(NOTIFICATION_ID, n);
             }
         } catch (Throwable t) {
+            Log.w(TAG, "startForeground failed", t);
             // 兜底：以普通通知呈现。不保证显示，但绝不因 startForeground 失败而崩溃。
             notifications.notify(NOTIFICATION_ID, n);
         }
