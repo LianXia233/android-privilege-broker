@@ -2,14 +2,14 @@ package io.github.lianxia233.privbroker;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.AppOpsManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.LocalSocket;
+import android.net.LocalSocketAddress;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -28,87 +28,92 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * 无线调试配对教程页。
+ * 无线调试配对页（仅支持 Android 13+）。
  *
- * 形态与成熟实现一致：本页只负责引导与检查前置条件，**一进入页面就启动
- * 前台服务**，让通知栏立刻出现常驻通知。用户随后点「去无线调试」进入系统
- * 设置、打开配对码弹窗，此时不能退出也不能返回（离开设置页弹窗即消失），
- * 只能下拉通知栏 —— 下拉不会让设置页失去焦点 —— 在常驻通知里输入 6 位码。
+ * 交互模型把两件事明确拆开，二者不再耦合：
  *
- * 因此通知栏是唯一主路径；页面内的端口/配对码输入框只作为小窗、分屏或
- * 平板等多窗口场景下的备用入口，不依赖通知权限与 ROM 通知样式。
+ * <b>配对（一次性）</b>：把本机 ADB 公钥登记到设备 adbd。系统「无线调试」页的
+ * 配对码弹窗不能退出、不能返回，一离开就消失，因此配对码只能在常驻通知的
+ * RemoteInput 里输入（下拉通知栏不会让设置页失去焦点）。公钥与本机
+ * {@code adb_key.pk8} 会持久保存，配对成功后一般无需再做。
  *
- * 连接地址不再假定 loopback：mDNS 解析出的 WLAN 接口 IP 与本机网卡地址、
- * 127.0.0.1 一起作为候选交给 native 层逐个尝试。
+ * <b>激活服务（随时可重复）</b>：用已登记的公钥连接 {@code _adb-tls-connect}
+ * 端口，经 ADB TLS 通道以 shell 身份拉起特权代理。设备重启、代理进程被回收后，
+ * 只要无线调试仍开启且连着 WLAN，随时点「激活服务」即可重新拉起，无需重新配对。
+ * 这一步是本页的一等公民主按钮，独立于配对流程、可反复点击、结果明确。
+ *
+ * 连接地址不假定 loopback：mDNS 解析出的 WLAN 接口 IP、本机网卡 IPv4 与
+ * loopback 一起作为候选交给 native 层逐个尝试。真机上 adbd 常绑在 WLAN IP。
  */
 public final class PairingActivity extends Activity {
 
     private static final String TAG = "PairingActivity";
 
-    private static final int STATE_IDLE = 0;
-    private static final int STATE_PAIRING = 1;
-    private static final int STATE_AWAIT_CONNECT = 2;
-    private static final int STATE_STARTING = 3;
-    private static final int STATE_DONE = 4;
-
-    private static final long CONNECT_WAIT_MS = 8000L;
+    private static final long AUTO_ACTIVATE_WAIT_MS = 8000L;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService probeWorker = Executors.newCachedThreadPool();
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
 
-    private TextView statusText;
-    private TextView resultText;
+    private TextView tvServiceBadge;
+    private View vStatusDot;
+    private TextView tvServiceState;
+    private TextView tvServiceHint;
+    private TextView tvDiscover;
+    private TextView tvResult;
+    private EditText etConnectPort;
+    private EditText etPort;
+    private EditText etCode;
+    private Button btnActivate;
+    private Button btnPair;
     private LinearLayout cardNotif;
     private LinearLayout cardMiui;
-    private Button btnPair;
-    private Button btnRestart;
-    private EditText portInput;
-    private EditText codeInput;
 
     private int pairingPort = -1;
     private int connectPort = -1;
     private int lastConnectPort = -1;
-    private int state = STATE_IDLE;
+    private boolean working;
     private boolean paired;
     private boolean notificationEnabled;
-    private Runnable connectTimeout;
+    private boolean serviceActive;
+    /** 配对成功后等新的连接服务端口，就绪则自动激活一次（按钮始终可手动点）。 */
+    private boolean pendingAutoActivate;
+    private Runnable autoActivateTimeout;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_pairing);
 
-        statusText = findViewById(R.id.statusText);
-        resultText = findViewById(R.id.resultText);
+        tvServiceBadge = findViewById(R.id.tvServiceBadge);
+        vStatusDot = findViewById(R.id.vStatusDot);
+        tvServiceState = findViewById(R.id.tvServiceState);
+        tvServiceHint = findViewById(R.id.tvServiceHint);
+        tvDiscover = findViewById(R.id.tvDiscover);
+        tvResult = findViewById(R.id.tvResult);
+        etConnectPort = findViewById(R.id.etConnectPort);
+        etPort = findViewById(R.id.etPort);
+        etCode = findViewById(R.id.etCode);
+        btnActivate = findViewById(R.id.btnActivate);
+        btnPair = findViewById(R.id.btnPair);
         cardNotif = findViewById(R.id.cardNotif);
         cardMiui = findViewById(R.id.cardMiui);
-        btnPair = findViewById(R.id.btnPair);
-        btnRestart = findViewById(R.id.btnNotification);
-        portInput = findViewById(R.id.portInput);
-        codeInput = findViewById(R.id.codeInput);
 
+        btnActivate.setOnClickListener(v -> onActivateClicked());
+        btnPair.setOnClickListener(v -> onPairClicked());
+        findViewById(R.id.btnRefresh).setOnClickListener(v -> refreshServiceState());
         findViewById(R.id.btnDevOptions).setOnClickListener(v -> openDeveloperOptions());
         findViewById(R.id.btnNotifSettings).setOnClickListener(v -> openNotificationSettings());
         findViewById(R.id.btnBattery).setOnClickListener(v -> openBatterySettings());
-        btnPair.setOnClickListener(v -> onPairClicked());
-        btnRestart.setOnClickListener(v -> startPairingService(true));
+        findViewById(R.id.btnNotification).setOnClickListener(v -> startPairingService(true));
+        findViewById(R.id.btnBack).setOnClickListener(v -> finish());
 
         if (RomCompat.isMiuiLike()) {
             cardMiui.setVisibility(View.VISIBLE);
         }
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            statusText.setText(R.string.pairing_requires_android11);
-            btnPair.setEnabled(false);
-            btnRestart.setEnabled(false);
-            return;
-        }
-
-        notificationEnabled = isNotificationEnabled();
-        syncNotificationCard();
-
-        if (Build.VERSION.SDK_INT >= 33
-                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+        // Android 13+ 恒需要运行时请求通知权限。
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
             try {
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
@@ -117,7 +122,9 @@ public final class PairingActivity extends Activity {
             }
         }
 
-        // 通知已开启时立即启动前台服务，用户离开本页之前通知栏就有常驻通知。
+        notificationEnabled = isNotificationEnabled();
+        syncNotificationCard();
+        // 通知可用时立即拉起前台服务，让用户离开本页前通知栏就有常驻输码通知。
         if (notificationEnabled) {
             startPairingService(false);
         }
@@ -126,9 +133,10 @@ public final class PairingActivity extends Activity {
             MdnsProbe.get(this).start(this::onPorts);
         } catch (Throwable t) {
             Log.w(TAG, "mDNS start failed", t);
-            statusText.setText(R.string.pairing_mdns_failed);
+            tvDiscover.setText(R.string.pairing_mdns_failed);
         }
         applyCachedPorts();
+        refreshServiceState();
     }
 
     @Override
@@ -138,22 +146,23 @@ public final class PairingActivity extends Activity {
         if (enabled != notificationEnabled) {
             notificationEnabled = enabled;
             syncNotificationCard();
-            // 用户刚在通知设置里放行：立刻补启动前台服务
             if (enabled) {
                 startPairingService(false);
             }
         }
         applyCachedPorts();
+        refreshServiceState();
     }
 
     @Override
     protected void onDestroy() {
-        cancelConnectTimeout();
+        cancelAutoActivateTimeout();
         try {
             MdnsProbe.get(this).clearCallback();
         } catch (Throwable ignored) {
         }
         worker.shutdownNow();
+        probeWorker.shutdownNow();
         super.onDestroy();
     }
 
@@ -164,6 +173,50 @@ public final class PairingActivity extends Activity {
         syncNotificationCard();
         if (notificationEnabled) {
             startPairingService(false);
+        }
+    }
+
+    // ------------------------------------------------------------ 服务状态
+
+    /**
+     * 只探测 abstract socket 是否被监听（连上即代表特权代理进程在跑），不做
+     * 完整握手，几乎瞬时。放在独立线程池，绝不阻塞激活/配对的 worker，也不卡 UI。
+     */
+    private void refreshServiceState() {
+        probeWorker.execute(() -> {
+            boolean active = false;
+            try {
+                LocalSocket s = new LocalSocket();
+                try {
+                    s.connect(new LocalSocketAddress(
+                            BrokerClient.socketName(getApplicationContext()),
+                            LocalSocketAddress.Namespace.ABSTRACT));
+                    active = true;
+                } finally {
+                    try { s.close(); } catch (Throwable ignored) { }
+                }
+            } catch (Throwable ignored) {
+                active = false;
+            }
+            final boolean result = active;
+            ui(() -> applyServiceState(result));
+        });
+    }
+
+    private void applyServiceState(boolean active) {
+        serviceActive = active;
+        if (active) {
+            tvServiceBadge.setText(R.string.pairing_badge_active);
+            vStatusDot.setBackgroundResource(R.drawable.bg_status_dot_ok);
+            tvServiceState.setText(R.string.pairing_state_on);
+            tvServiceHint.setText(R.string.pairing_state_hint_on);
+            btnActivate.setText(R.string.pairing_btn_activate_again);
+        } else {
+            tvServiceBadge.setText(R.string.pairing_badge_inactive);
+            vStatusDot.setBackgroundResource(R.drawable.bg_status_dot);
+            tvServiceState.setText(R.string.pairing_state_off);
+            tvServiceHint.setText(R.string.pairing_state_hint_off);
+            btnActivate.setText(R.string.pairing_btn_activate);
         }
     }
 
@@ -187,15 +240,8 @@ public final class PairingActivity extends Activity {
         cardNotif.setVisibility(notificationEnabled ? View.GONE : View.VISIBLE);
     }
 
-    /**
-     * 启动通知栏输码通道。参考实现在教程页 onCreate / onResume 里直接调用
-     * startForegroundService；被系统禁止后台启动前台服务时降级为普通 startService
-     * 并提示用户关闭电池优化。
-     */
+    /** 通知栏输码通道：进入页面即启动；被系统禁止后台启动前台服务时降级普通 startService。 */
     private void startPairingService(boolean userInitiated) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            return;
-        }
         Intent intent = WirelessPairingService.startIntent(this);
         try {
             startForegroundService(intent);
@@ -204,23 +250,9 @@ public final class PairingActivity extends Activity {
             }
         } catch (Throwable t) {
             Log.w(TAG, "startForegroundService failed", t);
-            // 用类名判断而非 instanceof：该异常类只在 Android 12+ 存在，
-            // 避免在低版本 ROM 上触发类解析失败。
-            boolean startNotAllowed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                    && t.getClass().getName().contains("ForegroundServiceStartNotAllowedException");
+            boolean startNotAllowed = t.getClass().getName()
+                    .contains("ForegroundServiceStartNotAllowedException");
             if (startNotAllowed) {
-                try {
-                    AppOpsManager ops = getSystemService(AppOpsManager.class);
-                    int mode = ops == null ? AppOpsManager.MODE_ALLOWED
-                            : ops.noteOpNoThrow("android:start_foreground",
-                            android.os.Process.myUid(), getPackageName(), null, null);
-                    if (mode == AppOpsManager.MODE_ERRORED) {
-                        toast(getString(R.string.pairing_fgs_blocked));
-                        openBatterySettings();
-                        return;
-                    }
-                } catch (Throwable ignored) {
-                }
                 try {
                     startService(intent);
                     if (userInitiated) {
@@ -260,7 +292,6 @@ public final class PairingActivity extends Activity {
         }
     }
 
-    /** 部分 ROM 在应用不可见时禁止联网，即使有前台服务；需加入电池优化白名单。 */
     private void openBatterySettings() {
         try {
             Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
@@ -300,70 +331,114 @@ public final class PairingActivity extends Activity {
             return;
         }
 
-        if (state == STATE_AWAIT_CONNECT && c > 0) {
-            doStart(c);
-            return;
+        // 连接端口自动回填到激活输入框（用户没在改时）。
+        if (c > 0 && etConnectPort.getText().toString().trim().isEmpty()) {
+            etConnectPort.setText(String.valueOf(c));
+            etConnectPort.setSelection(etConnectPort.getText().length());
         }
-        if (state == STATE_PAIRING || state == STATE_STARTING || state == STATE_DONE) {
-            return;
+        if (p > 0 && etPort.getText().toString().trim().isEmpty()) {
+            etPort.setText(String.valueOf(p));
+            etPort.setSelection(etPort.getText().length());
+        }
+        if (c > 0) {
+            tvDiscover.setText(getString(R.string.pairing_discover_found, c));
+        } else {
+            tvDiscover.setText(R.string.pairing_discover_searching);
         }
 
-        if (pairingPort <= 0) {
-            statusText.setText(R.string.pairing_status_searching);
-            return;
-        }
-        portInput.setText(String.valueOf(pairingPort));
-        portInput.setSelection(portInput.getText().length());
-        if (connectPort > 0) {
-            statusText.setText(getString(R.string.pairing_status_ready, pairingPort, connectPort));
-        } else {
-            statusText.setText(getString(R.string.pairing_status_wait_connect, pairingPort));
+        // 配对成功后系统可能重分配连接端口：拿到新端口自动激活一次。
+        if (pendingAutoActivate && c > 0 && !working) {
+            pendingAutoActivate = false;
+            cancelAutoActivateTimeout();
+            doActivate(c);
         }
     }
 
-    // ------------------------------------------------------------ 备用：页面内输码
+    // ------------------------------------------------------------ 主 CTA：激活服务
+
+    /**
+     * 激活服务：用已登记的公钥连接连接端口并启动特权代理。
+     * 端口优先取输入框（自动发现回填或用户手填），否则退回缓存端口。
+     * 随时可点、可重复；失败只更新结果条，不改变按钮可用性。
+     */
+    private void onActivateClicked() {
+        if (working) {
+            return;
+        }
+        int port = parsePort(etConnectPort);
+        if (port <= 0) {
+            port = connectPort > 0 ? connectPort : lastConnectPort;
+        }
+        if (port <= 0) {
+            showResult(getString(R.string.pairing_activate_need_port), RESULT_ERR);
+            return;
+        }
+        pendingAutoActivate = false;
+        cancelAutoActivateTimeout();
+        doActivate(port);
+    }
+
+    private void doActivate(int port) {
+        if (working || isFinishing() || isDestroyed()) {
+            return;
+        }
+        working = true;
+        setWorking(true);
+        showResult(getString(R.string.pairing_activating), RESULT_INFO);
+        final int finalPort = port;
+        final String host = MdnsProbe.get(this).resolvedHost();
+        worker.execute(() -> {
+            String raw = WirelessRunner.start(PairingActivity.this, finalPort, host);
+            ui(() -> onActivateResult(raw));
+        });
+    }
+
+    private void onActivateResult(String raw) {
+        working = false;
+        setWorking(false);
+        JSONObject j = parse(raw);
+        if (j.optBoolean("ok", false)) {
+            paired = true;
+            showResult(getString(R.string.pairing_activate_ok), RESULT_OK);
+            refreshServiceState();
+            return;
+        }
+        String code = j.optString("code", "");
+        String stage = j.optString("stage", "");
+        String message = j.optString("message", "");
+        String text = friendlyMessage(code, stage, message);
+        // 认证/连接类失败，多半是还没配对过或端口不对，补充引导。
+        if (!paired && (stage.contains("connect") || stage.contains("shell"))) {
+            text = text + "\n\n" + getString(R.string.pairing_first_desc);
+        }
+        showResult(text, RESULT_ERR);
+        refreshServiceState();
+    }
+
+    // ------------------------------------------------------------ 备用：页面内配对
 
     private void onPairClicked() {
-        if (state == STATE_DONE) {
-            finish();
+        if (working) {
             return;
         }
-        if (state == STATE_PAIRING || state == STATE_STARTING) {
-            return;
-        }
-        if (paired) {
-            int c = connectPort > 0 ? connectPort : lastConnectPort;
-            if (c <= 0) {
-                resultText.setVisibility(View.VISIBLE);
-                resultText.setText(R.string.pairing_connect_lost);
-                return;
-            }
-            doStart(c);
-            return;
-        }
-
-        String code = codeInput.getText().toString().trim();
+        String code = etCode.getText().toString().trim();
         if (!code.matches("\\d{6}")) {
-            resultText.setVisibility(View.VISIBLE);
-            resultText.setText(R.string.pairing_bad_code);
+            showResult(getString(R.string.pairing_bad_code), RESULT_ERR);
             return;
         }
-        int port;
-        try {
-            port = Integer.parseInt(portInput.getText().toString().trim());
-        } catch (NumberFormatException e) {
-            port = -1;
+        int port = parsePort(etPort);
+        if (port <= 0) {
+            port = pairingPort;
         }
-        if (port < 1 || port > 65535) {
-            resultText.setVisibility(View.VISIBLE);
-            resultText.setText(R.string.pairing_bad_port);
+        if (port <= 0) {
+            showResult(getString(R.string.pairing_bad_port), RESULT_ERR);
             return;
         }
-
-        state = STATE_PAIRING;
-        setWorking(true, R.string.pairing_working);
-        final String finalCode = code;
+        working = true;
+        setWorking(true);
+        showResult(getString(R.string.pairing_working), RESULT_INFO);
         final int finalPort = port;
+        final String finalCode = code;
         final String host = MdnsProbe.get(this).resolvedHost();
         worker.execute(() -> {
             String raw = WirelessRunner.pair(PairingActivity.this, finalPort, finalCode, host);
@@ -372,102 +447,87 @@ public final class PairingActivity extends Activity {
     }
 
     private void onPairResult(String raw) {
-        setWorking(false, 0);
+        working = false;
+        setWorking(false);
         JSONObject j = parse(raw);
-        boolean ok = j.optBoolean("ok", false);
-        String stage = j.optString("stage", "");
-        if (ok && WirelessRunner.STAGE_PAIRED.equals(stage)) {
+        if (j.optBoolean("ok", false) && WirelessRunner.STAGE_PAIRED.equals(j.optString("stage", ""))) {
             paired = true;
-            state = STATE_AWAIT_CONNECT;
-            resultText.setVisibility(View.VISIBLE);
-            resultText.setTextColor(getResources().getColor(R.color.text_secondary, getTheme()));
-            resultText.setText(R.string.pairing_paired_wait_connect);
-            statusText.setText(R.string.pairing_paired_wait_connect);
-            btnPair.setText(R.string.pairing_retry_connect);
-            btnPair.setEnabled(false);
+            showResult(getString(R.string.pairing_paired_activate_hint), RESULT_OK);
+            // 配对成功后连接端口可能重分配：重启发现，拿到新端口自动激活一次；
+            // 无论自动是否成功，激活按钮始终可手动点。
+            pendingAutoActivate = true;
             try {
                 MdnsProbe.get(this).restart(this::onPorts);
             } catch (Throwable t) {
                 Log.w(TAG, "restart discovery failed", t);
             }
-            scheduleConnectTimeout();
+            scheduleAutoActivateTimeout();
             return;
         }
-        state = STATE_IDLE;
-        showFailure(j);
+        showResult(friendlyMessage(
+                j.optString("code", ""), j.optString("stage", ""), j.optString("message", "")),
+                RESULT_ERR);
     }
 
-    private void scheduleConnectTimeout() {
-        cancelConnectTimeout();
-        connectTimeout = () -> {
-            if (state != STATE_AWAIT_CONNECT || isFinishing() || isDestroyed()) {
+    private void scheduleAutoActivateTimeout() {
+        cancelAutoActivateTimeout();
+        autoActivateTimeout = () -> {
+            if (!pendingAutoActivate || isFinishing() || isDestroyed() || working) {
                 return;
             }
-            if (lastConnectPort > 0) {
-                doStart(lastConnectPort);
-            } else {
-                state = STATE_IDLE;
-                btnPair.setEnabled(true);
-                resultText.setText(R.string.pairing_connect_lost);
+            pendingAutoActivate = false;
+            // 没等到新端口：把当前端口填入输入框，交给用户手动点激活按钮。
+            int port = connectPort > 0 ? connectPort : lastConnectPort;
+            if (port > 0 && etConnectPort.getText().toString().trim().isEmpty()) {
+                etConnectPort.setText(String.valueOf(port));
             }
+            showResult(getString(R.string.pairing_paired_activate_hint), RESULT_INFO);
         };
-        uiHandler.postDelayed(connectTimeout, CONNECT_WAIT_MS);
+        uiHandler.postDelayed(autoActivateTimeout, AUTO_ACTIVATE_WAIT_MS);
     }
 
-    private void cancelConnectTimeout() {
-        if (connectTimeout != null) {
-            uiHandler.removeCallbacks(connectTimeout);
-            connectTimeout = null;
+    private void cancelAutoActivateTimeout() {
+        if (autoActivateTimeout != null) {
+            uiHandler.removeCallbacks(autoActivateTimeout);
+            autoActivateTimeout = null;
         }
     }
 
-    private void doStart(int port) {
-        if (state == STATE_STARTING || state == STATE_DONE) {
-            return;
+    // ------------------------------------------------------------ 结果条与工具
+
+    private static final int RESULT_INFO = 0;
+    private static final int RESULT_OK = 1;
+    private static final int RESULT_ERR = 2;
+
+    private void showResult(String text, int kind) {
+        tvResult.setVisibility(View.VISIBLE);
+        tvResult.setText(text);
+        if (kind == RESULT_OK) {
+            tvResult.setBackgroundResource(R.drawable.bg_result_strip_ok);
+            tvResult.setTextColor(getResources().getColor(R.color.success, getTheme()));
+        } else if (kind == RESULT_ERR) {
+            tvResult.setBackgroundResource(R.drawable.bg_result_strip_err);
+            tvResult.setTextColor(getResources().getColor(R.color.danger, getTheme()));
+        } else {
+            tvResult.setBackgroundResource(R.drawable.bg_result_strip);
+            tvResult.setTextColor(getResources().getColor(R.color.text_primary, getTheme()));
         }
-        cancelConnectTimeout();
-        state = STATE_STARTING;
-        setWorking(true, R.string.pairing_starting);
-        final int finalPort = port;
-        final String host = MdnsProbe.get(this).resolvedHost();
-        worker.execute(() -> {
-            String raw = WirelessRunner.start(PairingActivity.this, finalPort, host);
-            ui(() -> onStartResult(raw));
-        });
     }
 
-    private void onStartResult(String raw) {
-        setWorking(false, 0);
-        JSONObject j = parse(raw);
-        if (j.optBoolean("ok", false)) {
-            state = STATE_DONE;
-            paired = true;
-            statusText.setText(R.string.pairing_status_done);
-            resultText.setVisibility(View.VISIBLE);
-            resultText.setTextColor(getResources().getColor(R.color.success, getTheme()));
-            resultText.setText(R.string.pairing_success);
-            btnPair.setText(R.string.pairing_back);
-            btnPair.setEnabled(true);
-            try {
-                MdnsProbe.get(this).stop();
-            } catch (Throwable ignored) {
+    private void setWorking(boolean on) {
+        btnActivate.setEnabled(!on);
+        btnPair.setEnabled(!on);
+    }
+
+    private int parsePort(EditText field) {
+        try {
+            int p = Integer.parseInt(field.getText().toString().trim());
+            if (p >= 1 && p <= 65535) {
+                return p;
             }
-            return;
+        } catch (NumberFormatException ignored) {
         }
-        state = STATE_IDLE;
-        btnPair.setText(R.string.pairing_retry_connect);
-        showFailure(j);
-    }
-
-    private void showFailure(JSONObject j) {
-        resultText.setVisibility(View.VISIBLE);
-        resultText.setTextColor(getResources().getColor(R.color.danger, getTheme()));
-        resultText.setText(friendlyMessage(
-                j.optString("code", ""), j.optString("stage", ""), j.optString("message", "")));
-        btnPair.setEnabled(true);
-        if (!paired) {
-            btnPair.setText(R.string.pairing_retry);
-        }
+        return -1;
     }
 
     private JSONObject parse(String raw) {
@@ -479,16 +539,6 @@ public final class PairingActivity extends Activity {
             } catch (Throwable ignored) {
                 return new JSONObject();
             }
-        }
-    }
-
-    private void setWorking(boolean working, int messageRes) {
-        btnPair.setEnabled(!working);
-        btnRestart.setEnabled(!working);
-        if (messageRes != 0) {
-            resultText.setVisibility(View.VISIBLE);
-            resultText.setTextColor(getResources().getColor(R.color.text_secondary, getTheme()));
-            resultText.setText(messageRes);
         }
     }
 

@@ -258,7 +258,7 @@
     <string name="pairing_battery_button">电池优化设置</string>
     <string name="pairing_step1">1. 点下方「去无线调试」，打开无线调试开关（必须已连接 WLAN）。</string>
     <string name="pairing_step2">2. 点「使用配对码配对设备」，弹出 6 位配对码。注意：这个弹窗不能退出、不能返回，一离开无线调试页就会消失。</string>
-    <string name="pairing_step3">3. 不要切回本应用，直接下拉通知栏，在本应用的常驻通知里点「输入配对码」填入 6 位数字。配对成功后会自动重新发现连接服务并启动特权代理。</string>
+    <string name="pairing_step3">3. 不要切回本应用，直接下拉通知栏，在本应用的常驻通知里点「输入配对码」填入 6 位数字。配对完成后回到本页，点「激活服务」启动特权代理。</string>
     <string name="pairing_dev_options">去无线调试</string>
     <string name="pairing_status_searching">正在搜索配对服务… 请点「去无线调试」打开配对码弹窗，然后下拉通知栏。</string>
     <string name="pairing_status_ready">已发现配对服务（端口 %1$d），连接服务端口 %2$d。请下拉通知栏输码。</string>
@@ -295,4 +295,34 @@
     <string name="pairing_open_failed">无法打开配对页，请重试</string>
 
     <string name="wireless_key_error">密钥初始化失败：</string>
+
+    <!-- 现代化配对页：状态、激活服务主 CTA、首次配对、环境 -->
+    <string name="pairing_hero_title">无线调试配对</string>
+    <string name="pairing_hero_subtitle">免 Root · 免电脑 · shell 身份运行</string>
+    <string name="pairing_badge_inactive">未激活</string>
+    <string name="pairing_badge_active">已激活</string>
+    <string name="pairing_state_off">特权代理未运行</string>
+    <string name="pairing_state_on">特权代理已激活</string>
+    <string name="pairing_state_hint_off">配对一次后，公钥会保存在本机。之后随时点「激活服务」即可重新拉起代理，无需再次配对。</string>
+    <string name="pairing_state_hint_on">代理正以 shell(2000) 身份运行，可返回主界面使用静默安装等功能。</string>
+    <string name="pairing_btn_refresh">刷新</string>
+    <string name="pairing_activate_section">激活服务</string>
+    <string name="pairing_activate_chip">随时可用</string>
+    <string name="pairing_activate_desc">只要「无线调试」保持开启并连接 WLAN，点下方按钮即可连接无线调试、以 shell 身份启动特权代理。若此前已配对成功，公钥已保存在本机，无需重复配对——重启设备后直接激活即可。</string>
+    <string name="pairing_discover_searching">正在自动搜索无线调试连接服务…</string>
+    <string name="pairing_discover_found">已发现连接服务端口 %1$d（本机）</string>
+    <string name="pairing_discover_manual">未自动发现端口，请在「无线调试」页查看「IP 地址和端口」并填写</string>
+    <string name="pairing_connect_port_hint">连接端口（自动发现，或填无线调试页端口）</string>
+    <string name="pairing_btn_activate">激活服务</string>
+    <string name="pairing_btn_activate_again">重新激活服务</string>
+    <string name="pairing_activating">正在连接无线调试并以 shell 身份启动特权代理…</string>
+    <string name="pairing_activate_ok">激活成功：特权代理已启动。返回主界面点「刷新状态」即可使用。</string>
+    <string name="pairing_activate_need_port">请先填写连接端口：可在「无线调试」页「IP 地址和端口」查看，或等待自动发现。</string>
+    <string name="pairing_activate_bad_port">端口无效，请输入 1–65535 之间的数字</string>
+    <string name="pairing_first_section">首次配对（只需一次）</string>
+    <string name="pairing_first_desc">仅首次启用或系统清除配对时需要。配对码弹窗不能退出、不能返回，请下拉通知栏在常驻通知里输入 6 位码。</string>
+    <string name="pairing_manual_title">备用：在本页输入</string>
+    <string name="pairing_manual_desc">分屏、小窗等不便下拉通知栏时，可在此手填配对端口与 6 位配对码。配对完成后同样需要点上方「激活服务」。</string>
+    <string name="pairing_env_section">环境与权限</string>
+    <string name="pairing_paired_activate_hint">配对成功，公钥已登记到设备。现在点上方「激活服务」按钮启动特权代理。</string>
 </resources>
