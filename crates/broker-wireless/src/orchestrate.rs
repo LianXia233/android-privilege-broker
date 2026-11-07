@@ -7,6 +7,11 @@
 //! * `start`：跳过配对，用重新发现到的连接端口连接并启动；
 //! * 缺省 / `full`：一次串完（通知栏可选通道的兼容路径）。
 //!
+//! 连接目标地址不再假定为 loopback。AOSP 把 adbd 的 TLS 端口绑在
+//! `127.0.0.1`，但部分 ROM（如 HyperOS）绑定在 WLAN 接口 IP 上，设置页里
+//! 显示的 `IP 地址和端口` 就是该地址。Java 层把 mDNS 解析地址、本机网卡
+//! IPv4 与 loopback 一起作为 `hosts` 传进来，这里逐个尝试，任一连通即用。
+//!
 //! 所有结果以稳定 JSON 返回，带 stage / code / message，不抛异常。
 
 use std::path::Path;
@@ -26,7 +31,12 @@ pub const STAGE_START: &str = "start";
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WirelessRequest {
+    /// 兼容旧调用方的主地址；`hosts` 为空时使用。
+    #[serde(default)]
     pub host: String,
+    /// 候选连接地址，按可靠性排序（mDNS 解析地址 → 本机网卡 IPv4 → loopback）。
+    #[serde(default)]
+    pub hosts: Vec<String>,
     pub pairing_port: u16,
     pub pairing_code: String,
     pub connect_port: u16,
@@ -39,6 +49,23 @@ pub struct WirelessRequest {
     /// 执行阶段：`pair` / `start` / 缺省（完整链路）。
     #[serde(default)]
     pub stage: String,
+}
+
+impl WirelessRequest {
+    /// 去重后的候选地址；至少保证有一个可尝试的目标。
+    fn candidate_hosts(&self) -> Vec<String> {
+        let mut result: Vec<String> = Vec::new();
+        for h in self.hosts.iter().chain(std::iter::once(&self.host)) {
+            let s = h.trim();
+            if !s.is_empty() && !result.iter().any(|x| x == s) {
+                result.push(s.to_string());
+            }
+        }
+        if result.is_empty() {
+            result.push("127.0.0.1".to_string());
+        }
+        result
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -70,8 +97,8 @@ pub fn build_start_command(req: &WirelessRequest) -> String {
 
 /// 按阶段校验：只配对时不要求连接端口与启动参数，只启动时反之。
 fn validate(req: &WirelessRequest, need_pair: bool, need_start: bool) -> Result<(), WirelessError> {
-    if req.host.trim().is_empty() {
-        return Err(WirelessError::Protocol("host 不能为空".into()));
+    if req.candidate_hosts().is_empty() {
+        return Err(WirelessError::Protocol("没有可用的连接地址".into()));
     }
     if req.key_path.trim().is_empty() {
         return Err(WirelessError::Protocol("密钥路径不能为空".into()));
@@ -96,6 +123,29 @@ fn validate(req: &WirelessRequest, need_pair: bool, need_start: bool) -> Result<
     Ok(())
 }
 
+/// 在多个候选地址上尝试同一个连接动作，任一成功即返回。
+///
+/// 全部失败时优先返回「非连接类」错误（配对码错误、协议错误等更有诊断价值，
+/// 说明已经连上了只是对端拒绝了），否则返回最后一次连接错误。
+fn try_hosts<T, F>(hosts: &[String], mut action: F) -> Result<T, WirelessError>
+where
+    F: FnMut(&str) -> Result<T, WirelessError>,
+{
+    let mut last_conn: Option<WirelessError> = None;
+    for host in hosts {
+        match action(host) {
+            Ok(value) => return Ok(value),
+            Err(e) => match e {
+                WirelessError::Io(_) | WirelessError::Tls(_) => last_conn = Some(e),
+                other => return Err(other),
+            },
+        }
+    }
+    Err(last_conn.unwrap_or_else(|| {
+        WirelessError::Protocol("所有候选地址均无法连接".into())
+    }))
+}
+
 fn execute(args_json: &str) -> Result<WirelessResponse, (String, WirelessError)> {
     let req: WirelessRequest = serde_json::from_str(args_json)
         .map_err(|e| ("config".to_string(), WirelessError::Protocol(format!("请求 JSON 非法: {e}"))))?;
@@ -104,13 +154,16 @@ fn execute(args_json: &str) -> Result<WirelessResponse, (String, WirelessError)>
     let need_start = req.stage != STAGE_PAIR;
     validate(&req, need_pair, need_start).map_err(|e| ("config".to_string(), e))?;
 
+    let hosts = req.candidate_hosts();
+
     // 配对与后续连接必须复用同一把密钥：设备端登记的公钥就是 TLS 客户端证书。
     let key = AdbKey::load_or_create(Path::new(&req.key_path))
         .map_err(|e| ("key".to_string(), e))?;
 
     if need_pair {
-        pairing::pair(&req.host, req.pairing_port, &req.pairing_code, &key)
-            .map_err(|e| ("pairing".to_string(), e))?;
+        let _ = try_hosts(&hosts, |host| {
+            pairing::pair(host, req.pairing_port, &req.pairing_code, &key)
+        }).map_err(|e| ("pairing".to_string(), e))?;
         if !need_start {
             return Ok(WirelessResponse {
                 ok: true,
@@ -122,8 +175,9 @@ fn execute(args_json: &str) -> Result<WirelessResponse, (String, WirelessError)>
         }
     }
 
-    let mut client = AdbClient::connect(&req.host, req.connect_port, &key)
-        .map_err(|e| ("connect".to_string(), e))?;
+    let mut client = try_hosts(&hosts, |host| {
+        AdbClient::connect(host, req.connect_port, &key)
+    }).map_err(|e| ("connect".to_string(), e))?;
     let command = build_start_command(&req);
     let output = client.shell(&command).map_err(|e| ("shell".to_string(), e))?;
 
@@ -160,6 +214,7 @@ mod tests {
     fn request() -> WirelessRequest {
         WirelessRequest {
             host: "127.0.0.1".into(),
+            hosts: vec![],
             pairing_port: 37331,
             pairing_code: "482913".into(),
             connect_port: 41235,
@@ -277,5 +332,89 @@ mod tests {
         })).unwrap();
         let parsed: WirelessRequest = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.stage, "");
+    }
+
+    // ------------------------------------------------------------ 多地址候选
+
+    #[test]
+    fn candidate_hosts_dedup_and_order() {
+        let mut req = request();
+        req.hosts = vec![
+            "192.168.88.158".into(),
+            "192.168.88.158".into(),
+            " 10.0.0.2 ".into(),
+            "".into(),
+        ];
+        req.host = "127.0.0.1".into();
+        assert_eq!(req.candidate_hosts(), vec![
+            "192.168.88.158".to_string(),
+            "10.0.0.2".to_string(),
+            "127.0.0.1".to_string(),
+        ]);
+    }
+
+    #[test]
+    fn candidate_hosts_falls_back_when_all_empty() {
+        let mut req = request();
+        req.host.clear();
+        req.hosts.clear();
+        assert_eq!(req.candidate_hosts(), vec!["127.0.0.1".to_string()]);
+    }
+
+    #[test]
+    fn hosts_field_is_optional_in_json() {
+        let req = request();
+        let json = serde_json::to_string(&serde_json::json!({
+            "host": req.host, "pairingPort": req.pairing_port,
+            "pairingCode": req.pairing_code, "connectPort": req.connect_port,
+            "keyPath": req.key_path, "apkPath": req.apk_path,
+            "nativeLibDir": req.native_lib_dir, "token": req.token,
+            "client": req.client, "endpoint": req.endpoint,
+        })).unwrap();
+        let parsed: WirelessRequest = serde_json::from_str(&json).unwrap();
+        assert!(parsed.hosts.is_empty());
+        assert_eq!(parsed.candidate_hosts(), vec!["127.0.0.1".to_string()]);
+    }
+
+    #[test]
+    fn try_hosts_skips_failing_addresses() {
+        let hosts = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let mut seen = Vec::new();
+        let value: i32 = try_hosts(&hosts, |h| {
+            seen.push(h.to_string());
+            if h == "c" {
+                Ok(7)
+            } else {
+                Err(WirelessError::Io(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionRefused, "refused")))
+            }
+        }).unwrap();
+        assert_eq!(value, 7);
+        assert_eq!(seen, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn try_hosts_returns_protocol_error_immediately() {
+        let hosts = vec!["a".to_string(), "b".to_string()];
+        let mut seen = Vec::new();
+        let err = try_hosts::<(), _>(&hosts, |h| {
+            seen.push(h.to_string());
+            Err(WirelessError::BadPairingCode)
+        }).unwrap_err();
+        assert_eq!(err.code(), "BAD_PAIRING_CODE");
+        assert_eq!(seen, vec!["a"]);
+    }
+
+    #[test]
+    fn wlan_ip_is_accepted_as_candidate() {
+        let json = serde_json::json!({
+            "hosts": ["192.168.88.158", "127.0.0.1"],
+            "pairingPort": 39099, "pairingCode": "146861", "connectPort": 41407,
+            "keyPath": "/tmp/k", "apkPath": "/a.apk", "nativeLibDir": "/lib",
+            "token": "0123456789abcdef", "client": "installer", "endpoint": "abstract",
+            "stage": "pair",
+        });
+        let parsed: WirelessRequest = serde_json::from_str(&json.to_string()).unwrap();
+        assert_eq!(parsed.candidate_hosts()[0], "192.168.88.158");
     }
 }

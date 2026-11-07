@@ -26,10 +26,29 @@ fn server_name(host: &str) -> Result<ServerName<'static>, WirelessError> {
         .map_err(|e| WirelessError::Protocol(format!("非法服务名 {host}: {e}")))
 }
 
+/// 带超时的 TCP 连接。无线调试的候选地址可能有多个（WLAN 接口 IP、本机
+/// 其它网卡、loopback），某个不可达的地址若用系统默认 connect 超时会阻塞
+/// 数十秒，逐个尝试时必须给出明确上限。
+pub fn connect_tcp(host: &str, port: u16) -> Result<TcpStream, WirelessError> {
+    use std::net::ToSocketAddrs;
+    let addrs: Vec<_> = (host, port).to_socket_addrs()?.collect();
+    let mut last: Option<std::io::Error> = None;
+    for addr in addrs {
+        match TcpStream::connect_timeout(&addr, Duration::from_secs(3)) {
+            Ok(stream) => return Ok(stream),
+            Err(e) => last = Some(e),
+        }
+    }
+    Err(WirelessError::Io(last.unwrap_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::AddrNotAvailable,
+            format!("{host}:{port} 无法解析为可连接地址"))
+    })))
+}
+
 impl TlsStream {
     /// 新建 TCP 连接并完成 TLS 握手。
     pub fn connect(host: &str, port: u16, cfg: ClientConfig) -> Result<Self, WirelessError> {
-        let tcp = TcpStream::connect((host, port))?;
+        let tcp = connect_tcp(host, port)?;
         Self::wrap(tcp, cfg, host)
     }
 

@@ -2,11 +2,13 @@ package io.github.lianxia233.privbroker;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AppOpsManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -26,19 +28,18 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * 无线调试配对页：教程、服务发现、配对码输入、结果反馈都在同一个前台界面完成。
+ * 无线调试配对教程页。
  *
- * 结构上把「教程」与「输码」合成一页，是为了避开弹窗生命周期问题：用户需要
- * 跳到系统开发者选项打开配对弹窗，期间本页会进入后台；若输码依赖 Dialog，
- * 后台弹出的窗口既可能不显示，也可能在界面重建后丢失。
+ * 形态与成熟实现一致：本页只负责引导与检查前置条件，**一进入页面就启动
+ * 前台服务**，让通知栏立刻出现常驻通知。用户随后点「去无线调试」进入系统
+ * 设置、打开配对码弹窗，此时不能退出也不能返回（离开设置页弹窗即消失），
+ * 只能下拉通知栏 —— 下拉不会让设置页失去焦点 —— 在常驻通知里输入 6 位码。
  *
- * 本页不自动启动任何前台服务。mDNS 发现直接绑定本页生命周期，配对码在页面内
- * 输入，因此通知权限、通知样式、前台服务类型、ROM 后台策略都不会影响配对能力。
+ * 因此通知栏是唯一主路径；页面内的端口/配对码输入框只作为小窗、分屏或
+ * 平板等多窗口场景下的备用入口，不依赖通知权限与 ROM 通知样式。
  *
- * 链路按参考实现分成两个阶段：
- * 1. 配对：只用配对服务端口 + 6 位码注册 ADB 公钥；
- * 2. 启动：配对成功后系统可能重分配连接服务端口，重新发现该端口再连接并
- *    执行 shell。配对阶段不再要求连接服务已就绪，两阶段各自可独立失败/重试。
+ * 连接地址不再假定 loopback：mDNS 解析出的 WLAN 接口 IP 与本机网卡地址、
+ * 127.0.0.1 一起作为候选交给 native 层逐个尝试。
  */
 public final class PairingActivity extends Activity {
 
@@ -60,7 +61,7 @@ public final class PairingActivity extends Activity {
     private LinearLayout cardNotif;
     private LinearLayout cardMiui;
     private Button btnPair;
-    private Button btnNotification;
+    private Button btnRestart;
     private EditText portInput;
     private EditText codeInput;
 
@@ -82,14 +83,15 @@ public final class PairingActivity extends Activity {
         cardNotif = findViewById(R.id.cardNotif);
         cardMiui = findViewById(R.id.cardMiui);
         btnPair = findViewById(R.id.btnPair);
-        btnNotification = findViewById(R.id.btnNotification);
+        btnRestart = findViewById(R.id.btnNotification);
         portInput = findViewById(R.id.portInput);
         codeInput = findViewById(R.id.codeInput);
 
         findViewById(R.id.btnDevOptions).setOnClickListener(v -> openDeveloperOptions());
         findViewById(R.id.btnNotifSettings).setOnClickListener(v -> openNotificationSettings());
+        findViewById(R.id.btnBattery).setOnClickListener(v -> openBatterySettings());
         btnPair.setOnClickListener(v -> onPairClicked());
-        btnNotification.setOnClickListener(v -> startNotificationMode());
+        btnRestart.setOnClickListener(v -> startPairingService(true));
 
         if (RomCompat.isMiuiLike()) {
             cardMiui.setVisibility(View.VISIBLE);
@@ -98,14 +100,13 @@ public final class PairingActivity extends Activity {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             statusText.setText(R.string.pairing_requires_android11);
             btnPair.setEnabled(false);
-            btnNotification.setEnabled(false);
+            btnRestart.setEnabled(false);
             return;
         }
 
         notificationEnabled = isNotificationEnabled();
         syncNotificationCard();
 
-        // 可选：顺带申请通知权限，但不阻塞配对主路径
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -114,6 +115,11 @@ public final class PairingActivity extends Activity {
             } catch (Throwable t) {
                 Log.w(TAG, "request POST_NOTIFICATIONS failed", t);
             }
+        }
+
+        // 通知已开启时立即启动前台服务，用户离开本页之前通知栏就有常驻通知。
+        if (notificationEnabled) {
+            startPairingService(false);
         }
 
         try {
@@ -132,6 +138,10 @@ public final class PairingActivity extends Activity {
         if (enabled != notificationEnabled) {
             notificationEnabled = enabled;
             syncNotificationCard();
+            // 用户刚在通知设置里放行：立刻补启动前台服务
+            if (enabled) {
+                startPairingService(false);
+            }
         }
         applyCachedPorts();
     }
@@ -152,9 +162,12 @@ public final class PairingActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         notificationEnabled = isNotificationEnabled();
         syncNotificationCard();
+        if (notificationEnabled) {
+            startPairingService(false);
+        }
     }
 
-    // ------------------------------------------------------------ 教程与权限
+    // ------------------------------------------------------------ 权限与前置条件
 
     private boolean isNotificationEnabled() {
         try {
@@ -172,6 +185,55 @@ public final class PairingActivity extends Activity {
 
     private void syncNotificationCard() {
         cardNotif.setVisibility(notificationEnabled ? View.GONE : View.VISIBLE);
+    }
+
+    /**
+     * 启动通知栏输码通道。参考实现在教程页 onCreate / onResume 里直接调用
+     * startForegroundService；被系统禁止后台启动前台服务时降级为普通 startService
+     * 并提示用户关闭电池优化。
+     */
+    private void startPairingService(boolean userInitiated) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return;
+        }
+        Intent intent = WirelessPairingService.startIntent(this);
+        try {
+            startForegroundService(intent);
+            if (userInitiated) {
+                toast(getString(R.string.pairing_notif_mode_started));
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "startForegroundService failed", t);
+            // 用类名判断而非 instanceof：该异常类只在 Android 12+ 存在，
+            // 避免在低版本 ROM 上触发类解析失败。
+            boolean startNotAllowed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                    && t.getClass().getName().contains("ForegroundServiceStartNotAllowedException");
+            if (startNotAllowed) {
+                try {
+                    AppOpsManager ops = getSystemService(AppOpsManager.class);
+                    int mode = ops == null ? AppOpsManager.MODE_ALLOWED
+                            : ops.noteOpNoThrow("android:start_foreground",
+                            android.os.Process.myUid(), getPackageName(), null, null);
+                    if (mode == AppOpsManager.MODE_ERRORED) {
+                        toast(getString(R.string.pairing_fgs_blocked));
+                        openBatterySettings();
+                        return;
+                    }
+                } catch (Throwable ignored) {
+                }
+                try {
+                    startService(intent);
+                    if (userInitiated) {
+                        toast(getString(R.string.pairing_notif_mode_started));
+                    }
+                } catch (Throwable t2) {
+                    Log.w(TAG, "fallback startService failed", t2);
+                    toast(getString(R.string.pairing_notif_mode_failed));
+                }
+            } else {
+                toast(getString(R.string.pairing_notif_mode_failed));
+            }
+        }
     }
 
     private void openDeveloperOptions() {
@@ -195,6 +257,22 @@ public final class PairingActivity extends Activity {
             startActivity(intent);
         } catch (Throwable t) {
             Log.w(TAG, "open notification settings failed", t);
+        }
+    }
+
+    /** 部分 ROM 在应用不可见时禁止联网，即使有前台服务；需加入电池优化白名单。 */
+    private void openBatterySettings() {
+        try {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:" + getPackageName()));
+            startActivity(intent);
+            return;
+        } catch (Throwable ignored) {
+        }
+        try {
+            startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+        } catch (Throwable t) {
+            Log.w(TAG, "open battery settings failed", t);
         }
     }
 
@@ -222,7 +300,6 @@ public final class PairingActivity extends Activity {
             return;
         }
 
-        // 配对成功后等的是「新的」连接服务端口，重新出现即自动进入启动阶段
         if (state == STATE_AWAIT_CONNECT && c > 0) {
             doStart(c);
             return;
@@ -244,7 +321,7 @@ public final class PairingActivity extends Activity {
         }
     }
 
-    // ------------------------------------------------------------ 阶段一：配对
+    // ------------------------------------------------------------ 备用：页面内输码
 
     private void onPairClicked() {
         if (state == STATE_DONE) {
@@ -254,7 +331,6 @@ public final class PairingActivity extends Activity {
         if (state == STATE_PAIRING || state == STATE_STARTING) {
             return;
         }
-        // 已配对时只需重试连接启动，不再消耗配对码
         if (paired) {
             int c = connectPort > 0 ? connectPort : lastConnectPort;
             if (c <= 0) {
@@ -288,8 +364,9 @@ public final class PairingActivity extends Activity {
         setWorking(true, R.string.pairing_working);
         final String finalCode = code;
         final int finalPort = port;
+        final String host = MdnsProbe.get(this).resolvedHost();
         worker.execute(() -> {
-            String raw = WirelessRunner.pair(PairingActivity.this, finalPort, finalCode);
+            String raw = WirelessRunner.pair(PairingActivity.this, finalPort, finalCode, host);
             ui(() -> onPairResult(raw));
         });
     }
@@ -308,7 +385,6 @@ public final class PairingActivity extends Activity {
             statusText.setText(R.string.pairing_paired_wait_connect);
             btnPair.setText(R.string.pairing_retry_connect);
             btnPair.setEnabled(false);
-            // 强制重新解析连接服务：配对成功后其端口可能已重分配
             try {
                 MdnsProbe.get(this).restart(this::onPorts);
             } catch (Throwable t) {
@@ -327,7 +403,6 @@ public final class PairingActivity extends Activity {
             if (state != STATE_AWAIT_CONNECT || isFinishing() || isDestroyed()) {
                 return;
             }
-            // 等不到新的连接服务广播时，退回配对前缓存的端口再试一次
             if (lastConnectPort > 0) {
                 doStart(lastConnectPort);
             } else {
@@ -346,8 +421,6 @@ public final class PairingActivity extends Activity {
         }
     }
 
-    // ------------------------------------------------------------ 阶段二：连接并启动
-
     private void doStart(int port) {
         if (state == STATE_STARTING || state == STATE_DONE) {
             return;
@@ -356,8 +429,9 @@ public final class PairingActivity extends Activity {
         state = STATE_STARTING;
         setWorking(true, R.string.pairing_starting);
         final int finalPort = port;
+        final String host = MdnsProbe.get(this).resolvedHost();
         worker.execute(() -> {
-            String raw = WirelessRunner.start(PairingActivity.this, finalPort);
+            String raw = WirelessRunner.start(PairingActivity.this, finalPort, host);
             ui(() -> onStartResult(raw));
         });
     }
@@ -410,7 +484,7 @@ public final class PairingActivity extends Activity {
 
     private void setWorking(boolean working, int messageRes) {
         btnPair.setEnabled(!working);
-        btnNotification.setEnabled(!working);
+        btnRestart.setEnabled(!working);
         if (messageRes != 0) {
             resultText.setVisibility(View.VISIBLE);
             resultText.setTextColor(getResources().getColor(R.color.text_secondary, getTheme()));
@@ -432,26 +506,6 @@ public final class PairingActivity extends Activity {
                 return getString(R.string.pairing_bridge_error) + message;
             default:
                 return (stage.isEmpty() ? "" : stage + ": ") + message;
-        }
-    }
-
-    // ------------------------------------------------------------ 可选通知通道
-
-    /**
-     * 只在用户显式点击时启动前台服务。这是通知栏输码的可选增强，
-     * 主路径（页面内输码）不依赖它，服务启动失败也不会影响配对。
-     */
-    private void startNotificationMode() {
-        if (!notificationEnabled) {
-            toast(getString(R.string.pairing_notif_mode_unavailable));
-            return;
-        }
-        try {
-            startForegroundService(WirelessPairingService.startIntent(this));
-            toast(getString(R.string.pairing_notif_mode_started));
-        } catch (Throwable t) {
-            Log.w(TAG, "start notification mode failed", t);
-            toast(getString(R.string.pairing_notif_mode_failed));
         }
     }
 

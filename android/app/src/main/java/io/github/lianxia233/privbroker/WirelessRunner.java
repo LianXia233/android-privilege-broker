@@ -2,6 +2,7 @@ package io.github.lianxia233.privbroker;
 
 import android.content.Context;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -13,7 +14,12 @@ import java.io.File;
  * 两个互不相干的阶段：配对服务只在「使用配对码配对设备」弹窗打开期间存在，
  * 配对成功后系统会重分配连接服务端口。因此这里把它们拆成两次 native 调用：
  * {@link #pair} 只做配对并返回 stage=paired；调用方随后重新发现连接端口，
- * 再用 {@link #start} 连接并启动。{@link #full} 保留给通知栏可选通道。
+ * 再用 {@link #start} 连接并启动。{@link #full} 保留给通知栏兼容路径。
+ *
+ * 连接地址不再固定为 loopback。部分 ROM 的 adbd 把配对/连接端口绑在 WLAN
+ * 接口 IP（设置页「IP 地址和端口」显示的就是它），只用 127.0.0.1 会连不上。
+ * 这里把 mDNS 解析地址、本机网卡 IPv4 与 loopback 组成候选列表传给 native，
+ * 由连接层逐个尝试，任一连通即用。
  *
  * 所有异常都转成结构化 JSON 返回，绝不向上抛（避免 JNI 边界崩溃）。
  */
@@ -25,9 +31,9 @@ final class WirelessRunner {
     private WirelessRunner() {
     }
 
-    static String pair(Context c, int pairingPort, String code) {
+    static String pair(Context c, int pairingPort, String code, String mdnsHost) {
         try {
-            JSONObject args = base(c);
+            JSONObject args = base(c, mdnsHost);
             args.put("stage", "pair");
             args.put("pairingPort", pairingPort);
             args.put("pairingCode", code);
@@ -38,9 +44,9 @@ final class WirelessRunner {
         }
     }
 
-    static String start(Context c, int connectPort) {
+    static String start(Context c, int connectPort, String mdnsHost) {
         try {
-            JSONObject args = base(c);
+            JSONObject args = base(c, mdnsHost);
             args.put("stage", "start");
             args.put("connectPort", connectPort);
             args.put("pairingPort", 0);
@@ -51,9 +57,9 @@ final class WirelessRunner {
         }
     }
 
-    static String full(Context c, int pairingPort, String code, int connectPort) {
+    static String full(Context c, int pairingPort, String code, int connectPort, String mdnsHost) {
         try {
-            JSONObject args = base(c);
+            JSONObject args = base(c, mdnsHost);
             args.put("pairingPort", pairingPort);
             args.put("pairingCode", code);
             args.put("connectPort", connectPort);
@@ -63,9 +69,16 @@ final class WirelessRunner {
         }
     }
 
-    private static JSONObject base(Context c) throws Exception {
+    private static JSONObject base(Context c, String mdnsHost) throws Exception {
         JSONObject args = new JSONObject();
-        args.put("host", "127.0.0.1");
+        String[] hosts = MdnsFilter.candidates(mdnsHost);
+        JSONArray candidates = new JSONArray();
+        for (String h : hosts) {
+            candidates.put(h);
+        }
+        args.put("hosts", candidates);
+        // 保留 host 字段兼容旧 native 接口（取优先级最高的候选）
+        args.put("host", hosts.length > 0 ? hosts[0] : "127.0.0.1");
         args.put("keyPath", new File(c.getFilesDir(), "adb_key.pk8").getAbsolutePath());
         args.put("apkPath", c.getApplicationInfo().sourceDir);
         args.put("nativeLibDir", c.getApplicationInfo().nativeLibraryDir);

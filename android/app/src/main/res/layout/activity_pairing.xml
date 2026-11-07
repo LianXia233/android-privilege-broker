@@ -101,6 +101,14 @@
                 android:text="@string/pairing_battery_notice"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btnBattery"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/pairing_battery_button"
+                android:textAllCaps="false" />
         </LinearLayout>
 
         <LinearLayout

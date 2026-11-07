@@ -44,6 +44,8 @@ public final class MdnsProbe {
     private int connectPort = -1;
     private String pairingServiceName;
     private String connectServiceName;
+    /** 最近一次 mDNS 解析出的地址，通常是 WLAN 接口 IP（adbd 的真实监听地址）。 */
+    private volatile String resolvedHost;
 
     private MdnsProbe(Context c) {
         app = c.getApplicationContext();
@@ -63,6 +65,11 @@ public final class MdnsProbe {
 
     public int connectPort() {
         return connectPort;
+    }
+
+    /** mDNS 解析出的地址；可能为 null，此时连接层会枚举本机网卡自行补齐。 */
+    public String resolvedHost() {
+        return resolvedHost;
     }
 
     /** 开始发现；重复调用只更新回调。 */
@@ -163,11 +170,14 @@ public final class MdnsProbe {
                         public void onServiceResolved(final NsdServiceInfo resolved) {
                             final int port = resolved.getPort();
                             final String name = resolved.getServiceName();
-                            // 过滤掉其它设备广播的服务与已经失效的缓存记录
+                            final String host = MdnsFilter.hostOf(resolved);
                             if (!MdnsFilter.accept(resolved, port)) {
-                                Log.d(TAG, "忽略非本机/未监听的服务: " + name + ":" + port);
                                 return;
                             }
+                            if (host != null) {
+                                resolvedHost = host;
+                            }
+                            Log.d(TAG, "发现服务 " + name + " @ " + host + ":" + port);
                             main.post(() -> onPort(isPairing, port, name));
                         }
                     });

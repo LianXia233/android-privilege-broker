@@ -4,6 +4,15 @@
 
     <!-- Android 13+ 通知权限 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+      创建 TCP socket 的必要条件。无线调试的配对/连接服务要连本机 adbd
+      （loopback 或 WLAN 接口 IP），缺少此权限时所有连接直接 Permission denied，
+      表现为「端口填了也不识别」。参考实现的教程页也专门提示这条网络权限。
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 引导用户把本应用加入电池优化白名单：部分 ROM 在应用不可见时禁止联网 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- 可选：指示器与跨应用授权卡片使用不打断前台的系统悬浮窗；可经自主通道以 shell 身份开启 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- 授权询问期间的短时前台服务，保证入口 Activity 立即 finish 后弹窗仍能弹出 -->

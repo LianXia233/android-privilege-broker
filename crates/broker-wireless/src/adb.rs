@@ -143,7 +143,8 @@ pub struct AdbClient {
 impl AdbClient {
     /// 连接设备端 ADB TLS 服务并完成握手/认证。
     pub fn connect(host: &str, port: u16, key: &AdbKey) -> Result<Self, WirelessError> {
-        let tcp = TcpStream::connect((host, port))?;
+        // 与配对层共用带超时的连接，便于在多个候选地址间快速切换。
+        let tcp = crate::tls::connect_tcp(host, port)?;
         tcp.set_nodelay(true)?;
         tcp.set_read_timeout(Some(IO_TIMEOUT))?;
         tcp.set_write_timeout(Some(IO_TIMEOUT))?;

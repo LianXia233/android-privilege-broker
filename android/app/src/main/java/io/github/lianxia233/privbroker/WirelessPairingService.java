@@ -22,20 +22,26 @@ import android.util.Log;
 import org.json.JSONObject;
 
 /**
- * 通知栏输码通道（可选）。
+ * 无线调试配对的通知栏主通道。
  *
- * 主路径是 PairingActivity 里的页面内输码，本服务只在用户显式点「改用通知栏输码」
- * 时启动。形态与同类成熟实现一致：清单里只声明 shortService，发现配对服务端口后
- * 才发带 RemoteInput 的通知，回复以前台服务方式投递，端口放进 Intent 以免服务
- * 被回收后丢失。
+ * 交互模型与成熟实现一致，也是这类链路唯一可行的形态：系统「无线调试」页里的
+ * 配对码弹窗一旦离开该页就会消失，用户不能切回应用输码；而下拉通知栏不会
+ * 让设置页失去焦点，弹窗留在原地。因此服务必须在用户离开本应用之前就进入
+ * 前台并常驻一条通知，发现配对服务后把通知换成带 RemoteInput 的输码框。
  *
- * 配对与启动同样解耦：配对阶段只依赖配对服务端口；成功后系统可能重分配连接
- * 服务端口，需重新发现该端口再执行连接与 shell 启动。
+ * 生命周期要点：
+ * - {@code ACTION_START} 立即 {@code startForeground}，先显示「搜索中」通知；
+ * - mDNS 发现配对端口后 {@code notify()} 替换为可输码通知，端口写进 Intent，
+ *   服务被回收后重启仍能拿到；
+ * - RemoteInput 回复以前台服务方式投递；
+ * - {@code startForeground} 失败时降级为普通通知并撤销前台启动，避免系统在
+ *   5 秒后以 ForegroundServiceDidNotStartInTimeException 终止进程。
  *
- * 一类必须防御的系统行为：调用 startForegroundService 后若服务没能在 5 秒内
- * 成功 startForeground，系统会抛 ForegroundServiceDidNotStartInTimeException
- * 直接终止应用进程。因此 startForeground 一旦失败，立即 notify + stopSelf，
- * 让系统撤销这次前台启动；绝不允许服务带着未完成的 FGS 启动挂着。
+ * 连接地址：mDNS 解析出的地址（通常是 WLAN 接口 IP）与本机网卡地址、loopback
+ * 一起作为候选交给 native 层逐个尝试，不再假定 adbd 绑定在 127.0.0.1。
+ *
+ * 配对与启动解耦：配对只用配对端口；成功后系统可能重分配连接端口，重新发现
+ * 后再连接并启动特权代理。
  */
 public final class WirelessPairingService extends Service {
 
@@ -65,6 +71,7 @@ public final class WirelessPairingService extends Service {
     private volatile int pairingPort = -1;
     private volatile int connectPort = -1;
     private volatile int lastConnectPort = -1;
+    private volatile String resolvedHost;
     private volatile boolean working;
     private volatile boolean awaitingConnect;
     private volatile boolean discovering;
@@ -86,6 +93,11 @@ public final class WirelessPairingService extends Service {
         channel.setShowBadge(false);
         notifications.createNotificationChannel(channel);
         nsd = (NsdManager) getSystemService(Context.NSD_SERVICE);
+        // 服务可能被系统回收后重启，此时教程页的探测结果仍可复用
+        String cached = MdnsProbe.get(this).resolvedHost();
+        if (cached != null) {
+            resolvedHost = cached;
+        }
     }
 
     @Override
@@ -112,10 +124,7 @@ public final class WirelessPairingService extends Service {
         return START_REDELIVER_INTENT;
     }
 
-    /**
-     * 传 FOREGROUND_SERVICE_TYPE_MANIFEST 由系统按清单取值；失败立即收尾，
-     * 避免系统在 5 秒后因 FGS 未启动而终止进程。
-     */
+    /** 传 MANIFEST 类型由系统按清单取值；失败时保留普通通知并撤销前台启动。 */
     private void startInForeground(Notification n) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -129,9 +138,10 @@ public final class WirelessPairingService extends Service {
                 notifications.notify(NOTIFICATION_ID, n);
             } catch (Throwable ignored) {
             }
-            // 关键：撤销这次前台启动，否则系统会以超时异常杀掉整个进程
+            // DETACH 只解除前台关联、不删除刚发出的通知；再停掉服务，避免系统
+            // 因 5 秒内未成功进入前台而终止整个应用进程。
             try {
-                stopForeground(STOP_FOREGROUND_REMOVE);
+                stopForeground(STOP_FOREGROUND_DETACH);
             } catch (Throwable ignored) {
             }
             stopSelf();
@@ -207,6 +217,7 @@ public final class WirelessPairingService extends Service {
 
             @Override
             public void onStartDiscoveryFailed(String serviceType, int errorCode) {
+                Log.w(TAG, "start discovery failed: " + serviceType + " code=" + errorCode);
             }
 
             @Override
@@ -235,12 +246,18 @@ public final class WirelessPairingService extends Service {
                         @Override
                         public void onServiceResolved(final NsdServiceInfo resolved) {
                             final int port = resolved.getPort();
-                            if (MdnsFilter.accept(resolved, port)) {
-                                main.post(() -> onPort(isPairing, port));
+                            final String host = MdnsFilter.hostOf(resolved);
+                            if (!MdnsFilter.accept(resolved, port)) {
+                                return;
                             }
+                            if (host != null) {
+                                resolvedHost = host;
+                            }
+                            main.post(() -> onPort(isPairing, port));
                         }
                     });
-                } catch (Throwable ignored) {
+                } catch (Throwable t) {
+                    Log.w(TAG, "resolve service failed", t);
                 }
             }
         };
@@ -253,7 +270,6 @@ public final class WirelessPairingService extends Service {
             connectPort = port;
             lastConnectPort = port;
         }
-        // 配对成功后等的是「新的」连接服务端口
         if (awaitingConnect && !isPairing && port > 0 && !working) {
             startConnect(port);
             return;
@@ -261,7 +277,7 @@ public final class WirelessPairingService extends Service {
         if (working || awaitingConnect) {
             return;
         }
-        // 与参考实现一致：只有发现配对服务后才推送可输码的通知
+        // 只有发现配对服务后才推送可输码的通知（与参考实现一致）
         if (isPairing) {
             push(inputNotification(null));
         }
@@ -273,8 +289,9 @@ public final class WirelessPairingService extends Service {
         working = true;
         push(workingNotification());
         final int pPort = pairingPort;
+        final String host = resolvedHost;
         new Thread(() -> {
-            String raw = WirelessRunner.pair(WirelessPairingService.this, pPort, code);
+            String raw = WirelessRunner.pair(WirelessPairingService.this, pPort, code, host);
             main.post(() -> handleResult(raw));
         }, "wireless-pairing").start();
     }
@@ -286,8 +303,9 @@ public final class WirelessPairingService extends Service {
         awaitingConnect = false;
         working = true;
         push(workingNotification());
+        final String host = resolvedHost;
         new Thread(() -> {
-            String raw = WirelessRunner.start(WirelessPairingService.this, port);
+            String raw = WirelessRunner.start(WirelessPairingService.this, port, host);
             main.post(() -> handleResult(raw));
         }, "wireless-start").start();
     }
@@ -332,7 +350,6 @@ public final class WirelessPairingService extends Service {
         working = false;
 
         if (ok && WirelessRunner.STAGE_PAIRED.equals(stage)) {
-            // 配对成功：丢弃旧连接端口，等待系统重新广播连接服务
             awaitingConnect = true;
             connectPort = -1;
             push(waitingNotification());
@@ -468,7 +485,6 @@ public final class WirelessPairingService extends Service {
 
     @Override
     public void onTimeout(int startId) {
-        // shortService 约 3 分钟时限到达：只收尾，不再发常驻提示
         stopDiscovery();
         stopForeground(STOP_FOREGROUND_REMOVE);
         cancelConnectTimeout();
