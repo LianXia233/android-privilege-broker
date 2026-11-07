@@ -35,6 +35,7 @@ import java.util.function.Consumer;
 public final class MainActivity extends Activity {
     private static final int REQ_PICK = 1001;
     private static final int REQ_NOTIF = 1002;
+    private static final int REQ_NOTIF_PAIR = 1003;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
@@ -188,6 +189,17 @@ public final class MainActivity extends Activity {
             toast(getString(R.string.wireless_requires_android11));
             return;
         }
+        // 通知权限被拒时，前台服务通知会被系统静默隐藏——直接发起运行时请求，
+        // 授予后再启动服务；曾被永久拒绝时才引导去系统设置。
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIF_PAIR);
+            return;
+        }
+        startPairingService();
+    }
+
+    private void startPairingService() {
         if (!notificationsEnabled()) {
             new AlertDialog.Builder(this)
                     .setTitle(R.string.wireless_notif_title)
@@ -203,6 +215,19 @@ public final class MainActivity extends Activity {
             toast(getString(R.string.wireless_service_started));
         } catch (Throwable t) {
             toast(getString(R.string.wireless_service_failed));
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_NOTIF_PAIR) {
+            if (grantResults.length > 0
+                    && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                startPairingService();
+            } else {
+                toast(getString(R.string.wireless_notif_text));
+            }
         }
     }
 

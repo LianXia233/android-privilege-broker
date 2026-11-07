@@ -252,14 +252,15 @@
 
         <!--
           无电脑自助启用链路：发现无线调试服务、通知栏输入配对码、配对并启动特权代理。
-          connectedDevice：Android 11–13 的常规路径（14 起由 CHANGE_WIFI_MULTICAST_STATE
-          清单声明满足前置条件）；specialUse：部分 ROM 对 connectedDevice 校验更严格时
-          的兜底类型，用例为本机 mDNS 发现与本地配对，无任何网络数据外发。
+          shortService：无运行时前置条件，Android 14+ 上 startForeground 必然成功，
+          约 3 分钟时限由 onTimeout 处理（配对本就是短操作）；
+          connectedDevice：时限内优先使用（CHANGE_WIFI_MULTICAST_STATE 清单声明满足
+          其前置条件）；specialUse：部分 ROM 校验更严时的兜底。
         -->
         <service
             android:name=".WirelessPairingService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice|specialUse"
+            android:foregroundServiceType="connectedDevice|shortService|specialUse"
             android:stopWithTask="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"

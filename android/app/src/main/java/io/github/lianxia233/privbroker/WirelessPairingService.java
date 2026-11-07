@@ -88,10 +88,18 @@ public final class WirelessPairingService extends Service {
             }
         }
         startInForeground(currentNotification());
+        toast(getString(R.string.wireless_service_running));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !discovering && nsd != null) {
             startDiscovery();
         }
         return START_REDELIVER_INTENT;
+    }
+
+    private void toast(String text) {
+        try {
+            android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_LONG).show();
+        } catch (Throwable ignored) {
+        }
     }
 
     @Override
@@ -325,27 +333,49 @@ public final class WirelessPairingService extends Service {
     // ------------------------------------------------------------ 通知
 
     private void startInForeground(Notification n) {
+        // 首选 shortService：无运行时前置条件，Android 14+ 上必然成功，
+        // 代价是约 3 分钟时限——配对本就是短操作，超时后重新发起即可。
+        // connectedDevice 需要满足前置条件（本应用以 CHANGE_WIFI_MULTICAST_STATE
+        // 清单声明满足），部分 ROM 校验更严时再退 specialUse。
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 try {
                     startForeground(NOTIFICATION_ID, n,
                             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
                 } catch (Throwable strict) {
-                    // 部分 ROM 对 connectedDevice 的前置条件校验更严格，回退 specialUse。
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    try {
+                        startForeground(NOTIFICATION_ID, n,
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_SHORT_SERVICE);
+                    } catch (Throwable strict2) {
                         startForeground(NOTIFICATION_ID, n,
                                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-                    } else {
-                        throw strict;
                     }
                 }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, n,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
             } else {
                 startForeground(NOTIFICATION_ID, n);
             }
         } catch (Throwable t) {
-            // 兜底：以普通通知呈现（不保证显示，但绝不因 startForeground 失败而崩溃）。
+            // 兜底：以普通通知呈现。不保证显示，但绝不因 startForeground 失败而崩溃。
             notifications.notify(NOTIFICATION_ID, n);
         }
+    }
+
+    @Override
+    public void onTimeout(int startId) {
+        // shortService 约 3 分钟时限到达：停止服务并提示重新发起，避免系统 ANR。
+        stopDiscovery();
+        Notification timeout = new Notification.Builder(this, CHANNEL)
+                .setSmallIcon(R.drawable.ic_action_broker)
+                .setContentTitle(getString(R.string.wireless_timeout_title))
+                .setContentText(getString(R.string.wireless_timeout_text))
+                .setAutoCancel(true)
+                .build();
+        notifications.notify(NOTIFICATION_ID + 1, timeout);
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        stopSelf();
     }
 
     private void pushNotification() {
@@ -395,9 +425,9 @@ public final class WirelessPairingService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             flags |= PendingIntent.FLAG_MUTABLE;
         }
-        // 服务此刻已在前台运行，用 getService 直接投递即可；
-        // getForegroundService 在 Android 12+ 会触发后台启动前台服务的限制。
-        PendingIntent pi = PendingIntent.getService(this, 1, reply, flags);
+        // 与参考行为一致：输码时服务可能已被系统回收，须以前台服务方式重新拉起；
+        // 通知栏点击属于用户交互，满足前台服务启动豁免。
+        PendingIntent pi = PendingIntent.getForegroundService(this, 1, reply, flags);
         String text = hint == null ? getString(R.string.wireless_input_text) : hint;
         return base()
                 .setContentTitle(getString(R.string.wireless_input_title))
