@@ -53,6 +53,7 @@ public final class MainActivity extends Activity {
     private String installLabel = "安装包";
     private String currentState = "UNAVAILABLE";
     private boolean syncingPrefs;
+    private boolean resumed;
     private boolean awaitingPorts;
     private String pendingCode;
 
@@ -106,6 +107,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        resumed = true;
         refreshStatus();
         // 用户可能刚去开发者选项点开了配对弹窗再切回来：端口已由探测单例缓存，
         // 直接接手，不必重新搜索。
@@ -118,6 +120,12 @@ public final class MainActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        resumed = false;
+        super.onPause();
+    }
+
+    @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
@@ -125,6 +133,10 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        // 探测单例是静态的，必须主动断开回调，否则持有已销毁的 Activity。
+        MdnsProbe.get(this).clearCallback();
+        awaitingPorts = false;
+        pendingCode = null;
         BrokerBridge.setProgressListener(null);
         worker.shutdownNow();
         super.onDestroy();
@@ -238,7 +250,7 @@ public final class MainActivity extends Activity {
      */
     private void scheduleSearchHint() {
         new android.os.Handler(getMainLooper()).postDelayed(() -> {
-            if (!awaitingPorts || isFinishing() || isDestroyed()) {
+            if (!awaitingPorts || isFinishing() || isDestroyed() || !resumed) {
                 return;
             }
             new AlertDialog.Builder(this)
@@ -252,7 +264,9 @@ public final class MainActivity extends Activity {
     }
 
     private void onPorts(int pairingPort, int connectPort) {
-        if (isFinishing()) {
+        // 用户去系统设置开配对弹窗期间本 Activity 在后台，此时不能弹窗：
+        // 端口留在 MdnsProbe 单例里，回到前台由 onResume 接手。
+        if (isFinishing() || isDestroyed() || !resumed) {
             return;
         }
         if (awaitingPorts && pairingPort > 0) {

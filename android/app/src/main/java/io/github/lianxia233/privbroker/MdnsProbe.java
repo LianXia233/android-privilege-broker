@@ -91,6 +91,11 @@ public final class MdnsProbe {
         }
     }
 
+    /** 只断开回调，保持发现运行；Activity 销毁时用它避免泄漏，同时不打断发现。 */
+    public synchronized void clearCallback() {
+        callback = null;
+    }
+
     /** 重新开始一轮发现（配对成功后连接端口可能变化）。 */
     public synchronized void restart(Callback cb) {
         stop();
