@@ -327,11 +327,23 @@ public final class WirelessPairingService extends Service {
     private void startInForeground(Notification n) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST);
+                try {
+                    startForeground(NOTIFICATION_ID, n,
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
+                } catch (Throwable strict) {
+                    // 部分 ROM 对 connectedDevice 的前置条件校验更严格，回退 specialUse。
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        startForeground(NOTIFICATION_ID, n,
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+                    } else {
+                        throw strict;
+                    }
+                }
             } else {
                 startForeground(NOTIFICATION_ID, n);
             }
         } catch (Throwable t) {
+            // 兜底：以普通通知呈现（不保证显示，但绝不因 startForeground 失败而崩溃）。
             notifications.notify(NOTIFICATION_ID, n);
         }
     }
@@ -383,7 +395,9 @@ public final class WirelessPairingService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             flags |= PendingIntent.FLAG_MUTABLE;
         }
-        PendingIntent pi = PendingIntent.getForegroundService(this, 1, reply, flags);
+        // 服务此刻已在前台运行，用 getService 直接投递即可；
+        // getForegroundService 在 Android 12+ 会触发后台启动前台服务的限制。
+        PendingIntent pi = PendingIntent.getService(this, 1, reply, flags);
         String text = hint == null ? getString(R.string.wireless_input_text) : hint;
         return base()
                 .setContentTitle(getString(R.string.wireless_input_title))

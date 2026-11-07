@@ -199,7 +199,7 @@
     <!-- 无电脑自助启用：无线调试发现、配对与启动 -->
     <string name="wireless_channel">无线调试配对</string>
     <string name="wireless_guide_title">无线调试启用与配对</string>
-    <string name="wireless_guide_text">无需电脑即可启用特权代理：\n\n1. 打开「开发者选项 → 无线调试」并开启开关。\n2. 在无线调试页点「使用配对码配对设备」，记下 6 位配对码。\n3. 点「开始配对」后下拉通知栏，直接在通知里输入配对码。\n4. 本应用会自动完成配对，并以 shell 身份启动特权代理。\n\n配对公钥与令牌仅保存在本机，不上传任何服务器。\n\n说明：无线调试配对涉及设备端实现差异，该链路尚待真机验证。</string>
+    <string name="wireless_guide_text">无需电脑即可启用特权代理：\n\n1. 打开「开发者选项 → 无线调试」并开启开关。\n2. 在无线调试页点「使用配对码配对设备」，记下 6 位配对码，并保持该弹窗不要关闭（关闭后本应用就找不到配对服务了）。\n3. 下拉通知栏，直接在通知里输入配对码。\n4. 本应用会自动完成配对，并以 shell 身份启动特权代理。\n\n配对公钥与令牌仅保存在本机，不上传任何服务器。\n\n说明：无线调试配对涉及设备端实现差异，该链路尚待真机验证。</string>
     <string name="wireless_guide_start">开始配对</string>
     <string name="wireless_guide_open_settings">去设置</string>
     <string name="wireless_notif_title">需要通知权限</string>
@@ -210,10 +210,10 @@
     <string name="wireless_requires_android11">无线调试配对需要 Android 11 或更高版本</string>
 
     <string name="wireless_searching_title">正在搜索无线调试服务</string>
-    <string name="wireless_searching_text">请确认「开发者选项 → 无线调试」已开启</string>
+    <string name="wireless_searching_text">请开启「开发者选项 → 无线调试」并打开配对码弹窗</string>
     <string name="wireless_stop">停止搜索</string>
     <string name="wireless_input_title">输入 6 位配对码</string>
-    <string name="wireless_input_text">在无线调试页点「使用配对码配对设备」查看配对码</string>
+    <string name="wireless_input_text">保持配对码弹窗打开，在此输入 6 位配对码</string>
     <string name="wireless_input_code">输入配对码</string>
     <string name="wireless_code_hint">6 位配对码</string>
     <string name="wireless_waiting_title">等待无线调试连接服务</string>

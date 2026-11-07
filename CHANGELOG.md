@@ -5,6 +5,23 @@
 
 ---
 
+## v2.1.1
+
+### 修复：Android 11+ 上配对通知不出现 / 服务被系统终止
+
+- **真因**：配对前台服务传入的前台服务类型在 Android 14+ 因 `connectedDevice`
+  运行时前置条件未满足而被拒绝，`startForeground` 抛异常后服务 5 秒内被系统
+  按「startForegroundService 后未 startForeground」终止，通知随之消失。
+- 清单新增 `CHANGE_WIFI_MULTICAST_STATE` 权限：mDNS 发现真实需要组播，同时
+  该声明满足 Android 14+ 对 `connectedDevice` 类型的前置条件。
+- 服务类型显式传 `FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE`，被严格 ROM
+  拒绝时回退 `specialUse` 类型（清单同步声明，含用途说明 property）。
+- 配对码回复改用 `getService` 投递：服务已在前台运行，规避 Android 12+
+  后台启动前台服务的限制。
+- 引导文案明确：配对码弹窗必须保持打开，关闭弹窗后配对服务不再广播。
+
+---
+
 ## v2.1.0
 
 ### 应用内无线调试启用与配对（无需电脑）

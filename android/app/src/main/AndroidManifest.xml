@@ -10,6 +10,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- 无线调试发现与配对的前台服务（Android 14+ 需显式声明类型权限） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!--
+      mDNS 服务发现需要组播；同时该权限的清单声明满足 Android 14+ 对
+      connectedDevice 前台服务类型的运行时前置条件之一。
+    -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- 设置页与卸载选择器需要完整枚举系统应用列表（非 Google Play 分发，仅本机授权用途） -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
@@ -246,14 +252,19 @@
 
         <!--
           无电脑自助启用链路：发现无线调试服务、通知栏输入配对码、配对并启动特权代理。
-          使用 connectedDevice 类型而非 shortService，避免用户尚未输入配对码时
-          前台服务被系统按短时服务超时终止。
+          connectedDevice：Android 11–13 的常规路径（14 起由 CHANGE_WIFI_MULTICAST_STATE
+          清单声明满足前置条件）；specialUse：部分 ROM 对 connectedDevice 校验更严格时
+          的兜底类型，用例为本机 mDNS 发现与本地配对，无任何网络数据外发。
         -->
         <service
             android:name=".WirelessPairingService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice"
-            android:stopWithTask="false" />
+            android:foregroundServiceType="connectedDevice|specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="mdns_discovery_and_local_wireless_debugging_pairing" />
+        </service>
 
         <!-- 自家只读安装包容器：切断外部 content:// 临时授权的生命周期依赖 -->
         <provider
