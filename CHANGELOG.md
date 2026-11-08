@@ -5,6 +5,20 @@
 
 ---
 
+## v2.1.13
+
+### 修复
+
+- **特权代理无故消失导致安装失败（本轮根因）**：Android 12+ 的幻影进程监控会清理 shell fork 出来的 app_process 子进程——即使代理已 `setsid` 脱离会话，激活几分钟后仍被系统回收，安装时报「特权代理未就绪：特权代理服务未运行」。启动命令现在会用 shell(2000) 权限执行 `settings put settings enable_phantom_process_monitoring false` 与 `device_config put activity_manager max_phantom_processes 2147483647`，从根上关掉这层清理。
+- **安装/卸载自动恢复**：安装链路遇到 `BROKER_NOT_READY` 时不再直接报错降级，而是自动通过无线调试通道重新拉起特权代理（mDNS 发现当前连接端口 → 投递启动命令 → 实测端点恢复），成功后自动重试一次本次操作，全程无需重新配对、无需任何界面。恢复过程与结果写入「执行日志」（`REVIVE` / `REVIVED` / `REVIVE_FAILED`）。
+- 自动恢复失败时（最常见为无线调试已被关闭），失败通知文案明确给出原因与下一步。
+
+### 说明
+
+- 新增 `BrokerReviver`：后台限时自愈工具（mDNS 等待 ≤9s、端点探测 ≤12s），复用全局唯一判据 `BrokerClient.probe`，与状态徽章/激活结果不再各算各的。
+
+---
+
 ## v2.1.12
 
 ### 修复「激活成功但特权代理未运行」：统一判据、实时状态、进程保活、通知栏输码框

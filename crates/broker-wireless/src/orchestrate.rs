@@ -156,6 +156,9 @@ pub fn boot_log_failure_reason(log: &str) -> Option<String> {
 ///    真实原因带回界面。文件名带 `$$`（shell PID）：并发激活各写各的文件。
 /// 4. **端点可达**：默认 TCP loopback。SELinux enforcing 下 app 域连不上 shell
 ///    域的 abstract socket，只有本机回环 TCP 能被两侧同时访问。
+/// 5. **防幻影进程清理**：Android 12+ 会回收 shell fork 的子进程（即使已
+///    setsid），启动前用 shell 权限关闭幻影进程监控并抬高上限，这是代理
+///    「激活几分钟后无故消失」的根因。
 pub fn build_start_command(req: &WirelessRequest) -> String {
     // 用 `env` 设置 CLASSPATH 再 exec app_process，避免再套一层 `sh -c`
     // 造成参数里单引号的二次转义；setsid 直接把这个命令拉进新会话。
@@ -183,8 +186,14 @@ pub fn build_start_command(req: &WirelessRequest) -> String {
          done; sleep 1",
         new = SERVER_PROCESS_NAME,
     );
+    // 保活的另一半：Android 12+ 的幻影进程监控会清理 shell fork 出来的
+    // app_process 子进程——即使它已 setsid 脱离会话，激活几分钟后代理无故
+    // 消失、安装时报「特权代理服务未运行」正是它干的。shell(2000) 恰好有
+    // 权限直接关掉这两项设置；失败（老系统无此命令）不影响启动。
+    let keep_alive = "settings put settings enable_phantom_process_monitoring false 2>/dev/null; \
+                      device_config put activity_manager max_phantom_processes 2147483647 2>/dev/null";
     format!(
-        "{kill_old}; \
+        "{kill_old}; {keep_alive}; \
          LOG=/data/local/tmp/prvbrk_boot.$$.log; : > \"$LOG\" 2>/dev/null || LOG=/dev/null; \
          if command -v setsid >/dev/null 2>&1; then SETSID=setsid; else SETSID=; fi; \
          $SETSID {invoke} </dev/null >>\"$LOG\" 2>&1 & sleep 2; cat \"$LOG\" 2>/dev/null"
@@ -407,6 +416,23 @@ mod tests {
         assert!(setsid_at < app_at, "setsid 必须早于 app_process");
         // stdio 全脱离 + 独立会话，主 shell 退出不会带走服务
         assert!(cmd.contains("</dev/null >>\"$LOG\" 2>&1 &"));
+    }
+
+    /// 保活第二环：Android 12+ 幻影进程监控会回收 shell fork 的子进程，
+    /// 即使已 setsid。启动命令必须在拉起服务前用 shell 权限关掉它。
+    #[test]
+    fn start_command_disables_phantom_process_monitoring() {
+        let cmd = build_start_command(&request());
+        assert!(cmd.contains(
+            "settings put settings enable_phantom_process_monitoring false 2>/dev/null"),
+            "关闭幻影进程监控");
+        assert!(cmd.contains(
+            "device_config put activity_manager max_phantom_processes 2147483647 2>/dev/null"),
+            "抬高幻影进程上限");
+        // 必须发生在启动体之前
+        let ka_at = cmd.find("enable_phantom_process_monitoring").unwrap();
+        let app_at = cmd.find("app_process").unwrap();
+        assert!(ka_at < app_at, "防幻影进程设置必须早于启动");
     }
 
     #[test]

@@ -141,6 +141,11 @@ final class SilentTask implements Runnable {
                     .put("uris", new JSONArray(uris))
                     .put("options", opts);
             JSONObject r = call("prepareInstall", prepare.toString());
+            if (!r.optBoolean("ok") && isBrokerNotReady(r) && reviveBroker()) {
+                // 特权代理被系统回收（HyperOS 清理/幻影进程等）：自动重拉后重试，
+                // 用户无需感知，更不用重新输码。
+                r = call("prepareInstall", prepare.toString());
+            }
             if (!r.optBoolean("ok")) {
                 failPrepare(errorText(r));
                 return;
@@ -166,6 +171,9 @@ final class SilentTask implements Runnable {
                     .put("options", opts)
                     .put("context", context());
             JSONObject cr = call("commitInstall", commit.toString());
+            if (!cr.optBoolean("ok") && isBrokerNotReady(cr) && reviveBroker()) {
+                cr = call("commitInstall", commit.toString());
+            }
             if (!cr.optBoolean("ok")) {
                 finishFailure(AppNames.errorText(app, errorCodeOf(cr), errorText(cr)));
                 return;
@@ -203,6 +211,9 @@ final class SilentTask implements Runnable {
                     .put("options", new JSONObject().put("keepData", false))
                     .put("context", context());
             JSONObject r = call("uninstall", a.toString());
+            if (!r.optBoolean("ok") && isBrokerNotReady(r) && reviveBroker()) {
+                r = call("uninstall", a.toString());
+            }
             if (!r.optBoolean("ok")) {
                 finishFailure(AppNames.errorText(app, errorCodeOf(r), errorText(r)));
                 return;
@@ -469,6 +480,26 @@ final class SilentTask implements Runnable {
         }
         String k = e.optString("kind", "");
         return k.isEmpty() ? e.optString("message", "") : k;
+    }
+
+    /** 是否为「特权代理不在运行」类失败：只有这一类失败值得自动重拉重试。 */
+    private boolean isBrokerNotReady(JSONObject r) {
+        return "BROKER_NOT_READY".equals(errorCodeOf(r));
+    }
+
+    /**
+     * 自动重拉特权代理并写日志。阻塞（最长约 20 秒），仅限 SilentTask
+     * 的后台线程调用；恢复期间通知保持「进行中」，失败才发失败通知。
+     */
+    private boolean reviveBroker() {
+        record("REVIVE", "特权代理未运行，正在自动重新拉起（无需重新配对）");
+        String err = BrokerReviver.revive(app);
+        if (err == null) {
+            record("REVIVED", "自动恢复成功，重试本次操作");
+            return true;
+        }
+        record("REVIVE_FAILED", err);
+        return false;
     }
 
     private String safePkg(String p) {
