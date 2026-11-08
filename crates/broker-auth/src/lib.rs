@@ -91,6 +91,11 @@ impl ChallengeTable {
     ///
     /// 按 (client_id, nonce) 精确匹配：错误 nonce 不会消费该客户端的其它
     /// 合法挑战，也不会影响其它客户端。
+    ///
+    /// 返回码按失败原因区分，便于现场日志直接定位：槽位未命中（没有待验证
+    /// 挑战，或 nonce 与服务端登记值不同）为 [`ErrorCode::ChallengeUnknown`]；
+    /// 槽位命中但证明不成立为 [`ErrorCode::ProofMismatch`]；挑战超期为
+    /// [`ErrorCode::SessionExpired`]。
     pub fn verify(
         &mut self,
         client_id: &str,
@@ -101,11 +106,14 @@ impl ChallengeTable {
         now_ms: u64,
     ) -> Result<(), ErrorCode> {
         let (pending, slot_left_empty) = {
-            let slots = self.pending.get_mut(client_id).ok_or(ErrorCode::Unauthenticated)?;
+            let slots = self
+                .pending
+                .get_mut(client_id)
+                .ok_or(ErrorCode::ChallengeUnknown)?;
             let pos = slots
                 .iter()
                 .position(|p| p.nonce == server_nonce)
-                .ok_or(ErrorCode::Unauthenticated)?;
+                .ok_or(ErrorCode::ChallengeUnknown)?;
             let pending = slots.remove(pos);
             (pending, slots.is_empty())
         };
@@ -116,10 +124,10 @@ impl ChallengeTable {
             return Err(ErrorCode::SessionExpired);
         }
         let expected = compute_proof(token, server_nonce, client_id, issued_at_ms);
-        let actual = hex::decode(proof_hex).map_err(|_| ErrorCode::Unauthenticated)?;
+        let actual = hex::decode(proof_hex).map_err(|_| ErrorCode::ProofMismatch)?;
         let expected_bytes = hex::decode(&expected).map_err(|_| ErrorCode::Internal)?;
         if !constant_time_eq(&actual, &expected_bytes) {
-            return Err(ErrorCode::Unauthenticated);
+            return Err(ErrorCode::ProofMismatch);
         }
         Ok(())
     }
@@ -213,7 +221,7 @@ mod tests {
         assert!(t.verify("client-a", "token", 777, &proof, 1_100, 1_200).is_ok());
         assert_eq!(
             t.verify("client-a", "token", 777, &proof, 1_100, 1_200),
-            Err(ErrorCode::Unauthenticated)
+            Err(ErrorCode::ChallengeUnknown)
         );
     }
 
@@ -222,16 +230,28 @@ mod tests {
         let mut t = ChallengeTable::new(30_000);
         t.issue("c", 5, 0);
         let good = compute_proof("token", 5, "c", 10);
-        assert_eq!(t.verify("c", "token", 6, &good, 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "token", 6, &good, 10, 20),
+            Err(ErrorCode::ChallengeUnknown)
+        );
 
         t.issue("c", 5, 0);
-        assert_eq!(t.verify("c", "bad", 5, &good, 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "bad", 5, &good, 10, 20),
+            Err(ErrorCode::ProofMismatch)
+        );
 
         t.issue("c", 5, 0);
-        assert_eq!(t.verify("c", "token", 5, "00", 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "token", 5, "00", 10, 20),
+            Err(ErrorCode::ProofMismatch)
+        );
 
         t.issue("c", 5, 0);
-        assert_eq!(t.verify("c", "token", 5, "zz", 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "token", 5, "zz", 10, 20),
+            Err(ErrorCode::ProofMismatch)
+        );
     }
 
     #[test]
@@ -247,7 +267,10 @@ mod tests {
         let mut t = ChallengeTable::new(30_000);
         t.issue("client-a", 1, 0);
         let proof = compute_proof("token", 1, "client-b", 10);
-        assert_eq!(t.verify("client-b", "token", 1, &proof, 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("client-b", "token", 1, &proof, 10, 20),
+            Err(ErrorCode::ChallengeUnknown)
+        );
         assert_eq!(t.pending_count(), 1, "A 的挑战不应被 B 的失败消费");
     }
 
@@ -274,7 +297,10 @@ mod tests {
         let mut t = ChallengeTable::new(30_000);
         t.issue("c", 7, 0);
         let good = compute_proof("token", 7, "c", 10);
-        assert_eq!(t.verify("c", "token", 9, &good, 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "token", 9, &good, 10, 20),
+            Err(ErrorCode::ChallengeUnknown)
+        );
         assert!(t.verify("c", "token", 7, &good, 10, 20).is_ok());
     }
 
@@ -286,7 +312,10 @@ mod tests {
         }
         assert_eq!(t.pending_count(), MAX_PENDING_PER_CLIENT);
         let oldest = compute_proof("token", 1, "c", 1);
-        assert_eq!(t.verify("c", "token", 1, &oldest, 1, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "token", 1, &oldest, 1, 20),
+            Err(ErrorCode::ChallengeUnknown)
+        );
         let newest = compute_proof("token", 20, "c", 20);
         assert!(t.verify("c", "token", 20, &newest, 20, 30).is_ok());
     }
