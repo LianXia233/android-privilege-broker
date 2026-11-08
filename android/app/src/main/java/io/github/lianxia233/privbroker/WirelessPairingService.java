@@ -10,6 +10,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.graphics.drawable.Icon;
+import android.net.LocalSocket;
+import android.net.LocalSocketAddress;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.os.Build;
@@ -57,6 +59,8 @@ public final class WirelessPairingService extends Service {
     private static final int REQ_REPLY = 1;
     private static final int REQ_STOP = 2;
     private static final long CONNECT_WAIT_MS = 8000L;
+    private static final long START_VERIFY_TIMEOUT_MS = 7000L;
+    private static final long START_VERIFY_INTERVAL_MS = 400L;
 
     private static final String SERVICE_PAIRING = "_adb-tls-pairing._tcp";
     private static final String SERVICE_CONNECT = "_adb-tls-connect._tcp";
@@ -333,6 +337,40 @@ public final class WirelessPairingService extends Service {
         }
     }
 
+    /** 同步探测 abstract socket 是否被监听，联上即代表特权代理在跑。 */
+    private boolean isServiceUp() {
+        try {
+            LocalSocket s = new LocalSocket();
+            try {
+                s.connect(new LocalSocketAddress(
+                        BrokerClient.socketName(getApplicationContext()),
+                        LocalSocketAddress.Namespace.ABSTRACT));
+                return true;
+            } finally {
+                try { s.close(); } catch (Throwable ignored) { }
+            }
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 投递启动命令后轮询等待代理真正常驻，返回是否实测到。 */
+    private boolean awaitServiceUp() {
+        long deadline = System.currentTimeMillis() + START_VERIFY_TIMEOUT_MS;
+        do {
+            if (isServiceUp()) {
+                return true;
+            }
+            try {
+                Thread.sleep(START_VERIFY_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        } while (System.currentTimeMillis() < deadline);
+        return isServiceUp();
+    }
+
     private void handleResult(String resultJson) {
         boolean ok = false;
         String code = "";
@@ -357,12 +395,29 @@ public final class WirelessPairingService extends Service {
             return;
         }
         if (ok && WirelessRunner.STAGE_STARTED.equals(stage)) {
-            stopDiscovery();
-            notifyResult(getString(R.string.wireless_success_title),
-                    getString(R.string.wireless_success_text), true);
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            cancelConnectTimeout();
-            stopSelf();
+            // 启动命令「投递成功」不等于代理真的常驻：后台 stdio/进程组处理不当
+            // 时 adbd 会把刚拉起的进程一起杀掉。这里实测 abstract socket，
+            // 只有确认在跑才宣告成功并停止服务，避免「假成功」。
+            working = true;
+            push(workingNotification());
+            new Thread(() -> {
+                final boolean up = awaitServiceUp();
+                main.post(() -> {
+                    working = false;
+                    if (up) {
+                        stopDiscovery();
+                        notifyResult(getString(R.string.wireless_success_title),
+                                getString(R.string.wireless_success_text), true);
+                        cancelConnectTimeout();
+                        stopForeground(STOP_FOREGROUND_REMOVE);
+                        stopSelf();
+                    } else {
+                        awaitingConnect = false;
+                        cancelConnectTimeout();
+                        push(inputNotification(getString(R.string.wireless_start_not_verified)));
+                    }
+                });
+            }, "wireless-verify").start();
             return;
         }
         awaitingConnect = false;

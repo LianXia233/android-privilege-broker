@@ -241,6 +241,7 @@
     <string name="wireless_working_text">正在完成配对、公钥注册与连接启动</string>
     <string name="wireless_success_title">特权代理已启动</string>
     <string name="wireless_success_text">无线调试配对完成，返回应用点击「刷新状态」即可使用。</string>
+    <string name="wireless_start_not_verified">启动命令已投递，但暂未检测到特权代理运行。请确认「无线调试」开关仍打开、已连接 WLAN；回到应用点「激活服务」重试，必要时重新输入配对码。</string>
     <string name="wireless_bad_code">配对码必须是 6 位数字</string>
     <string name="wireless_no_pairing_service">尚未发现配对服务，请在无线调试页点「使用配对码配对设备」，并确认已连接 WLAN</string>
     <string name="wireless_no_connect_service">配对已完成，但没等到连接服务。请确认「无线调试」开关仍打开，然后重新输入配对码。</string>
@@ -316,7 +317,9 @@
     <string name="pairing_btn_activate">激活服务</string>
     <string name="pairing_btn_activate_again">重新激活服务</string>
     <string name="pairing_activating">正在连接无线调试并以 shell 身份启动特权代理…</string>
-    <string name="pairing_activate_ok">激活成功：特权代理已启动。返回主界面点「刷新状态」即可使用。</string>
+    <string name="pairing_activate_ok">激活成功：已实测到特权代理正在运行，状态已刷新为「已激活」，可返回主界面使用。</string>
+    <string name="pairing_activate_failed_hint">服务未起来：若还没配对，请先点上方高亮的「在通知栏输入配对码」完成首次配对；若已配对，请确认「无线调试」开关仍打开、已连接 WLAN，再点「激活服务」重试。</string>
+    <string name="pairing_diag_title">启动日志（诊断）：</string>
     <string name="pairing_activate_need_port">请先填写连接端口：可在「无线调试」页「IP 地址和端口」查看，或等待自动发现。</string>
     <string name="pairing_activate_bad_port">端口无效，请输入 1–65535 之间的数字</string>
     <string name="pairing_first_section">首次配对（只需一次）</string>
@@ -325,4 +328,12 @@
     <string name="pairing_manual_desc">分屏、小窗等不便下拉通知栏时，可在此手填配对端口与 6 位配对码。配对完成后同样需要点上方「激活服务」。</string>
     <string name="pairing_env_section">环境与权限</string>
     <string name="pairing_paired_activate_hint">配对成功，公钥已登记到设备。现在点上方「激活服务」按钮启动特权代理。</string>
+
+    <!-- 激活按钮旁的高亮「通知栏输码」入口 -->
+    <string name="pairing_notif_title">第 1 步：在通知栏输入配对码</string>
+    <string name="pairing_notif_tag">必做</string>
+    <string name="pairing_notif_sub">首次启用必须先配对：去「无线调试」点「使用配对码配对设备」，弹窗留在原地，下拉通知栏在本应用通知里输入 6 位码。</string>
+    <string name="pairing_notif_sub_urgent">特权代理未运行：请先完成上方配对（下拉通知栏输入 6 位码），再点「激活服务」。已配对过可直接点激活。</string>
+    <string name="pairing_notif_btn">重新显示通知栏输码</string>
+    <string name="pairing_notif_howto">已把常驻输码通知置顶。请下拉通知栏，点本应用通知里的「输入配对码」填入 6 位数字；配对弹窗留在无线调试页不要退出。配对完成后回到本页点「激活服务」。</string>
 </resources>

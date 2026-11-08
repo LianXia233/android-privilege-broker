@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 激活失败/服务未运行时的强调态：更醒目的红橙渐变 + 加粗描边。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#FFECEC"
+        android:centerColor="#FFD9D0"
+        android:endColor="#FFC4A6"
+        android:angle="0" />
+    <stroke
+        android:width="2dp"
+        android:color="#E5484D" />
+    <corners android:radius="16dp" />
+</shape>

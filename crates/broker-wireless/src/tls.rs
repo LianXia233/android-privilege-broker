@@ -140,6 +140,11 @@ impl TlsStream {
         self.flush_tls()
     }
 
+    /// 调整底层 TCP 读超时；用于后台启动命令投递后缩短等待窗口。
+    pub fn set_read_timeout(&mut self, dur: Option<Duration>) -> io::Result<()> {
+        self.tcp.set_read_timeout(dur)
+    }
+
     /// RFC 5705 导出密钥材料；配对密码 = 配对码字节 || 64 字节导出材料。
     pub fn export_keying_material(
         &self,

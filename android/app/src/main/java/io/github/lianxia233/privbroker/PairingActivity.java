@@ -50,6 +50,11 @@ public final class PairingActivity extends Activity {
     private static final String TAG = "PairingActivity";
 
     private static final long AUTO_ACTIVATE_WAIT_MS = 8000L;
+    /** 激活后轮询探测特权代理 abstract socket 的总时长与间隔。 */
+    private static final long SERVICE_PROBE_TIMEOUT_MS = 7000L;
+    private static final long SERVICE_PROBE_INTERVAL_MS = 400L;
+    /** 结果条里回显启动日志的最大字符数。 */
+    private static final int DIAG_CLIP = 260;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ExecutorService probeWorker = Executors.newCachedThreadPool();
@@ -68,6 +73,10 @@ public final class PairingActivity extends Activity {
     private Button btnPair;
     private LinearLayout cardNotif;
     private LinearLayout cardMiui;
+    /** 激活按钮旁的高亮「通知栏输码」入口（容器 + 副标题，用于强调态）。 */
+    private View cardPairNotif;
+    private TextView tvPairNotifSub;
+    private boolean pairEntryEmphasized;
 
     private int pairingPort = -1;
     private int connectPort = -1;
@@ -98,14 +107,19 @@ public final class PairingActivity extends Activity {
         btnPair = findViewById(R.id.btnPair);
         cardNotif = findViewById(R.id.cardNotif);
         cardMiui = findViewById(R.id.cardMiui);
+        cardPairNotif = findViewById(R.id.cardPairNotif);
+        tvPairNotifSub = findViewById(R.id.tvPairNotifSub);
 
         btnActivate.setOnClickListener(v -> onActivateClicked());
         btnPair.setOnClickListener(v -> onPairClicked());
+        // 高亮输码入口：紧邻激活按钮，点击立即把常驻输码通知置顶并给出引导。
+        cardPairNotif.setOnClickListener(v -> onPairNotifClicked());
+        findViewById(R.id.btnPairNotif).setOnClickListener(v -> onPairNotifClicked());
         findViewById(R.id.btnRefresh).setOnClickListener(v -> refreshServiceState());
         findViewById(R.id.btnDevOptions).setOnClickListener(v -> openDeveloperOptions());
         findViewById(R.id.btnNotifSettings).setOnClickListener(v -> openNotificationSettings());
         findViewById(R.id.btnBattery).setOnClickListener(v -> openBatterySettings());
-        findViewById(R.id.btnNotification).setOnClickListener(v -> startPairingService(true));
+        findViewById(R.id.btnNotification).setOnClickListener(v -> onPairNotifClicked());
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
 
         if (RomCompat.isMiuiLike()) {
@@ -184,27 +198,51 @@ public final class PairingActivity extends Activity {
      */
     private void refreshServiceState() {
         probeWorker.execute(() -> {
-            boolean active = false;
-            try {
-                LocalSocket s = new LocalSocket();
-                try {
-                    s.connect(new LocalSocketAddress(
-                            BrokerClient.socketName(getApplicationContext()),
-                            LocalSocketAddress.Namespace.ABSTRACT));
-                    active = true;
-                } finally {
-                    try { s.close(); } catch (Throwable ignored) { }
-                }
-            } catch (Throwable ignored) {
-                active = false;
-            }
-            final boolean result = active;
-            ui(() -> applyServiceState(result));
+            final boolean active = isServiceUp();
+            ui(() -> applyServiceState(active));
         });
+    }
+
+    /** 同步探测 abstract socket 是否被监听（联上即代表代理在跑），可在 worker 线程调用。 */
+    private boolean isServiceUp() {
+        try {
+            LocalSocket s = new LocalSocket();
+            try {
+                s.connect(new LocalSocketAddress(
+                        BrokerClient.socketName(getApplicationContext()),
+                        LocalSocketAddress.Namespace.ABSTRACT));
+                return true;
+            } finally {
+                try { s.close(); } catch (Throwable ignored) { }
+            }
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 投递启动命令后轮询等待代理真正常驻。命令投递成功不等于服务已起来，
+     * 只有 abstract socket 被监听才算激活成功，避免出现「假成功」。
+     */
+    private boolean awaitServiceUp() {
+        long deadline = System.currentTimeMillis() + SERVICE_PROBE_TIMEOUT_MS;
+        do {
+            if (isServiceUp()) {
+                return true;
+            }
+            try {
+                Thread.sleep(SERVICE_PROBE_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        } while (System.currentTimeMillis() < deadline);
+        return isServiceUp();
     }
 
     private void applyServiceState(boolean active) {
         serviceActive = active;
+        emphasizePairEntry(!active);
         if (active) {
             tvServiceBadge.setText(R.string.pairing_badge_active);
             vStatusDot.setBackgroundResource(R.drawable.bg_status_dot_ok);
@@ -238,6 +276,38 @@ public final class PairingActivity extends Activity {
 
     private void syncNotificationCard() {
         cardNotif.setVisibility(notificationEnabled ? View.GONE : View.VISIBLE);
+    }
+
+    /**
+     * 高亮输码入口：立即重启常驻通知通道，把带 RemoteInput 的输码通知顶到通知栏，
+     * 并在结果条给出「先去无线调试点配对码 → 下拉通知栏输码」的明确引导。
+     * 通知被关闭时直接引导去开权限，而不是静默失败。
+     */
+    private void onPairNotifClicked() {
+        if (!isNotificationEnabled()) {
+            showResult(getString(R.string.pairing_notif_blocked), RESULT_ERR);
+            toast(getString(R.string.pairing_notif_mode_unavailable));
+            openNotificationSettings();
+            return;
+        }
+        startPairingService(true);
+        showResult(getString(R.string.pairing_notif_howto), RESULT_INFO);
+    }
+
+    /** 未激活/激活失败时把输码入口切成强调态；服务已运行时恢复常态。 */
+    private void emphasizePairEntry(boolean emphasize) {
+        if (pairEntryEmphasized == emphasize) {
+            return;
+        }
+        pairEntryEmphasized = emphasize;
+        if (cardPairNotif != null) {
+            cardPairNotif.setBackgroundResource(emphasize
+                    ? R.drawable.bg_pair_notif_urgent : R.drawable.bg_pair_notif);
+        }
+        if (tvPairNotifSub != null) {
+            tvPairNotifSub.setText(emphasize
+                    ? R.string.pairing_notif_sub_urgent : R.string.pairing_notif_sub);
+        }
     }
 
     /** 通知栏输码通道：进入页面即启动；被系统禁止后台启动前台服务时降级普通 startService。 */
@@ -389,30 +459,40 @@ public final class PairingActivity extends Activity {
         final String host = MdnsProbe.get(this).resolvedHost();
         worker.execute(() -> {
             String raw = WirelessRunner.start(PairingActivity.this, finalPort, host);
-            ui(() -> onActivateResult(raw));
+            // 命令投递后实测代理是否常驻；这是激活成功的唯一判据。
+            final boolean up = awaitServiceUp();
+            ui(() -> onActivateResult(raw, up));
         });
     }
 
-    private void onActivateResult(String raw) {
+    private void onActivateResult(String raw, boolean serviceUp) {
         working = false;
         setWorking(false);
         JSONObject j = parse(raw);
-        if (j.optBoolean("ok", false)) {
+        if (serviceUp) {
             paired = true;
+            emphasizePairEntry(false);
             showResult(getString(R.string.pairing_activate_ok), RESULT_OK);
-            refreshServiceState();
+            applyServiceState(true);
             return;
         }
         String code = j.optString("code", "");
         String stage = j.optString("stage", "");
         String message = j.optString("message", "");
-        String text = friendlyMessage(code, stage, message);
-        // 认证/连接类失败，多半是还没配对过或端口不对，补充引导。
-        if (!paired && (stage.contains("connect") || stage.contains("shell"))) {
-            text = text + "\n\n" + getString(R.string.pairing_first_desc);
+        String output = j.optString("output", "").trim();
+        StringBuilder sb = new StringBuilder(friendlyMessage(code, stage, message));
+        // 回显启动日志：类加载/so 加载/SELinux 失败时给出真实原因，而非笼统失败。
+        if (!output.isEmpty()) {
+            sb.append("\n\n").append(getString(R.string.pairing_diag_title))
+              .append("\n").append(output.length() > DIAG_CLIP
+                    ? output.substring(0, DIAG_CLIP) + "…" : output);
         }
-        showResult(text, RESULT_ERR);
-        refreshServiceState();
+        // 只要没实测到服务在跑，就一律给出可操作的下一步，杜绝「命令已投递」
+        // 被当成成功、以及失败后无从下手两种情况。
+        sb.append("\n\n").append(getString(R.string.pairing_activate_failed_hint));
+        showResult(sb.toString(), RESULT_ERR);
+        emphasizePairEntry(true);
+        applyServiceState(false);
     }
 
     // ------------------------------------------------------------ 备用：页面内配对

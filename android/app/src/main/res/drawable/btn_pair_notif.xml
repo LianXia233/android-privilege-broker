@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 高亮输码按钮：暖橙渐变，与蓝色激活按钮区分，视觉上更跳。 -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33E5484D">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#FF9F43"
+                android:centerColor="#F5811F"
+                android:endColor="#E8600C"
+                android:angle="0" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+</ripple>

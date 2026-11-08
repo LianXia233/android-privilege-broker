@@ -116,6 +116,15 @@ impl Transport {
             Transport::Tls(t) => t.write_all(data),
         }
     }
+
+    /// 调整底层 socket 读超时。后台启动命令投递后只需短暂等待回显，
+    /// 不能沿用握手阶段的 15~20 秒，否则某些 ROM 不发 A_CLSE 会让激活卡很久。
+    pub fn set_read_timeout(&mut self, dur: Option<Duration>) -> Result<(), WirelessError> {
+        match self {
+            Transport::Plain(t) => t.set_read_timeout(dur).map_err(WirelessError::Io),
+            Transport::Tls(t) => t.set_read_timeout(dur).map_err(WirelessError::Io),
+        }
+    }
 }
 
 pub fn read_message(transport: &mut Transport) -> Result<AdbMessage, WirelessError> {
@@ -228,6 +237,49 @@ impl AdbClient {
                         "shell 通道收到非预期命令 0x{other:08x}"
                     )));
                 }
+            }
+        }
+        Ok(output)
+    }
+
+    /// 打开 `shell:` 通道投递一条后台启动命令，并尽量收集回显。
+    ///
+    /// 与 `shell` 不同：不把「收到 `A_CLSE`」当作成功的必要条件。命令一旦写入
+    /// 通道就已投递，之后无论收到 `A_CLSE`、读超时还是 EOF，都返回已收集的输出。
+    /// 特权代理是常驻进程，部分 ROM 的 adbd 会迟迟不关闭后台命令的 shell 通道，
+    /// 死等 `A_CLSE` 只会卡到读超时并误报失败。真正是否常驻由界面探测 abstract
+    /// socket 判定，这里只负责投递与把启动日志带回去用于诊断。
+    pub fn shell_detached(&mut self, command: &str) -> Result<Vec<u8>, WirelessError> {
+        const LOCAL_ID: u32 = 1;
+        const DETACHED_READ_TIMEOUT: Duration = Duration::from_secs(6);
+        write_message(
+            &mut self.transport,
+            &AdbMessage::new_str(A_OPEN, LOCAL_ID, 0, &format!("shell:{command}")),
+        )?;
+        let _ = self.transport.set_read_timeout(Some(DETACHED_READ_TIMEOUT));
+        let mut output = Vec::new();
+        loop {
+            match read_message(&mut self.transport) {
+                Ok(message) => match message.command {
+                    A_OKAY => continue,
+                    A_WRTE => {
+                        output.extend_from_slice(&message.data);
+                        let _ = write_message(
+                            &mut self.transport,
+                            &AdbMessage::new(A_OKAY, LOCAL_ID, message.arg0, Vec::new()),
+                        );
+                    }
+                    A_CLSE => {
+                        let _ = write_message(
+                            &mut self.transport,
+                            &AdbMessage::new(A_CLSE, LOCAL_ID, message.arg0, Vec::new()),
+                        );
+                        break;
+                    }
+                    _ => continue,
+                },
+                // 读超时 / EOF / 连接被重置都发生在命令投递之后，视为已投递。
+                Err(_) => break,
             }
         }
         Ok(output)
@@ -447,5 +499,35 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         handle.join().unwrap();
         assert_eq!(out, b"privilege broker ready\n");
+    }
+
+    /// 后台启动命令的关键容错：设备端只回显日志、迟迟不发 A_CLSE（甚至直接
+    /// 关闭连接），shell_detached 也必须把已收集到的启动日志带回来，不能报错。
+    /// 否则界面只会看到「激活失败」，无从判断代理是否其实已经起来了。
+    #[test]
+    fn shell_detached_returns_output_without_aclse() {
+        use std::net::{TcpListener, TcpStream};
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (tcp, _) = listener.accept().unwrap();
+            let mut t = Transport::Plain(tcp);
+            let open = read_message(&mut t).unwrap();
+            assert_eq!(open.command, A_OPEN);
+            assert!(String::from_utf8_lossy(&open.data).starts_with("shell:"));
+            write_message(&mut t, &AdbMessage::new(A_OKAY, 1, 7, Vec::new())).unwrap();
+            write_message(&mut t, &AdbMessage::new(
+                A_WRTE, 7, 1, b"listening: abstract:prvbrk.abc\n".to_vec())).unwrap();
+            // 故意不发 A_CLSE，离开作用域即关闭 socket。
+        });
+
+        let tcp = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        tcp.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+        let mut client = AdbClient { transport: Transport::Plain(tcp) };
+        let out = client.shell_detached("start broker").unwrap();
+        handle.join().unwrap();
+        assert_eq!(out, b"listening: abstract:prvbrk.abc\n");
     }
 }

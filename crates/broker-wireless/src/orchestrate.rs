@@ -25,6 +25,10 @@ use crate::pairing;
 
 const STARTER_CLASS: &str = "io.github.lianxia233.privbroker.ServiceStarter";
 
+/// 特权代理成功绑定监听后由运行时打印到 stderr 的标记。启动命令把 stderr
+/// 回读给本模块，据此回填 `listening`，供界面区分「命令已投递」与「进程确实起来了」。
+pub const BROKER_LISTEN_MARKER: &str = "监听:";
+
 pub const STAGE_PAIR: &str = "pair";
 pub const STAGE_START: &str = "start";
 
@@ -75,23 +79,46 @@ pub struct WirelessResponse {
     pub code: Option<String>,
     pub message: String,
     pub output: Option<String>,
+    /// 启动命令回读的 stderr 中出现监听标记，说明 app_process 已成功绑定端点。
+    /// 界面据此区分「命令已投递」与「代理确实常驻」，避免假成功。
+    pub listening: bool,
 }
 
 fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
+/// 启动日志中出现运行时绑定监听的标记，即视为 app_process 已真正跑起来。
+pub fn boot_log_confirms_listening(log: &str) -> bool {
+    log.contains(BROKER_LISTEN_MARKER)
+}
+
 /// 构造在无线调试 shell 中后台启动特权代理的命令。
+///
+/// 三个细节决定「服务到底能不能起来」，缺一个就会表现为「提示成功但服务未运行」：
+/// 1. **重定向 stdio**：常驻的 app_process 若继承 shell 通道的 stdout/stderr，
+///    adbd 会一直等这些 fd 关闭才发 `A_CLSE`；客户端读超时断开后，adbd 又会
+///    kill 掉整个进程组。所以后台进程必须 `</dev/null >>log 2>&1`，让主 shell
+///    能立即结束、通道能正常关闭。
+/// 2. **脱离进程组**：Java 侧 `ServiceStarter` 会调用 `Os.setsid()`，避免 adbd
+///    会话收尾时把代理一起杀掉。
+/// 3. **回读启动日志**：把 stderr 落到 shell 可写的临时文件再 `cat` 出来，
+///    客户端既能据此判断是否真的监听了端点，也能在类加载 / so 加载失败时
+///    把真实原因带回界面，而不是只剩一个无从诊断的「激活失败」。
 pub fn build_start_command(req: &WirelessRequest) -> String {
-    format!(
-        "(CLASSPATH={} app_process /system/bin --nice-name=privilege-broker {} \
-         --token={} --client={} --endpoint={} --lib={})&",
+    let invoke = format!(
+        "( export CLASSPATH={}; exec app_process /system/bin --nice-name=privilege-broker {} \
+          --token={} --client={} --endpoint={} --lib={} )",
         shell_quote(&req.apk_path),
         STARTER_CLASS,
         shell_quote(&req.token),
         shell_quote(&req.client),
         shell_quote(&req.endpoint),
         shell_quote(&req.native_lib_dir),
+    );
+    format!(
+        "LOG=/data/local/tmp/prvbrk_boot.log; : > \"$LOG\" 2>/dev/null || LOG=/dev/null; \
+         {invoke} </dev/null >>\"$LOG\" 2>&1 & sleep 2; cat \"$LOG\" 2>/dev/null"
     )
 }
 
@@ -171,6 +198,7 @@ fn execute(args_json: &str) -> Result<WirelessResponse, (String, WirelessError)>
                 code: None,
                 message: "配对成功，公钥已登记到设备。".to_string(),
                 output: None,
+                listening: false,
             });
         }
     }
@@ -179,14 +207,18 @@ fn execute(args_json: &str) -> Result<WirelessResponse, (String, WirelessError)>
         AdbClient::connect(host, req.connect_port, &key)
     }).map_err(|e| ("connect".to_string(), e))?;
     let command = build_start_command(&req);
-    let output = client.shell(&command).map_err(|e| ("shell".to_string(), e))?;
+    // 后台启动命令不依赖 A_CLSE：命令投递即返回，最终是否常驻由界面探测
+    // abstract socket 判定，避免 adbd 通道时序把「已启动」误报成失败。
+    let output = client.shell_detached(&command).map_err(|e| ("shell".to_string(), e))?;
+    let text = String::from_utf8_lossy(&output).to_string();
 
     Ok(WirelessResponse {
         ok: true,
         stage: "started".to_string(),
         code: None,
-        message: "配对成功，已通过无线调试启动特权代理。".to_string(),
-        output: Some(String::from_utf8_lossy(&output).to_string()),
+        message: "已通过无线调试投递特权代理启动命令。".to_string(),
+        listening: boot_log_confirms_listening(&text),
+        output: Some(text),
     })
 }
 
@@ -200,6 +232,7 @@ pub fn run(args_json: &str) -> String {
             code: Some(e.code().to_string()),
             message: e.to_string(),
             output: None,
+            listening: false,
         },
     };
     serde_json::to_string(&response).unwrap_or_else(|e| {
@@ -231,13 +264,33 @@ mod tests {
     #[test]
     fn start_command_contains_all_arguments_and_is_backgrounded() {
         let cmd = build_start_command(&request());
-        assert!(cmd.starts_with("(CLASSPATH='"));
-        assert!(cmd.ends_with(")&"));
-        assert!(cmd.contains("app_process /system/bin"));
+        assert!(cmd.contains("export CLASSPATH='"));
+        assert!(cmd.contains("exec app_process /system/bin"));
         assert!(cmd.contains("io.github.lianxia233.privbroker.ServiceStarter"));
         assert!(cmd.contains("--token='0123456789abcdef0123456789abcdef'"));
         assert!(cmd.contains("--endpoint='abstract'"));
         assert!(cmd.contains("--lib='/data/app/~~abc/lib/arm64'"));
+        assert!(cmd.contains("& sleep 2; cat"));
+    }
+
+    /// 后台进程必须彻底脱离 shell 通道 fd，否则 adbd 不发 A_CLSE，客户端超时
+    /// 断开后还会 kill 整个进程组 —— 这是「提示成功但服务从未运行」的根因。
+    #[test]
+    fn start_command_detaches_stdio_and_reads_boot_log() {
+        let cmd = build_start_command(&request());
+        assert!(cmd.contains("</dev/null >>\"$LOG\" 2>&1 &"));
+        assert!(cmd.contains("cat \"$LOG\""));
+        assert!(cmd.contains("prvbrk_boot.log"));
+        // 不再有裸的 (...)& 结尾：那会让常驻进程持有 ADB socket fd。
+        assert!(!cmd.ends_with(")&"));
+    }
+
+    #[test]
+    fn listening_marker_is_detected_in_boot_log() {
+        assert!(boot_log_confirms_listening(
+            "特权代理启动: uid=2000 ...\n监听: abstract:prvbrk.1234\n"));
+        assert!(!boot_log_confirms_listening("ClassNotFoundException: ServiceStarter"));
+        assert!(!boot_log_confirms_listening(""));
     }
 
     #[test]
