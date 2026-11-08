@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
+import android.text.TextUtils;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -421,44 +422,115 @@ public final class BrokerBridge {
     }
 
     /**
-     * stdin 流式写入失败时的兜底：把该 split 复制到 shell 可读目录，
+     * stdin 流式写入失败时的兜底：把该 split 中转成 system_server 可读的路径，
      * 返回绝对路径，供 `pm install-write <session> <name> <path>` 使用。
-     * 完全绕开跨进程 stdin 管道，避免跨进程管道在部分 ROM 上的兼容差异。
+     *
+     * 不能直接把外部缓存里的文件交给 pm：`/storage/emulated/0/...` 属于 FUSE
+     * 域，只有 shell(2000) 能读，system_server 读取会命中
+     * `avc: denied { read } ... tcontext=u:object_r:fuse:s0` 并 exit 255。
+     * 因此先由应用写到外部缓存（应用可写、shell 可读），再让特权代理以 shell
+     * 身份 `cp` 到 /data/local/tmp 下的一次性目录：
+     *
+     * - 目录 0711：仅属主 shell 可列目录，其它 uid 只能按已知名字进入，
+     *   目录名带随机 tag，避免其它应用枚举；
+     * - 文件 0644：system_server 需要读，安装结束/失败即整目录删除；
+     * - 每次兜底用独立目录，不做整目录清空，避免并发或重试时误删彼此的中间产物。
      */
     private static JSONObject stageForShell(JSONObject a) throws Exception {
         JSONObject spec = a.getJSONObject("stdin");
         String name = a.optString("name", "base.apk");
-        File dir = StagedFiles.shellDir(App.context());
-        File[] old = dir.listFiles();
-        if (old != null) {
-            for (File f : old) {
-                try {
-                    f.delete();
-                } catch (Throwable ignored) {
-                }
-            }
-        }
-        String safe = name.replaceAll("[^A-Za-z0-9._-]", "_");
-        if (!safe.toLowerCase(Locale.ROOT).endsWith(".apk")) {
-            safe = safe + ".apk";
-        }
-        File dst = new File(dir, "stage_" + safe);
-        try (OutputStream os = new FileOutputStream(dst)) {
+        Context ctx = App.context();
+        File src = StagedFiles.transferFile(ctx, name);
+        try (OutputStream os = new FileOutputStream(src)) {
             pipeStdin(spec, os);
         }
-        if (dst.length() <= 0) {
+        if (src.length() <= 0) {
+            src.delete();
             throw new IllegalStateException("兜底文件为空，无法用文件路径写入");
         }
-        // shell(uid 2000) 与 system 需要能读这个文件
-        dst.setReadable(true, false);
-        return new JSONObject()
-                .put("path", dst.getAbsolutePath())
-                .put("size", dst.length());
+        src.setReadable(true, false);
+
+        String fileName = StagedFiles.transferName(name);
+        String tag = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String dir = StagedFiles.TMP_ROOT + "/" + tag;
+        String target = dir + "/" + fileName;
+        BrokerClient client = BrokerClient.connect(ctx);
+        try {
+            shellOk(client, "mkdir", "-p", dir);
+            shellOk(client, "chmod", "0711", dir);
+            shellOk(client, "cp", src.getAbsolutePath(), target);
+            shellOk(client, "chmod", "0644", target);
+        } catch (Throwable t) {
+            // 失败回滚：远端目录没建完/没复制完就整目录删掉，本地暂存也删掉，
+            // 不把半成品留给后续当前路径重试。
+            try {
+                shellExec(client, "rm", "-rf", dir);
+            } catch (Throwable ignored) {
+            }
+            src.delete();
+            throw t;
+        } finally {
+            try {
+                client.close();
+            } catch (Throwable ignored) {
+            }
+        }
+        long size = src.length();
+        src.delete();
+        StagedFiles.rememberTmpDir(ctx, dir);
+        return new JSONObject().put("path", target).put("size", size).put("dir", dir);
     }
 
+    private static JSONObject shellExec(BrokerClient client, String... argv) throws Exception {
+        return client.exec(argv, new JSONObject().put("type", "none"), 30_000L);
+    }
+
+    private static void shellOk(BrokerClient client, String... argv) throws Exception {
+        JSONObject r = shellExec(client, argv);
+        if (r.optInt("code", -1) != 0) {
+            String detail = (r.optString("stderr", "") + r.optString("stdout", "")).trim();
+            throw new IllegalStateException(
+                    "特权侧中转安装文件失败 (" + TextUtils.join(" ", argv) + "): " + detail);
+        }
+    }
+
+    /**
+     * 清理本轮的中转目录与本地暂存文件。
+     *
+     * 按记录逐个删除，代理暂时不可用时把目录放回记录，留给下一次清理；
+     * 这样既不会遗漏 App 进程被杀导致的残留，也不会误删并发请求的目录。
+     */
     private static JSONObject cleanupStaged() {
+        Context ctx = App.context();
+        List<String> dirs = StagedFiles.takeTmpDirs(ctx);
+        if (!dirs.isEmpty()) {
+            try {
+                BrokerClient client = BrokerClient.connect(ctx);
+                try {
+                    List<String> failed = new ArrayList<>();
+                    for (String d : dirs) {
+                        try {
+                            JSONObject r = shellExec(client, "rm", "-rf", d);
+                            if (r.optInt("code", -1) != 0) {
+                                failed.add(d);
+                            }
+                        } catch (Throwable ignored) {
+                            failed.add(d);
+                        }
+                    }
+                    if (!failed.isEmpty()) {
+                        StagedFiles.restoreTmpDirs(ctx, failed);
+                    }
+                } finally {
+                    client.close();
+                }
+            } catch (Throwable t) {
+                Log.w(TAG, "cleanupStaged", t);
+                StagedFiles.restoreTmpDirs(ctx, dirs);
+            }
+        }
         try {
-            StagedFiles.cleanup(App.context());
+            StagedFiles.cleanup(ctx);
         } catch (Throwable ignored) {
         }
         return new JSONObject();

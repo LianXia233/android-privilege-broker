@@ -1,6 +1,7 @@
 package io.github.lianxia233.privbroker;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.net.Uri;
 
 import java.io.File;
@@ -8,6 +9,8 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,6 +30,19 @@ final class StagedFiles {
     private static final String SRC_DIR = "staged";
     private static final String SHELL_DIR = "shellstage";
     private static final long MAX_AGE_MS = 24L * 60 * 60 * 1000;
+
+    /**
+     * 文件路径兜底用的中转根目录。
+     *
+     * 外部缓存（/storage/emulated/0/Android/data/<pkg>/cache）属于 FUSE 域
+     * u:object_r:fuse:s0：shell(2000) 能读，但 system_server 读不到，`pm install-write`
+     * 传文件路径时会在 system_server 侧报 avc denied、exit 255。
+     * /data/local/tmp 的模式是 0771（owner/group shell），system_server 可读，
+     * 应用无法写入，只能由特权代理（shell 身份）在这里中转。
+     */
+    static final String TMP_ROOT = "/data/local/tmp/prvbrk-stage";
+    private static final String TMP_PREFS = "privilege_broker_stage";
+    private static final String KEY_TMP_DIRS = "tmp_dirs";
 
     private StagedFiles() {
     }
@@ -120,6 +136,58 @@ final class StagedFiles {
             s = "pkg" + s;
         }
         return s;
+    }
+
+    /**
+     * 文件路径兜底用的本地暂存文件。
+     *
+     * 只落在外部缓存（应用可写、shell 可读），随后由特权代理复制到
+     * {@link #TMP_ROOT}，绝不再把这个路径直接交给 `pm install-write`。
+     */
+    static File transferFile(Context c, String name) {
+        String tag = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        return new File(shellDir(c), "xfer_" + tag + "_" + safeName(name));
+    }
+
+    /** 中转文件名：沿用现有净化规则，避免把奇怪字符带进 shell 参数。 */
+    static String transferName(String name) {
+        return safeName(name);
+    }
+
+    /** 记录已交给特权代理的中转目录，供结束或失败时逐个删除（不整目录清空）。 */
+    static synchronized void rememberTmpDir(Context c, String dir) {
+        LinkedHashSet<String> dirs = new LinkedHashSet<>(
+                tmpPrefs(c).getStringSet(KEY_TMP_DIRS, Collections.<String>emptySet()));
+        dirs.add(dir);
+        tmpPrefs(c).edit().putStringSet(KEY_TMP_DIRS, dirs).apply();
+    }
+
+    static synchronized void forgetTmpDir(Context c, String dir) {
+        LinkedHashSet<String> dirs = new LinkedHashSet<>(
+                tmpPrefs(c).getStringSet(KEY_TMP_DIRS, Collections.<String>emptySet()));
+        if (dirs.remove(dir)) {
+            tmpPrefs(c).edit().putStringSet(KEY_TMP_DIRS, dirs).apply();
+        }
+    }
+
+    /** 取出待清理的中转目录并清空记录；调用方负责按返回值逐个删除。 */
+    static synchronized List<String> takeTmpDirs(Context c) {
+        List<String> out = new ArrayList<>(
+                tmpPrefs(c).getStringSet(KEY_TMP_DIRS, Collections.<String>emptySet()));
+        tmpPrefs(c).edit().remove(KEY_TMP_DIRS).apply();
+        return out;
+    }
+
+    /** 删除失败时把目录放回记录，留给下一次结束/失败清理再试。 */
+    static synchronized void restoreTmpDirs(Context c, List<String> dirs) {
+        LinkedHashSet<String> all = new LinkedHashSet<>(
+                tmpPrefs(c).getStringSet(KEY_TMP_DIRS, Collections.<String>emptySet()));
+        all.addAll(dirs);
+        tmpPrefs(c).edit().putStringSet(KEY_TMP_DIRS, all).apply();
+    }
+
+    private static SharedPreferences tmpPrefs(Context c) {
+        return c.getSharedPreferences(TMP_PREFS, Context.MODE_PRIVATE);
     }
 
     /** 安装结束后清理：shell 临时文件全删，源文件按时间过期清理（不删本次的，降级还要用）。 */
