@@ -228,6 +228,18 @@ mod tests {
     }
 
     #[test]
+    fn field_handshake_timestamps_are_within_window() {
+        // 现场日志：requestId/nonce=1794132511870、issuedAtMs=1794132589748、
+        // deadlineMs=1794132619748（issuedAt+30s），服务端在 issuedAt 当刻处理。
+        // 即：nonce 只是进程内自增序列（可为更早的毫秒值），issuedAt 才是校验基准，
+        // 三者关系合法，时间窗口本身不构成拒绝理由。
+        let mut a = Authenticator::new(AuthConfig::new(TOKEN, &["client-a"]));
+        let mut e = hello(1_794_132_511_870, 1_794_132_589_748, TOKEN);
+        e.deadline_ms = 1_794_132_619_748;
+        assert!(a.verify(&e, 1_794_132_589_748).is_ok());
+    }
+
+    #[test]
     fn version_mismatch_is_rejected() {
         let mut a = Authenticator::new(AuthConfig::new(TOKEN, &["client-a"]));
         let mut e = hello(1, 1000, TOKEN);

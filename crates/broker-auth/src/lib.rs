@@ -36,15 +36,24 @@ pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     diff == 0
 }
 
+/// 每个客户端同时允许挂起的挑战数量上限。
+///
+/// 客户端每次桥接调用都会新建连接并独立握手（状态查询、安装各步骤、焦点
+/// 快照都可能在同一个客户端标识下并发），因此不能假定「同一客户端同一时刻
+/// 只有一个握手」。槽位太少时后到的 Hello 会顶掉先到的挑战，先到的证明就会
+/// 被当成无效挑战而返回 UNAUTHENTICATED。
+const MAX_PENDING_PER_CLIENT: usize = 8;
+
 #[derive(Debug, Clone)]
 struct PendingChallenge {
     nonce: u64,
     issued_at_ms: u64,
 }
 
-/// 服务端挑战状态表。按客户端隔离，防止跨客户端借用挑战。
+/// 服务端挑战状态表。按客户端隔离，防止跨客户端借用挑战；同一客户端可同时
+/// 持有多个待验证挑战，按 nonce 精确匹配与消费。
 pub struct ChallengeTable {
-    pending: HashMap<String, PendingChallenge>,
+    pending: HashMap<String, Vec<PendingChallenge>>,
     ttl_ms: u64,
 }
 
@@ -53,16 +62,24 @@ impl ChallengeTable {
         Self { pending: HashMap::new(), ttl_ms }
     }
 
-    /// 为客户端生成一个挑战随机数。相同客户端的旧挑战会被覆盖。
+    /// 为客户端登记一个挑战随机数。返回值与入参一致，便于调用方直接回传。
+    ///
+    /// 先清掉该客户端已过期的槽位，再在容量上限内追加；只有超出上限时才
+    /// 淘汰最早的槽位，避免无限增长。
     pub fn issue(&mut self, client_id: &str, nonce: u64, now_ms: u64) -> u64 {
-        self.pending.insert(
-            client_id.to_string(),
-            PendingChallenge { nonce, issued_at_ms: now_ms },
-        );
+        let slots = self.pending.entry(client_id.to_string()).or_default();
+        slots.retain(|p| now_ms.saturating_sub(p.issued_at_ms) <= self.ttl_ms);
+        slots.push(PendingChallenge { nonce, issued_at_ms: now_ms });
+        while slots.len() > MAX_PENDING_PER_CLIENT {
+            slots.remove(0);
+        }
         nonce
     }
 
-    /// 校验客户端证明。成功即消费挑战，二次提交必然失败。
+    /// 校验客户端证明。成功即消费对应挑战，二次提交必然失败。
+    ///
+    /// 按 (client_id, nonce) 精确匹配：错误 nonce 不会消费该客户端的其它
+    /// 合法挑战，也不会影响其它客户端。
     pub fn verify(
         &mut self,
         client_id: &str,
@@ -72,9 +89,17 @@ impl ChallengeTable {
         issued_at_ms: u64,
         now_ms: u64,
     ) -> Result<(), ErrorCode> {
-        let pending = self.pending.remove(client_id).ok_or(ErrorCode::Unauthenticated)?;
-        if pending.nonce != server_nonce {
-            return Err(ErrorCode::Unauthenticated);
+        let (pending, slot_left_empty) = {
+            let slots = self.pending.get_mut(client_id).ok_or(ErrorCode::Unauthenticated)?;
+            let pos = slots
+                .iter()
+                .position(|p| p.nonce == server_nonce)
+                .ok_or(ErrorCode::Unauthenticated)?;
+            let pending = slots.remove(pos);
+            (pending, slots.is_empty())
+        };
+        if slot_left_empty {
+            self.pending.remove(client_id);
         }
         if now_ms.saturating_sub(pending.issued_at_ms) > self.ttl_ms {
             return Err(ErrorCode::SessionExpired);
@@ -88,15 +113,20 @@ impl ChallengeTable {
         Ok(())
     }
 
-    /// 清理过期挑战，返回被清理的客户端数。
+    /// 清理过期挑战，返回被清理的挑战条数。
     pub fn purge(&mut self, now_ms: u64) -> usize {
-        let before = self.pending.len();
-        self.pending.retain(|_, p| now_ms.saturating_sub(p.issued_at_ms) <= self.ttl_ms);
-        before - self.pending.len()
+        let mut removed = 0;
+        self.pending.retain(|_, slots| {
+            let before = slots.len();
+            slots.retain(|p| now_ms.saturating_sub(p.issued_at_ms) <= self.ttl_ms);
+            removed += before - slots.len();
+            !slots.is_empty()
+        });
+        removed
     }
 
     pub fn pending_count(&self) -> usize {
-        self.pending.len()
+        self.pending.values().map(|s| s.len()).sum()
     }
 }
 
@@ -193,6 +223,46 @@ mod tests {
         let proof = compute_proof("token", 1, "client-b", 10);
         assert_eq!(t.verify("client-b", "token", 1, &proof, 10, 20), Err(ErrorCode::Unauthenticated));
         assert_eq!(t.pending_count(), 1, "A 的挑战不应被 B 的失败消费");
+    }
+
+    #[test]
+    fn interleaved_handshakes_from_same_client_are_independent() {
+        // 现场故障的复现：同一客户端（应用每次桥接调用都会新建连接）先后发出
+        // 两个 Hello，后到的挑战不能顶掉先到的挑战，否则先到连接的证明会被
+        // 判成 UNAUTHENTICATED。
+        let mut t = ChallengeTable::new(30_000);
+        t.issue("installer", 1_001, 1_000);
+        t.issue("installer", 1_002, 1_010);
+        assert_eq!(t.pending_count(), 2);
+
+        let proof_a = compute_proof("token", 1_001, "installer", 1_100);
+        assert!(t.verify("installer", "token", 1_001, &proof_a, 1_100, 1_200).is_ok());
+
+        let proof_b = compute_proof("token", 1_002, "installer", 1_110);
+        assert!(t.verify("installer", "token", 1_002, &proof_b, 1_110, 1_210).is_ok());
+        assert_eq!(t.pending_count(), 0);
+    }
+
+    #[test]
+    fn unknown_nonce_does_not_consume_legitimate_challenge() {
+        let mut t = ChallengeTable::new(30_000);
+        t.issue("c", 7, 0);
+        let good = compute_proof("token", 7, "c", 10);
+        assert_eq!(t.verify("c", "token", 9, &good, 10, 20), Err(ErrorCode::Unauthenticated));
+        assert!(t.verify("c", "token", 7, &good, 10, 20).is_ok());
+    }
+
+    #[test]
+    fn pending_challenges_per_client_are_bounded() {
+        let mut t = ChallengeTable::new(30_000);
+        for n in 1..=20 {
+            t.issue("c", n, n);
+        }
+        assert_eq!(t.pending_count(), MAX_PENDING_PER_CLIENT);
+        let oldest = compute_proof("token", 1, "c", 1);
+        assert_eq!(t.verify("c", "token", 1, &oldest, 1, 20), Err(ErrorCode::Unauthenticated));
+        let newest = compute_proof("token", 20, "c", 20);
+        assert!(t.verify("c", "token", 20, &newest, 20, 30).is_ok());
     }
 
     #[test]

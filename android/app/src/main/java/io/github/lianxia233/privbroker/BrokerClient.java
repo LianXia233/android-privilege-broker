@@ -61,6 +61,9 @@ final class BrokerClient {
         return NONCE_SEQ.getAndIncrement();
     }
 
+    /** 令牌首次生成必须是单写入者：并发首用若各自生成，会得到两个不同的令牌。 */
+    private static final Object TOKEN_LOCK = new Object();
+
     private final InputStream in;
     private final OutputStream out;
     private final Socket tcpSocket;
@@ -89,13 +92,22 @@ final class BrokerClient {
     static String token(Context c) {
         SharedPreferences p = prefs(c);
         String t = p.getString(KEY_TOKEN, null);
-        if (t == null || t.length() < 32) {
-            byte[] rnd = new byte[24];
-            new SecureRandom().nextBytes(rnd);
-            t = hex(rnd);
-            p.edit().putString(KEY_TOKEN, t).apply();
+        if (t != null && t.length() >= 32) {
+            return t;
         }
-        return t;
+        // 无线调试拉起、状态查询与安装步骤可能并发首次取令牌；不加锁时
+        // 两个线程会各自生成并互相覆盖，代理进程拿到的令牌与应用后续读取的
+        // 不再是同一个，所有握手都会稳定被判 UNAUTHENTICATED。
+        synchronized (TOKEN_LOCK) {
+            t = p.getString(KEY_TOKEN, null);
+            if (t == null || t.length() < 32) {
+                byte[] rnd = new byte[24];
+                new SecureRandom().nextBytes(rnd);
+                t = hex(rnd);
+                p.edit().putString(KEY_TOKEN, t).commit();
+            }
+            return t;
+        }
     }
 
     /** 由用户改写为配对令牌时调用，用于与独立进程对齐。 */
@@ -198,7 +210,39 @@ final class BrokerClient {
 
     // ------------------------------------------------------------ 连接与握手
 
+    /**
+     * 建立连接并完成握手。握手阶段的鉴权类拒绝（挑战失效、重放窗口、会话
+     * 过期）都来自一次性凭据失效，换一组新 nonce 与新挑战即可恢复；这里
+     * 只重试一次，不做无限重连，也绝不降级为无鉴权通道。
+     */
     static BrokerClient connect(Context c) throws Exception {
+        Exception last = null;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                return open(c);
+            } catch (Exception e) {
+                last = e;
+                if (attempt == 0 && retryableHandshakeRejection(e)) {
+                    Log.w(TAG, "握手被拒，换新 nonce/挑战重试一次", e);
+                    continue;
+                }
+                throw e;
+            }
+        }
+        throw last;
+    }
+
+    private static boolean retryableHandshakeRejection(Throwable t) {
+        String msg = String.valueOf(t.getMessage());
+        if (!msg.contains("握手失败")) {
+            return false;
+        }
+        return msg.contains("UNAUTHENTICATED")
+                || msg.contains("SESSION_EXPIRED")
+                || msg.contains("REPLAY_DETECTED");
+    }
+
+    private static BrokerClient open(Context c) throws Exception {
         String ep = endpoint(c);
         if ("abstract".equals(ep) || ep.startsWith("abstract:")) {
             String name = ep.startsWith("abstract:")
