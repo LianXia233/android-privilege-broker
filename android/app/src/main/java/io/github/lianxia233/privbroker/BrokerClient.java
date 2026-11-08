@@ -212,7 +212,7 @@ final class BrokerClient {
      * 端点可连且握手成功才算「真的可用」。
      *
      * <p>只探测端口会漏掉「进程在监听但拒绝当前令牌」的陈旧实例：此时
-     * 恢复流程会误判已恢复，重试仍然是同一个 UNAUTHENTICATED。
+     * 恢复流程会误判已恢复，重试仍然是同一个拒绝码。
      * 判定用完整握手，代价是每次多一次短连接，只在恢复/诊断路径使用。</p>
      */
     static boolean handshake(Context c) {
@@ -252,12 +252,21 @@ final class BrokerClient {
         throw last;
     }
 
+    /**
+     * 只对「换一组新 nonce 与新挑战就可能成功」的拒绝重试一次。
+     *
+     * <p>CHALLENGE_UNKNOWN 表示本次挑战槽位已失效（过期、被淘汰或同位竞争），
+     * 属于一次性状态，重取挑战即可恢复；PROOF_MISMATCH 表示令牌或 client_id
+     * 与服务端不一致，换 nonce 也无济于事，直接上抛，避免把真实原因拖成第二次
+     * 相同的失败。</p>
+     */
     private static boolean retryableHandshakeRejection(Throwable t) {
         String msg = String.valueOf(t.getMessage());
         if (!msg.contains("握手失败")) {
             return false;
         }
         return msg.contains("UNAUTHENTICATED")
+                || msg.contains("CHALLENGE_UNKNOWN")
                 || msg.contains("SESSION_EXPIRED")
                 || msg.contains("REPLAY_DETECTED");
     }
@@ -300,6 +309,10 @@ final class BrokerClient {
     }
 
     private static BrokerClient handshake(BrokerClient c, Context ctx) throws Exception {
+        // 一次握手只取一次令牌快照：Hello 与 Proof 必须基于同一个值。
+        // 两次分别读取时，中途一旦发生写入（首次生成、重新配对），就会出现
+        // Hello 的令牌通过、Proof 的证明用的是另一个令牌，最终被判证明不成立。
+        String token = token(ctx);
         long now = System.currentTimeMillis();
         c.nonce = nextNonce();
         c.writeFrame(new JSONObject()
@@ -312,7 +325,7 @@ final class BrokerClient {
                 .put("deadlineMs", now + DEADLINE_MS)
                 .put("body", new JSONObject()
                         .put("type", "hello")
-                        .put("token", token(ctx))
+                        .put("token", token)
                         .put("advertisedVersion", PROTOCOL_VERSION)));
 
         JSONObject challenge = c.readFrame();
@@ -320,10 +333,10 @@ final class BrokerClient {
         if (cb == null || !"challenge".equals(cb.optString("type"))) {
             throw new IllegalStateException("握手首帧不是 challenge: " + challenge);
         }
-        long serverNonce = cb.getLong("serverNonce");
+        long serverNonce = exactServerNonce(cb);
 
         long t2 = System.currentTimeMillis();
-        String proof = computeProof(token(ctx), serverNonce, c.clientId, t2);
+        String proof = computeProof(token, serverNonce, c.clientId, t2);
         c.nonce = nextNonce();
         c.writeFrame(new JSONObject()
                 .put("version", PROTOCOL_VERSION)
@@ -347,6 +360,29 @@ final class BrokerClient {
         c.serverUid = ab.optInt("uid", -1);
         c.protocolVersion = ab.optInt("serverVersion", PROTOCOL_VERSION);
         return c;
+    }
+
+    /**
+     * 读取服务端挑战随机数，拒绝一切会丢精度的表示。
+     *
+     * <p>服务端下发的是随机整数，而帧内容由 org.json 解析：超出 long 范围的
+     * 数字字面量会退化成 double，取整后得到的值不再等于服务端登记的值。
+     * 用这个值计算证明并按值回传，服务端按值精确匹配挑战槽位必然落空，最终
+     * 表现为「Hello 通过、Proof 被拒」且日志里只有一个笼统的拒绝码。这里把
+     * double/float 表示显式识别出来并给出可读原因，避免同类问题再次以静默
+     * 形式出现（新版本代理已把随机数限制在 53 位内）。</p>
+     */
+    private static long exactServerNonce(JSONObject body) {
+        Object raw = body.opt("serverNonce");
+        if (raw instanceof Number) {
+            Number n = (Number) raw;
+            if (n instanceof Long || n instanceof Integer || n instanceof Short || n instanceof Byte) {
+                return n.longValue();
+            }
+            throw new IllegalStateException("挑战随机数超出 JSON 精确整数范围（serverNonce="
+                    + n + "）：特权代理随机数未限制在 53 位内，请重新激活以更新代理");
+        }
+        throw new IllegalStateException("挑战帧缺少 serverNonce: " + body);
     }
 
     /** 与 Rust broker-auth::compute_proof 逐字节一致。 */
