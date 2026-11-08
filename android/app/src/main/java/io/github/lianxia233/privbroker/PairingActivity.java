@@ -458,15 +458,23 @@ public final class PairingActivity extends Activity {
         final long startedAt = System.currentTimeMillis();
         worker.execute(() -> {
             String raw = WirelessRunner.start(PairingActivity.this, finalPort, host);
-            // 命令投递后实测代理是否常驻；这是激活成功的唯一判据。
-            final boolean up = awaitServiceUp();
-            ui(() -> onActivateResult(raw, up, finalPort, host,
+            // 双通道判据，对齐成熟实现以启动器输出判定启动结果：
+            // 1) app 侧实测 abstract socket 能连上（最强证据）；
+            // 2) native 启动日志明确「监听成功 / 已有实例在运行」。
+            // 部分 ROM 的 SELinux 会拦截 app→shell 域 socket 直连，此时 1)
+            // 恒为 false 但服务其实已起来 —— `Address already in use` 就是
+            // 「旧实例还占着端点」的证据，不能因此误报激活失败。
+            final boolean probed = awaitServiceUp();
+            final boolean confirmed = ActivationLog.startLogConfirmsRunning(raw);
+            final boolean up = probed || confirmed;
+            ui(() -> onActivateResult(raw, up, probed, confirmed, finalPort, host,
                     System.currentTimeMillis() - startedAt));
         });
     }
 
-    private void onActivateResult(String raw, boolean serviceUp, int port,
-                                  String host, long durationMs) {
+    private void onActivateResult(String raw, boolean serviceUp, boolean probed,
+                                  boolean confirmed, int port, String host,
+                                  long durationMs) {
         working = false;
         setWorking(false);
         JSONObject j = parse(raw);
@@ -484,10 +492,22 @@ public final class PairingActivity extends Activity {
         if (serviceUp) {
             paired = true;
             emphasizePairEntry(false);
-            showResult(getString(R.string.pairing_activate_ok), RESULT_OK);
+            // 如实区分证据来源：实测连通最强；仅日志确认时说明是「复用已有实例」
+            // 或「app 直连探测受系统限制」，不宣称已完成实测，避免假成功。
+            String okText;
+            if (probed) {
+                okText = getString(R.string.pairing_activate_ok);
+            } else if (ActivationLog.reusedExistingInstance(raw)) {
+                okText = getString(R.string.pairing_activate_ok_reused);
+            } else {
+                okText = getString(R.string.pairing_activate_ok_confirmed);
+            }
+            String logSummary = okText
+                    + (probed ? "" : "\n（判据：启动日志确认监听；app 侧直连探测未通过）")
+                    + (confirmed ? "\n" + getString(R.string.pairing_activate_log_hint) : "");
+            showResult(okText, RESULT_OK);
             applyServiceState(true);
-            ActivationLog.record(this, true, port, host, "",
-                    getString(R.string.pairing_activate_ok), output, durationMs);
+            ActivationLog.record(this, true, port, host, "", logSummary, output, durationMs);
             return;
         }
 

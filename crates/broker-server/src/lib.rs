@@ -79,12 +79,12 @@ pub fn run(startup: StartupConfig) -> i32 {
             }
         };
 
-        // 只表示进入绑定阶段，不代表已绑定成功；真正的成功判据是界面实测
-        // abstract socket。此前打印「监听:」容易被误读成已经监听成功。
-        eprintln!("准备监听: {}", endpoint.describe());
+        // 绑定结果由 broker-core::serve 在 bind 之后如实打印（「监听成功:」/
+        // 「监听失败:」/「特权代理已在运行:」）。这里不再打印阶段标记，避免
+        // 重复日志，也不再把「准备监听」误读成已监听成功。
         tokio::select! {
             r = broker.serve(endpoint, shutdown) => {
-                if let Err(e) = r { eprintln!("监听失败: {e}"); 4 } else { 0 }
+                if r.is_err() { 4 } else { 0 }
             }
             _ = signal => { eprintln!("收到退出信号，停止服务"); 0 }
         }

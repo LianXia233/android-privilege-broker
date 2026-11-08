@@ -1,8 +1,12 @@
 package io.github.lianxia233.privbroker;
 
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,14 +19,18 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** 安装历史：展示、导出分享与清空。所有记录由 Rust 核心在安装/卸载结束时生成。 */
+/** 安装历史：展示、点开详情、导出分享与清空。 */
 public final class LogActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final List<JSONObject> rows = new ArrayList<>();
+    /** 已展开的记录（按列表位置），点击整条即可展开 / 收起完整详情。 */
+    private final Set<Integer> expanded = new HashSet<>();
     private LogAdapter adapter;
     private TextView empty;
 
@@ -35,6 +43,32 @@ public final class LogActivity extends Activity {
         adapter = new LogAdapter();
         list.setAdapter(adapter);
         list.setEmptyView(empty);
+        // 点击整条记录展开 / 收起：展开后显示完整未截断的启动日志与失败原因。
+        list.setOnItemClickListener((parent, v, position, id) -> {
+            if (expanded.contains(position)) {
+                expanded.remove(position);
+            } else {
+                expanded.add(position);
+            }
+            adapter.notifyDataSetChanged();
+        });
+        // 长按复制该条记录的完整详情，便于把诊断日志发给开发者。
+        list.setOnItemLongClickListener((parent, v, position, id) -> {
+            if (position < 0 || position >= rows.size()) {
+                return false;
+            }
+            String full = fullDetail(rows.get(position));
+            if (full.isEmpty()) {
+                return false;
+            }
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) {
+                cm.setPrimaryClip(ClipData.newPlainText(
+                        getString(R.string.log_title), full));
+                Toast.makeText(this, R.string.log_detail_copied, Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        });
 
         findViewById(R.id.btnLogBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnLogClear).setOnClickListener(v -> clear());
@@ -70,6 +104,8 @@ public final class LogActivity extends Activity {
             ui(() -> {
                 rows.clear();
                 rows.addAll(next);
+                // 数据集变化后旧的位置不再对应同一条记录，展开态必须重置。
+                expanded.clear();
                 adapter.notifyDataSetChanged();
                 empty.setText(rows.isEmpty()
                         ? getString(R.string.logs_empty) : getString(R.string.logs_hint));
@@ -165,6 +201,7 @@ public final class LogActivity extends Activity {
             TextView title = v.findViewById(R.id.itemTitle);
             TextView meta = v.findViewById(R.id.itemMeta);
             TextView detail = v.findViewById(R.id.itemDetail);
+            TextView toggle = v.findViewById(R.id.itemToggle);
             TextView badge = v.findViewById(R.id.itemBadge);
             View dot = v.findViewById(R.id.itemDot);
 
@@ -199,24 +236,30 @@ public final class LogActivity extends Activity {
             }
             meta.setText(m.toString());
 
-            StringBuilder detailText = new StringBuilder();
-            if (!ok) {
-                String code = e.optString("code", "-");
-                String zh = AppNames.errorText(LogActivity.this, code, "");
-                detailText.append(getString(R.string.log_error_code, zh));
-            }
-            String raw = e.optString("detail", "").trim();
-            if (!raw.isEmpty()) {
-                if (detailText.length() > 0) {
-                    detailText.append('\n');
-                }
-                detailText.append(clipDetail(raw));
-            }
-            if (detailText.length() == 0) {
+            String full = fullDetail(e);
+            boolean open = expanded.contains(position);
+            if (full.isEmpty()) {
                 detail.setVisibility(View.GONE);
+                toggle.setVisibility(View.GONE);
             } else {
                 detail.setVisibility(View.VISIBLE);
-                detail.setText(detailText.toString());
+                toggle.setVisibility(View.VISIBLE);
+                if (open) {
+                    // 展开：完整原文，不限行数、不省略。复制走「长按整条」，
+                    // 不启用 setTextIsSelectable —— 那会让 TextView 消费触摸
+                    // 事件，导致「点击整条收起」失效。
+                    detail.setText(full);
+                    detail.setMaxLines(Integer.MAX_VALUE);
+                    detail.setEllipsize(null);
+                    toggle.setText(getString(R.string.log_collapse) + "  ·  "
+                            + getString(R.string.log_detail_full_hint));
+                } else {
+                    // 收起：头尾保留的摘要，末尾失败原因不会被吃掉。
+                    detail.setText(clipDetail(full));
+                    detail.setMaxLines(3);
+                    detail.setEllipsize(TextUtils.TruncateAt.END);
+                    toggle.setText(getString(R.string.log_expand));
+                }
             }
 
             badge.setText(getString(ok ? R.string.log_success : R.string.log_fail));
@@ -227,6 +270,27 @@ public final class LogActivity extends Activity {
             dot.setBackgroundResource(ok ? R.drawable.bg_dot_ok : R.drawable.bg_dot_fail);
             return v;
         }
+    }
+
+    /**
+     * 生成一条记录的完整详情原文（不截断）。展开态与长按复制都用它，
+     * 保证「执行日志」里能看到完整的启动日志与失败原因，而不是省略号。
+     */
+    private String fullDetail(JSONObject e) {
+        StringBuilder sb = new StringBuilder();
+        if (!e.optBoolean("ok")) {
+            String code = e.optString("code", "-");
+            String zh = AppNames.errorText(LogActivity.this, code, "");
+            sb.append(getString(R.string.log_error_code, zh));
+        }
+        String raw = e.optString("detail", "").trim();
+        if (!raw.isEmpty()) {
+            if (sb.length() > 0) {
+                sb.append('\n');
+            }
+            sb.append(raw);
+        }
+        return sb.toString();
     }
 
     /** 详情过长时保留头尾：启动日志的失败原因在末尾，只截前段会把它吃掉。 */

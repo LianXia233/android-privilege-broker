@@ -355,4 +355,14 @@
     <string name="pairing_diag_view_log">完整启动日志已记入「执行日志」，可在主界面 →「执行日志」查看。</string>
     <string name="wireless_notif_view_log">查看日志</string>
     <string name="wireless_notif_diag_title">激活诊断</string>
+
+    <!-- v2.1.11：单实例修复 + 双通道成功判据 + 日志展开 -->
+    <string name="pairing_diag_reason_addr_in_use">上一次启动的代理仍占着端点，两个进程抢同一端口。新版会先清理旧实例再启动，重试一次即可。</string>
+    <string name="pairing_activate_ok_reused">激活成功：特权代理已在运行，本次复用了现有实例（无需重复启动）。</string>
+    <string name="pairing_activate_ok_confirmed">激活成功：无线调试通道已确认特权代理开始监听端点。</string>
+    <string name="pairing_activate_log_hint">完整启动日志已记入「执行日志」，点开该条记录即可展开查看详情。</string>
+    <string name="log_expand">展开详情 ▾</string>
+    <string name="log_collapse">收起 ▴</string>
+    <string name="log_detail_copied">日志详情已复制</string>
+    <string name="log_detail_full_hint">完整原文（可长按选择复制）</string>
 </resources>

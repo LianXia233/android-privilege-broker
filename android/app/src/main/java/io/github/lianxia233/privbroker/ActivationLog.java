@@ -24,7 +24,45 @@ final class ActivationLog {
     static final String OP_ACTIVATE = "activate";
     static final String SOURCE_WIRELESS = "wireless";
 
+    /** native 在 bind 成功后打印的权威标记（与 broker-wireless 常量一致）。 */
+    private static final String MARK_LISTENING = "监听成功:";
+    private static final String MARK_ALREADY_RUNNING = "特权代理已在运行";
+
     private ActivationLog() {
+    }
+
+    /**
+     * 解析 native 返回结果：是否由启动日志确认「服务已监听 / 已有实例在运行」。
+     *
+     * 对齐成熟实现——以 starter 的输出判定启动结果，而不是
+     * 单靠 app 进程去 connect server 的 abstract socket。部分 ROM 的 SELinux
+     * 会拦截 app→shell 域的 abstract socket 直连，那种情况下 app 侧探测永远
+     * 失败，但服务其实已经起来了（`Address already in use` 正是这个证据）。
+     */
+    static boolean startLogConfirmsRunning(String rawJson) {
+        try {
+            JSONObject j = new JSONObject(rawJson);
+            if (j.optBoolean("listening", false) || j.optBoolean("alreadyRunning", false)) {
+                return true;
+            }
+            String out = j.optString("output", "");
+            return out.contains(MARK_LISTENING) || out.contains(MARK_ALREADY_RUNNING);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 本次是否为「复用已有实例」的幂等重复激活。 */
+    static boolean reusedExistingInstance(String rawJson) {
+        try {
+            JSONObject j = new JSONObject(rawJson);
+            if (j.optBoolean("alreadyRunning", false)) {
+                return true;
+            }
+            return j.optString("output", "").contains(MARK_ALREADY_RUNNING);
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /** 追加一条激活结果记录。日志写入失败绝不影响激活流程。 */
@@ -104,6 +142,10 @@ final class ActivationLog {
         String[] lines = clean.split("\n");
         for (int i = lines.length - 1; i >= 0; i--) {
             String l = lines[i];
+            // 「已在运行」不是失败：它是幂等重复激活的正常结果。
+            if (l.contains(MARK_ALREADY_RUNNING) || l.contains(MARK_LISTENING)) {
+                continue;
+            }
             if (l.contains("监听失败") || l.contains("特权代理启动失败")
                     || l.contains("无法加载 native") || l.contains("加载 native 库失败")
                     || l.startsWith("错误:") || l.contains("UnsatisfiedLinkError")
@@ -120,6 +162,11 @@ final class ActivationLog {
         String rest;
         if (line.startsWith("监听失败:")) {
             rest = line.substring("监听失败:".length()).trim();
+            // 这类 errno 在旧版本里意味着「旧进程仍占着端点」。修复后应变成
+            // 幂等复用，但保留识别，避免历史日志被误读成致命故障。
+            if (rest.contains("Address already in use") || rest.contains("os error 98")) {
+                return c.getString(R.string.pairing_diag_reason_addr_in_use);
+            }
             return c.getString(R.string.pairing_diag_reason_bind, rest);
         }
         if (line.startsWith("特权代理启动失败:")) {
@@ -155,7 +202,9 @@ final class ActivationLog {
         if (clean.contains("特权代理启动:")) {
             steps.add(c.getString(R.string.pairing_diag_uid_ok));
         }
-        if ((clean.contains("监听:") || clean.contains("准备监听:")) && reason.isEmpty()) {
+        if ((clean.contains("监听成功:") || clean.contains(MARK_ALREADY_RUNNING)
+                || clean.contains("准备监听:") || clean.contains("监听:"))
+                && reason.isEmpty()) {
             steps.add(c.getString(R.string.pairing_diag_listening));
         }
         if (!steps.isEmpty()) {

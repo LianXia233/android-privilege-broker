@@ -10,7 +10,7 @@ use std::sync::Arc;
 use broker_android::PlatformState;
 use broker_auth::{ChallengeTable, NonceGenerator};
 use broker_exec::extract;
-use broker_ipc::{read_frame, write_frame, Duplex, Endpoint, Listener};
+use broker_ipc::{connect, read_frame, write_frame, Duplex, Endpoint, Listener};
 use broker_process::ProcessManager;
 use broker_protocol::auth::{AuthConfig, Authenticator};
 use broker_protocol::error::ErrorCode;
@@ -332,8 +332,31 @@ impl Broker {
     }
 
     /// 监听并接受连接，直到 shutdown。每个连接独立任务，互不阻塞。
+    ///
+    /// 绑定结果必须如实打印：只有 `Listener::bind` **成功之后**才输出
+    /// 「监听成功:」。启动命令会回读这段日志作为权威成功标记（对齐成熟实现
+    /// 以启动器输出判定启动结果），此前在 bind 之前
+    /// 打印「监听:」会让上层把「准备绑定」误当成「已经常驻」。
     pub async fn serve(self: Arc<Self>, endpoint: Endpoint, mut shutdown: tokio::sync::oneshot::Receiver<()>) -> Result<(), std::io::Error> {
-        let listener = Listener::bind(endpoint).await?;
+        let listener = match Listener::bind(endpoint.clone()).await {
+            Ok(l) => l,
+            // 端点已被占用（Linux EADDRINUSE = 98）。这恰恰说明**已经有一个
+            // 特权代理实例在跑**：对齐成熟实现的单实例语义，探测到它仍可连接时
+            // 直接复用并正常退出，绝不把「服务已在运行」误报成启动失败。
+            Err(e) if e.raw_os_error() == Some(98) => {
+                if connect(&endpoint).await.is_ok() {
+                    eprintln!("特权代理已在运行: {}（复用现有实例）", endpoint.describe());
+                    return Ok(());
+                }
+                eprintln!("监听失败: {e}");
+                return Err(e);
+            }
+            Err(e) => {
+                eprintln!("监听失败: {e}");
+                return Err(e);
+            }
+        };
+        eprintln!("监听成功: {}", listener.endpoint().describe());
         let mut ticker = interval(Duration::from_millis(5_000));
         loop {
             tokio::select! {
@@ -571,5 +594,23 @@ mod tests {
     fn hex_encode_is_exact() {
         assert_eq!(hex_encode(&[0x00, 0x0f, 0xff, 0xa1]), "000fffa1");
         assert_eq!(hex_encode(&[]), "");
+    }
+
+    /// 对齐成熟实现的单实例语义：端点已被现有实例占用（EADDRINUSE）时，
+    /// `serve` 应探测到「已有实例在运行」并正常退出，而不是把它误报成
+    /// 致命的绑定失败 —— 这正是 `Address already in use (os error 98)`
+    /// 被当成「特权代理没有保持运行」的根因。
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn serve_reuses_existing_instance_on_addr_in_use() {
+        let name = format!("prvbrk.test.reuse.{}", std::process::id());
+        let ep = Endpoint::Abstract(name);
+        // 模拟上一次激活留下的常驻实例：持有 listener 不释放。
+        let _existing = Listener::bind(ep.clone()).await.unwrap();
+        let (_tx, shutdown) = tokio::sync::oneshot::channel::<()>();
+        // 第二个进程 bind 同一端点会得到 EADDRINUSE，探测到现有实例可连后
+        // 直接正常返回，不进入 accept 循环、不报错。
+        let r = broker().serve(ep, shutdown).await;
+        assert!(r.is_ok(), "已有实例在跑时不应报绑定失败: {r:?}");
     }
 }

@@ -25,10 +25,18 @@ use crate::pairing;
 
 const STARTER_CLASS: &str = "io.github.lianxia233.privbroker.ServiceStarter";
 
-/// 运行时进入端点绑定阶段时打印到 stderr 的标记。注意它只表示「准备绑定」，
-/// 不代表绑定成功；是否真的常驻仍由界面实测 abstract socket 判定。
-/// 之前用「监听:」容易被误读成已监听成功，故改为「准备监听:」。
-pub const BROKER_LISTEN_MARKER: &str = "准备监听:";
+/// server 进程名，对应 `app_process --nice-name`。对齐成熟实现
+/// 的 固定进程名：启动前用它遍历 `/proc` 清理旧实例，保证单实例。
+/// 必须短于 15 字符（Linux `comm` 上限），否则会被截断导致匹配不到。
+pub const SERVER_PROCESS_NAME: &str = "prvbrk_svc";
+
+/// native 在 `Listener::bind` **成功之后**打印的标记，代表端点确实已监听。
+/// 此前「准备监听:」只在 bind 之前打印，不能证明成功；「监听:」更易误读。
+pub const BROKER_LISTEN_MARKER: &str = "监听成功:";
+
+/// native 检测到端点已被现有实例占用时打印。这时服务其实已经在运行，
+/// 是一次幂等的重复激活，绝不能当成启动失败。
+pub const BROKER_ALREADY_RUNNING_MARKER: &str = "特权代理已在运行";
 
 pub const STAGE_PAIR: &str = "pair";
 pub const STAGE_START: &str = "start";
@@ -81,9 +89,13 @@ pub struct WirelessResponse {
     pub code: Option<String>,
     pub message: String,
     pub output: Option<String>,
-    /// 启动日志中出现「准备绑定」标记，说明 app_process 已进入绑定阶段。
-    /// 仅作辅助信息，是否真的常驻以界面实测 abstract socket 为准。
+    /// native 在 `Listener::bind` 成功后打印「监听成功:」，或探测到已有实例
+    /// 时打印「特权代理已在运行:」。对齐成熟实现：以启动器
+    /// 输出判定启动结果：这是 shell 侧权威证据，不依赖 app 进程能否直连
+    /// server 的 abstract socket（部分 ROM 的 SELinux 会拦截该直连）。
     pub listening: bool,
+    /// 本次是幂等重复激活：端点已被一个正常运行的现有实例占用，无需重启。
+    pub already_running: bool,
     /// 启动日志里完整的一条失败行（含 errno / 异常文本）。单独带回，避免
     /// 界面因字符截断把最关键的失败原因切掉，也便于落库到「执行日志」。
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -94,9 +106,19 @@ fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
-/// 启动日志中出现运行时进入绑定阶段的标记。
+/// 启动日志是否证明服务已在监听。
+///
+/// 对齐成熟实现：以 **shell 侧 侧输出的明确标记**为
+/// 准，而不是让 app 进程去主动 connect server 的 socket（厂商 ROM 的 SELinux
+/// 常拦截 app→shell 的 abstract socket 直连，会误判成「服务没起来」）。
+/// `监听成功:` = 本次 bind 成功；`特权代理已在运行` = 复用了已有实例。
 pub fn boot_log_confirms_listening(log: &str) -> bool {
-    log.contains(BROKER_LISTEN_MARKER)
+    log.contains(BROKER_LISTEN_MARKER) || log.contains(BROKER_ALREADY_RUNNING_MARKER)
+}
+
+/// 启动日志是否表明本次是「已有实例在跑」的幂等重复激活。
+pub fn boot_log_confirms_already_running(log: &str) -> bool {
+    log.contains(BROKER_ALREADY_RUNNING_MARKER)
 }
 
 /// 提取启动日志中完整的一条失败行（含 errno / 异常文本），倒序取最后一条。
@@ -116,7 +138,13 @@ pub fn boot_log_failure_reason(log: &str) -> Option<String> {
 
 /// 构造在无线调试 shell 中后台启动特权代理的命令。
 ///
-/// 三个细节决定「服务到底能不能起来」，缺一个就会表现为「提示成功但服务未运行」：
+/// 四个细节决定「服务到底能不能起来」，缺一个就会表现为「提示成功但服务未运行」：
+/// 0. **单实例（对齐成熟实现的「启动前清理旧进程」）**：启动前遍历
+///    `/proc/*/comm`，把同名旧实例全部 `SIGKILL`。此前每次「激活」都无脑再拉
+///    一个 app_process，旧进程仍占着 `prvbrk.<token>` 这个 abstract socket，
+///    新进程 bind 必然 `Address already in use (os error 98)` 并退出 —— 这正是
+///    用户看到「端点绑定失败 / 特权代理没有保持运行」的根因。成熟实现用 C 层的
+///    `foreach_proc` + `kill(pid, SIGKILL)` 做同一件事，这里用 shell 等价实现。
 /// 1. **重定向 stdio**：常驻的 app_process 若继承 shell 通道的 stdout/stderr，
 ///    adbd 会一直等这些 fd 关闭才发 `A_CLSE`；客户端读超时断开后，adbd 又会
 ///    kill 掉整个进程组。所以后台进程必须 `</dev/null >>log 2>&1`，让主 shell
@@ -124,23 +152,36 @@ pub fn boot_log_failure_reason(log: &str) -> Option<String> {
 /// 2. **脱离进程组**：Java 侧 `ServiceStarter` 会调用 `Os.setsid()`，避免 adbd
 ///    会话收尾时把代理一起杀掉。
 /// 3. **回读启动日志**：把 stderr 落到 shell 可写的临时文件再 `cat` 出来，
-///    客户端既能据此判断是否真的进入了绑定阶段，也能在类加载 / so 加载 /
-///    端点绑定失败时把真实原因带回界面，而不是只剩一个无从诊断的「激活失败」。
-///    文件名带 `$$`（shell PID）：自动激活与手动激活并发时各写各的文件，
-///    不会互相清空或把两份日志串成重复的一坨。
+///    客户端既能据此判断是否真的绑定成功，也能在类加载 / so 加载失败时把
+///    真实原因带回界面。文件名带 `$$`（shell PID）：并发激活各写各的文件。
 pub fn build_start_command(req: &WirelessRequest) -> String {
     let invoke = format!(
-        "( export CLASSPATH={}; exec app_process /system/bin --nice-name=privilege-broker {} \
+        "( export CLASSPATH={}; exec app_process /system/bin --nice-name={} {} \
           --token={} --client={} --endpoint={} --lib={} )",
         shell_quote(&req.apk_path),
+        SERVER_PROCESS_NAME,
         STARTER_CLASS,
         shell_quote(&req.token),
         shell_quote(&req.client),
         shell_quote(&req.endpoint),
         shell_quote(&req.native_lib_dir),
     );
+    // 进程名与成熟实现的固定进程名同义。同时兼容旧版
+    // `--nice-name=privilege-broker`（Linux comm 上限 15 字符，被截成
+    // `privilege-brok*`），确保从旧版本升级后第一次激活就能清掉残留实例。
+    let kill_old = format!(
+        "SELF=$$; for p in /proc/[0-9]*; do \
+           IFS= read -r n < \"$p/comm\" 2>/dev/null || continue; \
+           case \"$n\" in {new}|privilege-brok*) \
+             pid=${{p##*/}}; [ \"$pid\" = \"$SELF\" ] && continue; \
+             kill -9 \"$pid\" 2>/dev/null ;; \
+           esac; \
+         done; sleep 1",
+        new = SERVER_PROCESS_NAME,
+    );
     format!(
-        "LOG=/data/local/tmp/prvbrk_boot.$$.log; : > \"$LOG\" 2>/dev/null || LOG=/dev/null; \
+        "{kill_old}; \
+         LOG=/data/local/tmp/prvbrk_boot.$$.log; : > \"$LOG\" 2>/dev/null || LOG=/dev/null; \
          {invoke} </dev/null >>\"$LOG\" 2>&1 & sleep 2; cat \"$LOG\" 2>/dev/null"
     )
 }
@@ -222,6 +263,7 @@ fn execute(args_json: &str) -> Result<WirelessResponse, (String, WirelessError)>
                 message: "配对成功，公钥已登记到设备。".to_string(),
                 output: None,
                 listening: false,
+                already_running: false,
                 failure_reason: None,
             });
         }
@@ -235,18 +277,29 @@ fn execute(args_json: &str) -> Result<WirelessResponse, (String, WirelessError)>
     // abstract socket 判定，避免 adbd 通道时序把「已启动」误报成失败。
     let output = client.shell_detached(&command).map_err(|e| ("shell".to_string(), e))?;
     let text = String::from_utf8_lossy(&output).to_string();
-    // 结构化带回完整失败行：界面与「执行日志」据此显示真实原因，
-    // 即使启动日志本身被通道时序截断也不会丢。
+    // 以 shell 侧启动日志的权威标记为准：bind 成功或复用已有实例都算服务在跑。
+    // 这样「app 进程连不上 shell 域 abstract socket」不会再被误判成激活失败，
+    // 也正是 成熟实现判定启动结果的方式。
+    let already_running = boot_log_confirms_already_running(&text);
     let listening = boot_log_confirms_listening(&text);
-    let failure = boot_log_failure_reason(&text);
+    // 只有确实没起来的情况下，失败行才有诊断价值；已确认监听时不报假失败。
+    let failure = if listening { None } else { boot_log_failure_reason(&text) };
+    let message = if already_running {
+        "特权代理已在运行，本次激活复用了现有实例。".to_string()
+    } else if listening {
+        "特权代理已启动并开始监听。".to_string()
+    } else {
+        "已投递启动命令，正在等待代理绑定端点。".to_string()
+    };
 
     Ok(WirelessResponse {
         ok: true,
         stage: "started".to_string(),
         code: None,
-        message: "已通过无线调试投递特权代理启动命令。".to_string(),
+        message,
         output: Some(text),
         listening,
+        already_running,
         failure_reason: failure,
     })
 }
@@ -262,6 +315,7 @@ pub fn run(args_json: &str) -> String {
             message: e.to_string(),
             output: None,
             listening: false,
+            already_running: false,
             failure_reason: None,
         },
     };
@@ -303,6 +357,24 @@ mod tests {
         assert!(cmd.contains("& sleep 2; cat"));
     }
 
+    /// 对齐成熟实现 的 kill old process：启动前必须清理旧实例，
+    /// 否则旧进程占着 abstract socket，新进程 bind 必然 EADDRINUSE(os error 98)。
+    #[test]
+    fn start_command_kills_old_instances_before_start() {
+        let cmd = build_start_command(&request());
+        assert!(cmd.contains("--nice-name=prvbrk_svc"));
+        assert!(cmd.contains("/proc/[0-9]*"), "必须遍历 /proc");
+        assert!(cmd.contains("/comm"), "按进程名 comm 匹配");
+        assert!(cmd.contains("kill -9"), "SIGKILL 旧实例");
+        assert!(cmd.contains("prvbrk_svc|privilege-brok*"), "兼容旧进程名");
+        // 清理必须发生在启动之前，否则清掉的是刚拉起的新进程。
+        let kill_at = cmd.find("kill -9").unwrap();
+        let start_at = cmd.find("exec app_process").unwrap();
+        assert!(kill_at < start_at, "kill 必须早于 app_process 启动");
+        // 不能误杀执行清理的 shell 自身。
+        assert!(cmd.contains("[ \"$pid\" = \"$SELF\" ] && continue"));
+    }
+
     /// 后台进程必须彻底脱离 shell 通道 fd，否则 adbd 不发 A_CLSE，客户端超时
     /// 断开后还会 kill 整个进程组 —— 这是「提示成功但服务从未运行」的根因。
     #[test]
@@ -319,10 +391,22 @@ mod tests {
 
     #[test]
     fn listening_marker_is_detected_in_boot_log() {
+        // bind 成功之后的权威标记才算「在跑」，bind 之前的阶段标记不算。
         assert!(boot_log_confirms_listening(
-            "特权代理启动: uid=2000 ...\n准备监听: abstract:prvbrk.1234\n"));
+            "特权代理启动: uid=2000 ...\n监听成功: abstract:prvbrk.1234\n"));
+        assert!(!boot_log_confirms_listening("准备监听: abstract:prvbrk.1234"));
         assert!(!boot_log_confirms_listening("ClassNotFoundException: ServiceStarter"));
         assert!(!boot_log_confirms_listening(""));
+    }
+
+    /// EADDRINUSE 幂等复用：日志出现「特权代理已在运行」也应判定服务在跑，
+    /// 这正是这次要修的 `Address already in use` 场景。
+    #[test]
+    fn already_running_marker_counts_as_running() {
+        let log = "特权代理启动: uid=2000 ...\n特权代理已在运行: abstract:prvbrk.abc（复用现有实例）";
+        assert!(boot_log_confirms_listening(log));
+        assert!(boot_log_confirms_already_running(log));
+        assert!(!boot_log_confirms_already_running("监听成功: abstract:prvbrk.abc"));
     }
 
     /// 完整失败行（含 errno）必须结构化带回，不能被结果条字符截断吃掉。
@@ -353,11 +437,14 @@ mod tests {
             message: "投递完成".into(),
             output: None,
             listening: true,
+            already_running: true,
             failure_reason: Some("监听失败: os error 98".into()),
         };
         let v: serde_json::Value =
             serde_json::from_str(&serde_json::to_string(&r).unwrap()).unwrap();
         assert_eq!(v["failureReason"], "监听失败: os error 98");
+        assert_eq!(v["alreadyRunning"], true);
+        assert_eq!(v["listening"], true);
     }
 
     #[test]

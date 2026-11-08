@@ -410,23 +410,33 @@ public final class WirelessPairingService extends Service {
             return;
         }
         if (ok && WirelessRunner.STAGE_STARTED.equals(stage)) {
-            // 启动命令「投递成功」不等于代理真的常驻：后台 stdio/进程组处理不当
-            // 时 adbd 会把刚拉起的进程一起杀掉。这里实测 abstract socket，
-            // 只有确认在跑才宣告成功并停止服务，避免「假成功」。
+            // 双通道判据，对齐成熟实现以启动器输出判定启动结果：app 侧实测
+            // 连通，或 native 启动日志明确「监听成功 / 已有实例在运行」。
+            // 部分 ROM 的 SELinux 会拦 app→shell 域 socket 直连，此时 app 探测
+            // 恒为 false 但服务其实已起来，不能因此误报激活失败。
+            final boolean confirmed = ActivationLog.startLogConfirmsRunning(resultJson);
+            final boolean reused = ActivationLog.reusedExistingInstance(resultJson);
             working = true;
             push(workingNotification());
             new Thread(() -> {
-                final boolean up = awaitServiceUp();
+                final boolean probed = awaitServiceUp();
+                final boolean up = probed || confirmed;
                 main.post(() -> {
                     working = false;
                     final int port = lastConnectPort;
                     final String host = resolvedHost;
                     if (up) {
                         stopDiscovery();
+                        String successText = probed
+                                ? getString(R.string.wireless_success_text)
+                                : reused ? getString(R.string.pairing_activate_ok_reused)
+                                         : getString(R.string.pairing_activate_ok_confirmed);
+                        String logSummary = successText
+                                + (probed ? "" : "\n（判据：启动日志确认监听；app 侧直连探测未通过）");
                         notifyResult(getString(R.string.wireless_success_title),
-                                getString(R.string.wireless_success_text), true);
+                                successText, true);
                         ActivationLog.record(WirelessPairingService.this, true, port, host, "",
-                                getString(R.string.wireless_success_text), diag, durationMs);
+                                logSummary, diag, durationMs);
                         cancelConnectTimeout();
                         stopForeground(STOP_FOREGROUND_REMOVE);
                         stopSelf();
