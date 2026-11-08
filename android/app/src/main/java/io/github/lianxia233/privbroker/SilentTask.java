@@ -203,6 +203,9 @@ final class SilentTask implements Runnable {
         }
         String installed = AppNames.labelForPackage(app, pkg);
         label = installed == null ? pkg : installed;
+        // 卸载不可重放：先记下发起前的状态，失败后用它区分「命令没执行」与
+        // 「命令执行了但结果没回来」。
+        boolean wasInstalled = AppNames.isInstalled(app, pkg);
         Notifier.start(app, label, true);
         attachProgress();
         try {
@@ -211,8 +214,17 @@ final class SilentTask implements Runnable {
                     .put("options", new JSONObject().put("keepData", false))
                     .put("context", context());
             JSONObject r = call("uninstall", a.toString());
-            if (!r.optBoolean("ok") && isBrokerLinkFailure(r) && reviveBroker()) {
-                r = call("uninstall", a.toString());
+            if (!r.optBoolean("ok") && isBrokerLinkFailure(r)) {
+                // 链路类失败有两种可能：命令还没执行，或命令执行完但结果没回来。
+                // 后者若照样重试，第二次会对已卸载的包报「未安装」，把成功掩盖成失败。
+                if (wasInstalled && !AppNames.isInstalled(app, pkg)) {
+                    record("UNINSTALL_CONFIRMED", "代理未回传结果，但目标包已不在安装状态，按已完成处理");
+                    Notifier.finish(app, label, true, true, "", "");
+                    return;
+                }
+                if (reviveBroker()) {
+                    r = call("uninstall", a.toString());
+                }
             }
             if (!r.optBoolean("ok")) {
                 finishFailure(AppNames.errorText(app, errorCodeOf(r), errorText(r)));

@@ -41,6 +41,26 @@ final class AppNames {
         return null;
     }
 
+    /**
+     * 目标包当前是否仍处于安装状态。
+     *
+     * <p>只有明确的 {@link PackageManager.NameNotFoundException} 才算未安装；
+     * 其它查询异常按「仍安装」处理，避免把查询失败误判成卸载已完成。</p>
+     */
+    static boolean isInstalled(Context c, String pkg) {
+        if (pkg == null || pkg.isEmpty() || pkg.startsWith("@")) {
+            return false;
+        }
+        try {
+            c.getPackageManager().getApplicationInfo(pkg, 0);
+            return true;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
     /** 授权弹窗里的调用方名称。 */
     static String labelForCaller(Context c, String caller) {
         if (caller == null || caller.isEmpty() || "@unknown".equals(caller)) {
