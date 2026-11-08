@@ -38,7 +38,12 @@ impl Default for BrokerConfig {
             token: String::new(),
             allowed_clients: vec!["installer".into()],
             session_ttl_ms: 60_000,
-            challenge_ttl_ms: 10_000,
+            // 与 Authenticator 的 30s 时钟容差对齐：Hello 与 ChallengeProof 之间
+            // 应用可能被系统冻结（缓存放行策略、doze、GC 停顿）或 IO 卡顿，10s
+            // 会让挑战在双方都无感知的情况下被清理，最终审计只能看到一个
+            // 「槽位未命中」；放宽到 30s 后，真正超时的场景会稳定落在
+            // SESSION_EXPIRED，而不是伪装成随机失败。
+            challenge_ttl_ms: 30_000,
             nonce_seed: 0x9E37_79B9_7F4A_7C15,
             require_shell_uid: true,
         }
