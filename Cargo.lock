@@ -129,7 +129,7 @@ dependencies = [
 
 [[package]]
 name = "broker-android"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "broker-protocol",
  "serde",
@@ -139,7 +139,7 @@ dependencies = [
 
 [[package]]
 name = "broker-auth"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "broker-protocol",
  "hex",
@@ -148,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "broker-client"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "broker-android",
  "broker-auth",
@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "broker-core"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "broker-android",
  "broker-auth",
@@ -175,7 +175,7 @@ dependencies = [
 
 [[package]]
 name = "broker-exec"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "broker-protocol",
  "hex",
@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "broker-ipc"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "broker-protocol",
  "libc",
@@ -195,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "broker-process"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "broker-exec",
  "broker-protocol",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "broker-protocol"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "serde",
  "serde_json",
@@ -214,7 +214,7 @@ dependencies = [
 
 [[package]]
 name = "broker-server"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "broker-android",
  "broker-core",
@@ -225,7 +225,7 @@ dependencies = [
 
 [[package]]
 name = "broker-wireless"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -539,7 +539,7 @@ dependencies = [
 
 [[package]]
 name = "installer-android-ffi"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "broker-android",
  "broker-server",
@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "installer-core"
-version = "2.1.13"
+version = "2.1.14"
 dependencies = [
  "serde",
  "serde_json",
