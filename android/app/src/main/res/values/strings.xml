@@ -232,8 +232,8 @@
     <string name="wireless_searching_text">保持本通知常驻。请点「去无线调试」打开配对码弹窗，然后下拉通知栏</string>
     <string name="wireless_stop">停止搜索</string>
     <string name="wireless_input_title">输入 6 位配对码</string>
-    <string name="wireless_input_text">点下方按钮输入配对码；配对弹窗留在无线调试页不要退出</string>
-    <string name="wireless_input_code">输入配对码</string>
+    <string name="wireless_input_text">点下方「输入 6 位配对码」按钮，在展开的输入框填入 6 位数字；配对弹窗留在无线调试页不要退出</string>
+    <string name="wireless_input_code">输入 6 位配对码</string>
     <string name="wireless_code_hint">6 位配对码</string>
     <string name="wireless_waiting_title">配对成功，等待连接服务</string>
     <string name="wireless_waiting_text">系统正在重新分配无线调试连接端口，本应用会自动发现并完成启动</string>
@@ -305,7 +305,7 @@
     <string name="pairing_state_off">特权代理未运行</string>
     <string name="pairing_state_on">特权代理已激活</string>
     <string name="pairing_state_hint_off">配对一次后，公钥会保存在本机。之后随时点「激活服务」即可重新拉起代理，无需再次配对。</string>
-    <string name="pairing_state_hint_on">代理正以 shell(2000) 身份运行，可返回主界面使用静默安装等功能。</string>
+    <string name="pairing_state_hint_on">代理正以 shell(2000) 身份运行，状态会自动持续刷新，可返回主界面使用静默安装等功能。</string>
     <string name="pairing_btn_refresh">刷新</string>
     <string name="pairing_activate_section">激活服务</string>
     <string name="pairing_activate_chip">随时可用</string>
@@ -317,7 +317,7 @@
     <string name="pairing_btn_activate">激活服务</string>
     <string name="pairing_btn_activate_again">重新激活服务</string>
     <string name="pairing_activating">正在连接无线调试并以 shell 身份启动特权代理…</string>
-    <string name="pairing_activate_ok">激活成功：已实测到特权代理正在运行，状态已刷新为「已激活」，可返回主界面使用。</string>
+    <string name="pairing_activate_ok">激活成功：已实测到特权代理正在运行，状态已同步为「已激活」并会持续自动刷新，可返回主界面使用。</string>
     <string name="pairing_activate_failed_hint">下一步：还没配对请先点上方高亮的「在通知栏输入配对码」完成首次配对；已配对请确认「无线调试」仍开启、已连 WLAN，再点「激活服务」。</string>
     <string name="pairing_diag_title">启动日志（诊断）：</string>
     <string name="pairing_activate_need_port">请先填写连接端口：可在「无线调试」页「IP 地址和端口」查看，或等待自动发现。</string>
@@ -358,11 +358,17 @@
 
     <!-- v2.1.11：单实例修复 + 双通道成功判据 + 日志展开 -->
     <string name="pairing_diag_reason_addr_in_use">上一次启动的代理仍占着端点，两个进程抢同一端口。新版会先清理旧实例再启动，重试一次即可。</string>
-    <string name="pairing_activate_ok_reused">激活成功：特权代理已在运行，本次复用了现有实例（无需重复启动）。</string>
-    <string name="pairing_activate_ok_confirmed">激活成功：无线调试通道已确认特权代理开始监听端点。</string>
+    <string name="pairing_activate_ok_reused">检测到已有代理实例在运行（本次未重复启动），是否可用以实测连通为准。</string>
+    <string name="pairing_activate_ok_confirmed">无线调试通道已确认代理进程开始监听端点，是否可用以实测连通为准。</string>
     <string name="pairing_activate_log_hint">完整启动日志已记入「执行日志」，点开该条记录即可展开查看详情。</string>
     <string name="log_expand">展开详情 ▾</string>
     <string name="log_collapse">收起 ▴</string>
     <string name="log_detail_copied">日志详情已复制</string>
     <string name="log_detail_full_hint">完整原文（可长按选择复制）</string>
+
+    <!-- v2.1.12：TCP loopback 端点 + 统一状态判据 + 保活 + 通知栏输码样式 -->
+    <string name="pairing_unreachable_confirmed">激活未完成：代理进程已在 shell 侧启动并监听，但应用仍无法连接它。多为端口或通道不通，请确认「无线调试」仍开启、已连 WLAN，点「激活服务」重试（新版会先清理旧实例）。</string>
+    <string name="pairing_state_lost">检测到特权代理已停止运行（可能被系统回收）。点「激活服务」即可重新拉起，配对过的设备无需再次配对。</string>
+    <string name="wireless_code_input_label">输入无线调试页显示的 6 位数字</string>
+    <string name="wireless_input_step">第 1 步 / 共 2 步 · 输完码点「激活服务」</string>
 </resources>

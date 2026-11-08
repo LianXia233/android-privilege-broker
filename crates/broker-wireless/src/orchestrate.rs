@@ -106,11 +106,9 @@ fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
-/// 启动日志是否证明服务已在监听。
-///
-/// 对齐成熟实现：以 **shell 侧 侧输出的明确标记**为
-/// 准，而不是让 app 进程去主动 connect server 的 socket（厂商 ROM 的 SELinux
-/// 常拦截 app→shell 的 abstract socket 直连，会误判成「服务没起来」）。
+/// 启动日志是否出现「服务已在监听」的标记。仅作诊断线索，不再作为
+/// 激活成功的判据 —— 成功一律以 app 侧实测连通为准。端点已改为 TCP
+/// loopback，两侧都能访问，实测结果是可靠的。
 /// `监听成功:` = 本次 bind 成功；`特权代理已在运行` = 复用了已有实例。
 pub fn boot_log_confirms_listening(log: &str) -> bool {
     log.contains(BROKER_LISTEN_MARKER) || log.contains(BROKER_ALREADY_RUNNING_MARKER)
@@ -138,26 +136,32 @@ pub fn boot_log_failure_reason(log: &str) -> Option<String> {
 
 /// 构造在无线调试 shell 中后台启动特权代理的命令。
 ///
-/// 四个细节决定「服务到底能不能起来」，缺一个就会表现为「提示成功但服务未运行」：
+/// 五个细节决定「服务能不能起来并常驻」，缺一个就会表现为「提示成功但服务未运行」：
 /// 0. **单实例（对齐成熟实现的「启动前清理旧进程」）**：启动前遍历
 ///    `/proc/*/comm`，把同名旧实例全部 `SIGKILL`。此前每次「激活」都无脑再拉
-///    一个 app_process，旧进程仍占着 `prvbrk.<token>` 这个 abstract socket，
-///    新进程 bind 必然 `Address already in use (os error 98)` 并退出 —— 这正是
-///    用户看到「端点绑定失败 / 特权代理没有保持运行」的根因。成熟实现用 C 层的
+///    一个 app_process，旧进程仍占着监听端点，新进程 bind 必然
+///    `Address already in use (os error 98)` 并退出。成熟实现用 C 层的
 ///    `foreach_proc` + `kill(pid, SIGKILL)` 做同一件事，这里用 shell 等价实现。
 /// 1. **重定向 stdio**：常驻的 app_process 若继承 shell 通道的 stdout/stderr，
 ///    adbd 会一直等这些 fd 关闭才发 `A_CLSE`；客户端读超时断开后，adbd 又会
-///    kill 掉整个进程组。所以后台进程必须 `</dev/null >>log 2>&1`，让主 shell
-///    能立即结束、通道能正常关闭。
-/// 2. **脱离进程组**：Java 侧 `ServiceStarter` 会调用 `Os.setsid()`，避免 adbd
-///    会话收尾时把代理一起杀掉。
+///    kill 掉整个进程组。所以后台进程必须 `</dev/null >>log 2>&1`。
+/// 2. **启动即脱离会话（保活关键）**：命令层用 `setsid` 让 app_process
+///    从第一条指令起就是独立会话的首进程，adbd 会话收尾时按进程组发出的信号
+///    再也碰不到它。仅靠 Java 侧 `Os.setsid()` 不够 —— 后台 job 常常已经是
+///    进程组首进程，`setsid()` 会失败，进程仍留在 adbd 会话里被连带清理。
+///    `ServiceStarter` 里的 `Os.setsid()` 保留作兜底；设备缺少 setsid 命令时
+///    也退化为原来的后台启动，不至于完全无法激活。
 /// 3. **回读启动日志**：把 stderr 落到 shell 可写的临时文件再 `cat` 出来，
 ///    客户端既能据此判断是否真的绑定成功，也能在类加载 / so 加载失败时把
 ///    真实原因带回界面。文件名带 `$$`（shell PID）：并发激活各写各的文件。
+/// 4. **端点可达**：默认 TCP loopback。SELinux enforcing 下 app 域连不上 shell
+///    域的 abstract socket，只有本机回环 TCP 能被两侧同时访问。
 pub fn build_start_command(req: &WirelessRequest) -> String {
+    // 用 `env` 设置 CLASSPATH 再 exec app_process，避免再套一层 `sh -c`
+    // 造成参数里单引号的二次转义；setsid 直接把这个命令拉进新会话。
     let invoke = format!(
-        "( export CLASSPATH={}; exec app_process /system/bin --nice-name={} {} \
-          --token={} --client={} --endpoint={} --lib={} )",
+        "env CLASSPATH={} app_process /system/bin --nice-name={} {} \
+         --token={} --client={} --endpoint={} --lib={}",
         shell_quote(&req.apk_path),
         SERVER_PROCESS_NAME,
         STARTER_CLASS,
@@ -182,7 +186,8 @@ pub fn build_start_command(req: &WirelessRequest) -> String {
     format!(
         "{kill_old}; \
          LOG=/data/local/tmp/prvbrk_boot.$$.log; : > \"$LOG\" 2>/dev/null || LOG=/dev/null; \
-         {invoke} </dev/null >>\"$LOG\" 2>&1 & sleep 2; cat \"$LOG\" 2>/dev/null"
+         if command -v setsid >/dev/null 2>&1; then SETSID=setsid; else SETSID=; fi; \
+         $SETSID {invoke} </dev/null >>\"$LOG\" 2>&1 & sleep 2; cat \"$LOG\" 2>/dev/null"
     )
 }
 
@@ -348,8 +353,8 @@ mod tests {
     #[test]
     fn start_command_contains_all_arguments_and_is_backgrounded() {
         let cmd = build_start_command(&request());
-        assert!(cmd.contains("export CLASSPATH='"));
-        assert!(cmd.contains("exec app_process /system/bin"));
+        assert!(cmd.contains("env CLASSPATH='"));
+        assert!(cmd.contains("app_process /system/bin"));
         assert!(cmd.contains("io.github.lianxia233.privbroker.ServiceStarter"));
         assert!(cmd.contains("--token='0123456789abcdef0123456789abcdef'"));
         assert!(cmd.contains("--endpoint='abstract'"));
@@ -369,7 +374,7 @@ mod tests {
         assert!(cmd.contains("prvbrk_svc|privilege-brok*"), "兼容旧进程名");
         // 清理必须发生在启动之前，否则清掉的是刚拉起的新进程。
         let kill_at = cmd.find("kill -9").unwrap();
-        let start_at = cmd.find("exec app_process").unwrap();
+        let start_at = cmd.find("app_process").unwrap();
         assert!(kill_at < start_at, "kill 必须早于 app_process 启动");
         // 不能误杀执行清理的 shell 自身。
         assert!(cmd.contains("[ \"$pid\" = \"$SELF\" ] && continue"));
@@ -387,6 +392,21 @@ mod tests {
         assert!(!cmd.contains("prvbrk_boot.log;"));
         // 不再有裸的 (...)& 结尾：那会让常驻进程持有 ADB socket fd。
         assert!(!cmd.ends_with(")&"));
+    }
+
+    /// 保活：进程必须从启动那一刻起就在独立会话里，不能只靠 Java 侧
+    /// 事后 setsid（后台 job 常已是进程组首进程，会失败）。
+    #[test]
+    fn start_command_detaches_service_into_own_session() {
+        let cmd = build_start_command(&request());
+        assert!(cmd.contains("command -v setsid"), "探测 setsid 可用性");
+        assert!(cmd.contains("SETSID=setsid"), "可用时启用 setsid");
+        assert!(cmd.contains("$SETSID env CLASSPATH="), "setsid 直接 exec 启动体");
+        let setsid_at = cmd.find("$SETSID").unwrap();
+        let app_at = cmd.find("app_process").unwrap();
+        assert!(setsid_at < app_at, "setsid 必须早于 app_process");
+        // stdio 全脱离 + 独立会话，主 shell 退出不会带走服务
+        assert!(cmd.contains("</dev/null >>\"$LOG\" 2>&1 &"));
     }
 
     #[test]

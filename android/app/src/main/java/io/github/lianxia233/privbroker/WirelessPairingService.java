@@ -10,8 +10,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.graphics.drawable.Icon;
-import android.net.LocalSocket;
-import android.net.LocalSocketAddress;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.os.Build;
@@ -59,6 +57,7 @@ public final class WirelessPairingService extends Service {
     private static final int REQ_REPLY = 1;
     private static final int REQ_STOP = 2;
     private static final int REQ_LOG = 3;
+    private static final int REQ_OPEN = 4;
     private static final long CONNECT_WAIT_MS = 8000L;
     private static final long START_VERIFY_TIMEOUT_MS = 7000L;
     private static final long START_VERIFY_INTERVAL_MS = 400L;
@@ -341,20 +340,9 @@ public final class WirelessPairingService extends Service {
     }
 
     /** 同步探测 abstract socket 是否被监听，联上即代表特权代理在跑。 */
+    /** 与激活页共用全局唯一判据，保证通知栏自动激活与页面状态一致。 */
     private boolean isServiceUp() {
-        try {
-            LocalSocket s = new LocalSocket();
-            try {
-                s.connect(new LocalSocketAddress(
-                        BrokerClient.socketName(getApplicationContext()),
-                        LocalSocketAddress.Namespace.ABSTRACT));
-                return true;
-            } finally {
-                try { s.close(); } catch (Throwable ignored) { }
-            }
-        } catch (Throwable ignored) {
-            return false;
-        }
+        return BrokerClient.probe(getApplicationContext());
     }
 
     /** 投递启动命令后轮询等待代理真正常驻，返回是否实测到。 */
@@ -410,41 +398,35 @@ public final class WirelessPairingService extends Service {
             return;
         }
         if (ok && WirelessRunner.STAGE_STARTED.equals(stage)) {
-            // 双通道判据，对齐成熟实现以启动器输出判定启动结果：app 侧实测
-            // 连通，或 native 启动日志明确「监听成功 / 已有实例在运行」。
-            // 部分 ROM 的 SELinux 会拦 app→shell 域 socket 直连，此时 app 探测
-            // 恒为 false 但服务其实已起来，不能因此误报激活失败。
+            // 唯一成功判据：app 侧实测到代理监听端点。启动日志里的
+            // 「监听成功 / 已在运行」只作诊断线索，不能替代实测，否则会出现
+            // 「报激活成功但页面显示未运行」的自相矛盾。
             final boolean confirmed = ActivationLog.startLogConfirmsRunning(resultJson);
-            final boolean reused = ActivationLog.reusedExistingInstance(resultJson);
             working = true;
             push(workingNotification());
             new Thread(() -> {
                 final boolean probed = awaitServiceUp();
-                final boolean up = probed || confirmed;
                 main.post(() -> {
                     working = false;
                     final int port = lastConnectPort;
                     final String host = resolvedHost;
-                    if (up) {
+                    if (probed) {
                         stopDiscovery();
-                        String successText = probed
-                                ? getString(R.string.wireless_success_text)
-                                : reused ? getString(R.string.pairing_activate_ok_reused)
-                                         : getString(R.string.pairing_activate_ok_confirmed);
-                        String logSummary = successText
-                                + (probed ? "" : "\n（判据：启动日志确认监听；app 侧直连探测未通过）");
+                        String successText = getString(R.string.wireless_success_text);
                         notifyResult(getString(R.string.wireless_success_title),
                                 successText, true);
                         ActivationLog.record(WirelessPairingService.this, true, port, host, "",
-                                logSummary, diag, durationMs);
+                                successText, diag, durationMs);
                         cancelConnectTimeout();
                         stopForeground(STOP_FOREGROUND_REMOVE);
                         stopSelf();
                     } else {
                         awaitingConnect = false;
                         cancelConnectTimeout();
-                        String summary = ActivationLog.summarize(
-                                WirelessPairingService.this, diag, false);
+                        String summary = confirmed
+                                ? getString(R.string.pairing_unreachable_confirmed)
+                                : ActivationLog.summarize(
+                                        WirelessPairingService.this, diag, false);
                         ActivationLog.record(WirelessPairingService.this, false, port, host,
                                 resultCode, summary, diag, durationMs);
                         // 失败通知仍保留输码入口，但大文本里给出人话诊断与下一步
@@ -517,6 +499,9 @@ public final class WirelessPairingService extends Service {
     private Notification.Builder base() {
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_action_broker)
+                .setColor(getColor(R.color.brand_primary))
+                .setCategory(Notification.CATEGORY_SERVICE)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOngoing(true);
     }
 
@@ -533,7 +518,8 @@ public final class WirelessPairingService extends Service {
 
     private Notification inputNotification(String hint) {
         RemoteInput remoteInput = new RemoteInput.Builder(KEY_CODE)
-                .setLabel(getString(R.string.wireless_code_hint))
+                .setLabel(getString(R.string.wireless_code_input_label))
+                .setAllowFreeFormInput(true)
                 .build();
         // 端口放进 Intent：服务可能在用户输码前被回收，重启后仍能拿到端口
         Intent reply = new Intent(this, WirelessPairingService.class)
@@ -545,13 +531,30 @@ public final class WirelessPairingService extends Service {
         }
         PendingIntent pi = PendingIntent.getForegroundService(this, REQ_REPLY, reply, flags);
         String text = hint == null ? getString(R.string.wireless_input_text) : hint;
+        // 点通知主体回到激活页：输完码紧接着就是点「激活服务」。
+        Intent open = new Intent(this, PairingActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent contentPi = PendingIntent.getActivity(this, REQ_OPEN, open, immutableFlags());
+        String step = getString(R.string.wireless_input_step);
         return base()
                 .setContentTitle(getString(R.string.wireless_input_title))
                 .setContentText(text)
-                // 诊断摘要往往多行；BigTextStyle 让下拉展开时完整可读，不被单行截断
-                .setStyle(new Notification.BigTextStyle().bigText(text))
+                .setSubText(step)
+                .setContentIntent(contentPi)
+                // 整条通知着色 + 品牌大图标，让输码通知在下拉列表里一眼可见。
+                .setColorized(true)
+                .setColor(getColor(R.color.brand_primary))
+                .setLargeIcon(Icon.createWithResource(this, R.drawable.ic_launcher_monochrome))
+                // 分层大文本：标题 / 步骤 / 说明，诊断摘要不再挤成一坨。
+                .setStyle(new Notification.BigTextStyle()
+                        .setBigContentTitle(getString(R.string.wireless_input_title))
+                        .setSummaryText(step)
+                        .bigText(text))
+                // RemoteInput 依赖系统原生 Action 渲染，绝不能用自定义 RemoteViews
+                // 覆盖（MIUI / HyperOS「原生样式」下会丢掉内嵌输入框）。
                 .addAction(new Notification.Action.Builder(
-                        (Icon) null, getString(R.string.wireless_input_code), pi)
+                        Icon.createWithResource(this, R.drawable.ic_notif_code),
+                        getString(R.string.wireless_input_code), pi)
                         .addRemoteInput(remoteInput)
                         .build())
                 .addAction(viewLogAction())
@@ -563,7 +566,8 @@ public final class WirelessPairingService extends Service {
         Intent logs = new Intent(this, LogActivity.class);
         PendingIntent pi = PendingIntent.getActivity(this, REQ_LOG, logs, immutableFlags());
         return new Notification.Action.Builder(
-                (Icon) null, getString(R.string.wireless_notif_view_log), pi).build();
+                Icon.createWithResource(this, R.drawable.ic_action_logs),
+                getString(R.string.wireless_notif_view_log), pi).build();
     }
 
     private Notification waitingNotification() {

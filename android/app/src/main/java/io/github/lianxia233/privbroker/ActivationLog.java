@@ -32,12 +32,9 @@ final class ActivationLog {
     }
 
     /**
-     * 解析 native 返回结果：是否由启动日志确认「服务已监听 / 已有实例在运行」。
-     *
-     * 对齐成熟实现——以 starter 的输出判定启动结果，而不是
-     * 单靠 app 进程去 connect server 的 abstract socket。部分 ROM 的 SELinux
-     * 会拦截 app→shell 域的 abstract socket 直连，那种情况下 app 侧探测永远
-     * 失败，但服务其实已经起来了（`Address already in use` 正是这个证据）。
+     * 解析 native 返回结果：启动日志是否出现「服务已监听 / 已有实例在运行」。
+     * 仅用于失败诊断（区分「进程没起来」与「起来了但 app 连不上」），
+     * 不再是激活成功的判据 —— 成功一律以 {@link BrokerClient#probe} 实测为准。
      */
     static boolean startLogConfirmsRunning(String rawJson) {
         try {

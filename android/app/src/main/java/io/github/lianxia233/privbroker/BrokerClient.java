@@ -43,6 +43,10 @@ final class BrokerClient {
     private static final int MAX_FRAME_BYTES = 1024 * 1024;
     private static final byte[] PROOF_DOMAIN = "privilege-broker/v2/challenge-proof".getBytes(StandardCharsets.UTF_8);
     private static final byte[] SOCKET_DOMAIN = "privilege-broker/socket/v2".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] TCP_DOMAIN = "privilege-broker/tcp/v2".getBytes(StandardCharsets.UTF_8);
+    /** 按配对令牌派生的 TCP loopback 端口落在这一段，避开常用端口。 */
+    private static final int TCP_PORT_BASE = 20000;
+    private static final int TCP_PORT_SPAN = 40000;
     private static final long DEADLINE_MS = 30_000L;
 
     /**
@@ -99,12 +103,23 @@ final class BrokerClient {
         prefs(c).edit().putString(KEY_TOKEN, t == null ? "" : t.trim()).apply();
     }
 
+    /**
+     * 默认端点使用 TCP loopback。SELinux enforcing 下 app 域无法 connect shell
+     * 域创建的 abstract Unix socket，只有本机 TCP 回环能被两侧同时访问。旧版本
+     * 把默认值写死为 "abstract"，这里在读取时自动迁移到按令牌派生的端口，
+     * 保证覆盖安装升级后第一次激活就走可连通的通道。
+     */
     static String endpoint(Context c) {
-        return prefs(c).getString(KEY_ENDPOINT, "abstract");
+        String ep = prefs(c).getString(KEY_ENDPOINT, null);
+        if (ep == null || ep.isEmpty() || "abstract".equals(ep)) {
+            return "tcp:127.0.0.1:" + tcpPort(c);
+        }
+        return ep;
     }
 
     static void setEndpoint(Context c, String ep) {
-        prefs(c).edit().putString(KEY_ENDPOINT, ep == null ? "abstract" : ep.trim()).apply();
+        // 传空等价于恢复默认的 TCP loopback 端点，不再写死 "abstract"。
+        prefs(c).edit().putString(KEY_ENDPOINT, ep == null ? "" : ep.trim()).apply();
     }
 
     static String clientId(Context c) {
@@ -126,6 +141,58 @@ final class BrokerClient {
             return s.toString();
         } catch (Throwable t) {
             throw new IllegalStateException("SHA-256 不可用", t);
+        }
+    }
+
+    /** 由配对令牌派生的稳定 TCP loopback 端口，app 与代理进程两侧一致。 */
+    private static int tcpPort(Context c) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(TCP_DOMAIN);
+            md.update(token(c).getBytes(StandardCharsets.UTF_8));
+            byte[] d = md.digest();
+            int v = ((d[0] & 0xff) << 8) | (d[1] & 0xff);
+            return TCP_PORT_BASE + Math.floorMod(v, TCP_PORT_SPAN);
+        } catch (Throwable ignored) {
+            return TCP_PORT_BASE;
+        }
+    }
+
+    /**
+     * 全局唯一的「特权代理是否在运行」判据：能连上监听端点即视为在跑。
+     * 状态徽章、激活结果、通知栏自动激活三处共用本方法，杜绝各处判据不一致
+     * 造成的「结果条报成功、状态区却显示未运行」。只做连接探测、不做握手，
+     * 600ms 超时，可在任意线程调用。
+     */
+    static boolean probe(Context c) {
+        String ep = endpoint(c);
+        if (ep.startsWith("tcp:")) {
+            String hp = ep.substring(4);
+            int colon = hp.lastIndexOf(':');
+            if (colon <= 0) {
+                return false;
+            }
+            Socket s = new Socket();
+            try {
+                s.connect(new InetSocketAddress(hp.substring(0, colon),
+                        Integer.parseInt(hp.substring(colon + 1))), 600);
+                return true;
+            } catch (Throwable ignored) {
+                return false;
+            } finally {
+                try { s.close(); } catch (Throwable ignored) { }
+            }
+        }
+        String name = ep.startsWith("abstract:")
+                ? ep.substring("abstract:".length()) : socketName(c);
+        LocalSocket s = new LocalSocket();
+        try {
+            s.connect(new LocalSocketAddress(name, LocalSocketAddress.Namespace.ABSTRACT));
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        } finally {
+            try { s.close(); } catch (Throwable ignored) { }
         }
     }
 

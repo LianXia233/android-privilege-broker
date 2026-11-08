@@ -8,9 +8,10 @@ import org.json.JSONObject;
  * 该类不依赖任何 Android 组件：CLASSPATH 指向 APK，framework 的 boot classloader
  * 提供 org.json；随后按 nativeLibraryDir 绝对路径加载 native 库并阻塞运行服务。
  *
- * 常驻的关键：启动命令已把 stdio 重定向并后台化，这里再调用 {@code Os.setsid()}
- * 脱离 adbd 的会话/进程组。否则 shell 通道关闭时 adbd 会向整个进程组发信号，
- * 把刚拉起的代理一起杀掉 —— 表现为「提示成功但特权代理服务未运行」。
+ * 常驻的关键：启动命令已用 setsid 让本进程从启动起就处于独立会话，并重定向
+ * stdio 后台化。这里再调用 {@code Os.setsid()} 作为兜底 —— 若设备缺少 setsid
+ * 命令、或本进程还不是会话首进程，仍可脱离 adbd 的会话/进程组。否则 shell
+ * 通道关闭时 adbd 会向整个进程组发信号，把刚拉起的代理一起杀掉。
  */
 public final class ServiceStarter {
 

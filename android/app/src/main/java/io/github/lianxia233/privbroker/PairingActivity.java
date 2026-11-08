@@ -7,8 +7,6 @@ import android.app.NotificationManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.net.LocalSocket;
-import android.net.LocalSocketAddress;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -50,9 +48,11 @@ public final class PairingActivity extends Activity {
     private static final String TAG = "PairingActivity";
 
     private static final long AUTO_ACTIVATE_WAIT_MS = 8000L;
-    /** 激活后轮询探测特权代理 abstract socket 的总时长与间隔。 */
+    /** 激活后轮询探测特权代理监听端点的总时长与间隔。 */
     private static final long SERVICE_PROBE_TIMEOUT_MS = 7000L;
     private static final long SERVICE_PROBE_INTERVAL_MS = 400L;
+    /** 页面可见时周期性刷新状态，服务被系统回收后能立刻反映出来。 */
+    private static final long STATE_POLL_INTERVAL_MS = 2500L;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ExecutorService probeWorker = Executors.newCachedThreadPool();
@@ -86,6 +86,13 @@ public final class PairingActivity extends Activity {
     /** 配对成功后等新的连接服务端口，就绪则自动激活一次（按钮始终可手动点）。 */
     private boolean pendingAutoActivate;
     private Runnable autoActivateTimeout;
+    private final Runnable statePoller = new Runnable() {
+        @Override public void run() {
+            refreshServiceState();
+            uiHandler.postDelayed(this, STATE_POLL_INTERVAL_MS);
+        }
+    };
+    private boolean statePolling;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -164,11 +171,19 @@ public final class PairingActivity extends Activity {
         }
         applyCachedPorts();
         refreshServiceState();
+        startStatePolling();
+    }
+
+    @Override
+    protected void onPause() {
+        stopStatePolling();
+        super.onPause();
     }
 
     @Override
     protected void onDestroy() {
         cancelAutoActivateTimeout();
+        stopStatePolling();
         try {
             MdnsProbe.get(this).clearCallback();
         } catch (Throwable ignored) {
@@ -191,31 +206,42 @@ public final class PairingActivity extends Activity {
     // ------------------------------------------------------------ 服务状态
 
     /**
-     * 只探测 abstract socket 是否被监听（连上即代表特权代理进程在跑），不做
-     * 完整握手，几乎瞬时。放在独立线程池，绝不阻塞激活/配对的 worker，也不卡 UI。
+     * 刷新服务状态。判据统一走 {@link BrokerClient#probe}，与激活结果、通知栏
+     * 自动激活完全一致，避免出现「结果条报成功、状态区却显示未运行」。
+     * 探测放在独立线程池，绝不阻塞激活/配对的 worker，也不卡 UI。
      */
     private void refreshServiceState() {
         probeWorker.execute(() -> {
             final boolean active = isServiceUp();
-            ui(() -> applyServiceState(active));
+            ui(() -> {
+                // 页面可见期间服务被系统回收：立刻把状态改回未运行并给出
+                // 可操作提示，用户点「激活服务」即可重新拉起。
+                boolean lost = serviceActive && !active && !working;
+                applyServiceState(active);
+                if (lost) {
+                    showResult(getString(R.string.pairing_state_lost), RESULT_ERR);
+                }
+            });
         });
     }
 
-    /** 同步探测 abstract socket 是否被监听（联上即代表代理在跑），可在 worker 线程调用。 */
-    private boolean isServiceUp() {
-        try {
-            LocalSocket s = new LocalSocket();
-            try {
-                s.connect(new LocalSocketAddress(
-                        BrokerClient.socketName(getApplicationContext()),
-                        LocalSocketAddress.Namespace.ABSTRACT));
-                return true;
-            } finally {
-                try { s.close(); } catch (Throwable ignored) { }
-            }
-        } catch (Throwable ignored) {
-            return false;
+    private void startStatePolling() {
+        if (statePolling) {
+            return;
         }
+        statePolling = true;
+        uiHandler.removeCallbacks(statePoller);
+        uiHandler.postDelayed(statePoller, STATE_POLL_INTERVAL_MS);
+    }
+
+    private void stopStatePolling() {
+        statePolling = false;
+        uiHandler.removeCallbacks(statePoller);
+    }
+
+    /** 同步探测代理监听端点是否可连，可在 worker 线程调用。 */
+    private boolean isServiceUp() {
+        return BrokerClient.probe(getApplicationContext());
     }
 
     /**
@@ -458,23 +484,19 @@ public final class PairingActivity extends Activity {
         final long startedAt = System.currentTimeMillis();
         worker.execute(() -> {
             String raw = WirelessRunner.start(PairingActivity.this, finalPort, host);
-            // 双通道判据，对齐成熟实现以启动器输出判定启动结果：
-            // 1) app 侧实测 abstract socket 能连上（最强证据）；
-            // 2) native 启动日志明确「监听成功 / 已有实例在运行」。
-            // 部分 ROM 的 SELinux 会拦截 app→shell 域 socket 直连，此时 1)
-            // 恒为 false 但服务其实已起来 —— `Address already in use` 就是
-            // 「旧实例还占着端点」的证据，不能因此误报激活失败。
+            // 唯一成功判据：app 侧实测到代理监听端点。启动日志只作诊断线索，
+            // 不能再充当成功证据 —— 否则会出现「结果条报激活成功、状态区却
+            // 显示特权代理未运行」的自相矛盾。端点已改为 TCP loopback，
+            // SELinux 不再拦截 app 直连，实测结果真实可用。
             final boolean probed = awaitServiceUp();
             final boolean confirmed = ActivationLog.startLogConfirmsRunning(raw);
-            final boolean up = probed || confirmed;
-            ui(() -> onActivateResult(raw, up, probed, confirmed, finalPort, host,
+            ui(() -> onActivateResult(raw, probed, confirmed, finalPort, host,
                     System.currentTimeMillis() - startedAt));
         });
     }
 
-    private void onActivateResult(String raw, boolean serviceUp, boolean probed,
-                                  boolean confirmed, int port, String host,
-                                  long durationMs) {
+    private void onActivateResult(String raw, boolean serviceUp, boolean confirmed,
+                                  int port, String host, long durationMs) {
         working = false;
         setWorking(false);
         JSONObject j = parse(raw);
@@ -492,31 +514,26 @@ public final class PairingActivity extends Activity {
         if (serviceUp) {
             paired = true;
             emphasizePairEntry(false);
-            // 如实区分证据来源：实测连通最强；仅日志确认时说明是「复用已有实例」
-            // 或「app 直连探测受系统限制」，不宣称已完成实测，避免假成功。
-            String okText;
-            if (probed) {
-                okText = getString(R.string.pairing_activate_ok);
-            } else if (ActivationLog.reusedExistingInstance(raw)) {
-                okText = getString(R.string.pairing_activate_ok_reused);
-            } else {
-                okText = getString(R.string.pairing_activate_ok_confirmed);
-            }
-            String logSummary = okText
-                    + (probed ? "" : "\n（判据：启动日志确认监听；app 侧直连探测未通过）")
-                    + (confirmed ? "\n" + getString(R.string.pairing_activate_log_hint) : "");
-            showResult(okText, RESULT_OK);
+            // 只有 app 侧实测连通才算成功，状态区与结果条用同一判据同步刷新。
+            String okText = getString(R.string.pairing_activate_ok);
+            showResult(okText + "\n" + getString(R.string.pairing_activate_log_hint), RESULT_OK);
             applyServiceState(true);
-            ActivationLog.record(this, true, port, host, "", logSummary, output, durationMs);
+            ActivationLog.record(this, true, port, host, "", okText, output, durationMs);
             return;
         }
 
         // 结果条只显示人话结论 + 完整原因 + 过程要点；raw 内部字段不再外泄，
         // 完整启动日志（含 errno）另行写入「执行日志」，不再被字符截断吃掉。
-        String summary = ActivationLog.summarize(this, output, false);
-        String lead = friendlyMessage(code, stage, message);
-        if (!lead.isEmpty() && !WirelessRunner.STAGE_STARTED.equals(stage)) {
-            summary = lead + "\n" + summary;
+        // 日志说「已在运行」但 app 连不上时，明确告知通道不通，而不是报成功。
+        String summary;
+        if (confirmed) {
+            summary = getString(R.string.pairing_unreachable_confirmed);
+        } else {
+            summary = ActivationLog.summarize(this, output, false);
+            String lead = friendlyMessage(code, stage, message);
+            if (!lead.isEmpty() && !WirelessRunner.STAGE_STARTED.equals(stage)) {
+                summary = lead + "\n" + summary;
+            }
         }
         ActivationLog.record(this, false, port, host, code, summary, output, durationMs);
 

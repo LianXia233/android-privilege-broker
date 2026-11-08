@@ -5,6 +5,35 @@
 
 ---
 
+## v2.1.12
+
+### 修复「激活成功但特权代理未运行」：统一判据、实时状态、进程保活、通知栏输码框
+
+上一版的成功判据是「app 实测 **或** 启动日志确认」，而状态徽章独立地用
+abstract socket 直连判定，两处判据不一致 —— 结果条报「激活成功·复用现有实例」，
+状态区却显示「特权代理未运行」。同时 `selinux=enforcing` 下 app 域连不上 shell
+域的 abstract socket，服务对 app 根本不可用。
+
+- **端点改为 TCP loopback**：`BrokerClient.endpoint()` 默认返回按配对令牌派生的
+  `tcp:127.0.0.1:<port>`（旧值 `abstract` 读取时自动迁移）。本机回环 TCP 不受
+  SELinux 域限制，app 与代理两侧都能访问；`broker-server` / `BrokerClient` /
+  `broker-ipc` 原本就支持 `tcp:` 端点，无需改协议。
+- **全局唯一判据**：新增 `BrokerClient.probe()`，激活页状态徽章、结果条、通知栏
+  自动激活三处统一用它，杜绝界面自相矛盾。启动日志的「监听成功 / 已在运行」
+  降级为诊断线索，**不再**能单独判定激活成功。
+- **状态实时同步**：配对页可见时每 2.5 秒刷新一次状态；服务被系统回收后立刻
+  改回「未运行」并提示「点激活服务重新拉起」。`onResume` 刷新、`onPause` 停轮询。
+- **进程保活**：启动命令改用 `setsid env CLASSPATH=… app_process …`，让代理从
+  启动第一条指令起就处于独立会话，adbd 会话收尾按进程组发的信号再也碰不到它。
+  仅靠 Java 侧 `Os.setsid()` 不够（后台 job 常已是进程组首进程而失败）。
+- **通知栏输码框样式**：整条通知着色 + 品牌大图标 + 步骤副标题 + 结构化
+  `BigTextStyle` + 图标化输码/查看日志按钮 + 点击主体直达激活页；保留系统原生
+  `RemoteInput`（MIUI / HyperOS「原生样式」下才会显示内嵌输入框），不用自定义
+  `RemoteViews` 覆盖。
+- 版本升至 2.1.12 / versionCode 19。
+
+---
+
 ## v2.1.11
 
 ### 修复「端点绑定失败：Address already in use (os error 98)」——完整对齐成熟实现的单实例机制

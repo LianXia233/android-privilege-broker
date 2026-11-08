@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知栏输码动作图标：配对码气泡 + 6 位码位。用描边而非填充，
+     系统对通知 Action 图标着色后形状仍能清晰辨认。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4,5 h16 a1.6,1.6 0 0 1 1.6,1.6 v8.8 a1.6,1.6 0 0 1 -1.6,1.6 h-8 l-4.2,3.2 v-3.2 h-3.8 a1.6,1.6 0 0 1 -1.6,-1.6 v-8.8 a1.6,1.6 0 0 1 1.6,-1.6 z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M6.6,10.6 h1.9 M10.1,10.6 h1.9 M13.6,10.6 h1.9 M17.1,10.6 h1.4"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round" />
+</vector>
