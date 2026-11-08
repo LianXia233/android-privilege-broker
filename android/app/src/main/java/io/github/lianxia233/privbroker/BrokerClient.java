@@ -379,10 +379,10 @@ final class BrokerClient {
             if (n instanceof Long || n instanceof Integer || n instanceof Short || n instanceof Byte) {
                 return n.longValue();
             }
-            throw new IllegalStateException("挑战随机数超出 JSON 精确整数范围（serverNonce="
+            throw new IllegalStateException("握手失败: 挑战随机数超出 JSON 精确整数范围（serverNonce="
                     + n + "）：特权代理随机数未限制在 53 位内，请重新激活以更新代理");
         }
-        throw new IllegalStateException("挑战帧缺少 serverNonce: " + body);
+        throw new IllegalStateException("握手失败: 挑战帧缺少 serverNonce: " + body);
     }
 
     /** 与 Rust broker-auth::compute_proof 逐字节一致。 */
