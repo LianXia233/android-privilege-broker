@@ -11,6 +11,14 @@ pub enum ErrorCode {
     MalformedFrame,
     FrameTooLarge,
     Unauthenticated,
+    /// 挑战阶段按 nonce 精确匹配槽位失败：该客户端没有待验证挑战，或
+    /// server_nonce 不在任何槽位里（过期、被淘汰、或与登记值不同）。
+    /// 与 [`ErrorCode::Unauthenticated`] 区分开，避免把「槽位没命中」
+    /// 和「令牌不对」混成同一个错误码而无法定位。
+    ChallengeUnknown,
+    /// 挑战槽位命中但证明不成立：令牌、client_id 或 issued_at 与服务端
+    /// 登记值不一致，或证明不是合法十六进制。
+    ProofMismatch,
     ClientRejected,
     ReplayDetected,
     SessionExpired,
@@ -35,6 +43,8 @@ impl ErrorCode {
             ErrorCode::MalformedFrame => "MALFORMED_FRAME",
             ErrorCode::FrameTooLarge => "FRAME_TOO_LARGE",
             ErrorCode::Unauthenticated => "UNAUTHENTICATED",
+            ErrorCode::ChallengeUnknown => "CHALLENGE_UNKNOWN",
+            ErrorCode::ProofMismatch => "PROOF_MISMATCH",
             ErrorCode::ClientRejected => "CLIENT_REJECTED",
             ErrorCode::ReplayDetected => "REPLAY_DETECTED",
             ErrorCode::SessionExpired => "SESSION_EXPIRED",
@@ -69,6 +79,8 @@ mod tests {
             ErrorCode::MalformedFrame,
             ErrorCode::FrameTooLarge,
             ErrorCode::Unauthenticated,
+            ErrorCode::ChallengeUnknown,
+            ErrorCode::ProofMismatch,
             ErrorCode::ClientRejected,
             ErrorCode::ReplayDetected,
             ErrorCode::SessionExpired,

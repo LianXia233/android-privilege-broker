@@ -13,6 +13,17 @@ use sha2::{Digest, Sha256};
 /// 证明计算所用的域分隔前缀，避免与其它哈希用途混淆。
 const PROOF_DOMAIN: &[u8] = b"privilege-broker/v2/challenge-proof";
 
+/// 挑战随机数的上界：53 位。
+///
+/// 原因：nonce 以 JSON 整数在链路上往返，而 JSON 数字在客户端（Android
+/// org.json 的 JSONTokener）会被解析成 long 或 double —— 可精确表示的整数
+/// 区间只到 2^53（double 尾数位）。超过该上限时，客户端拿到的值不再等于
+/// 服务端登记的值（精度丢失或饱和成 Long.MAX_VALUE），后续用这个值计算
+/// 证明并按值精确匹配槽位必然落空，表现为「Hello 通过、Proof 被判
+/// UNAUTHENTICATED」。把 nonce 限制在 53 位以内，双端数值才完全一致。
+/// 2^53 的空间配合 30s 重放窗口，碰撞概率可以忽略。
+const NONCE_MAX: u64 = (1u64 << 53) - 1;
+
 /// 计算挑战证明。返回小写 hex 的 SHA-256 摘要。
 pub fn compute_proof(token: &str, server_nonce: u64, client_id: &str, issued_at_ms: u64) -> String {
     let mut h = Sha256::new();
@@ -80,6 +91,11 @@ impl ChallengeTable {
     ///
     /// 按 (client_id, nonce) 精确匹配：错误 nonce 不会消费该客户端的其它
     /// 合法挑战，也不会影响其它客户端。
+    ///
+    /// 返回码按失败原因区分，便于现场日志直接定位：槽位未命中（没有待验证
+    /// 挑战，或 nonce 与服务端登记值不同）为 [`ErrorCode::ChallengeUnknown`]；
+    /// 槽位命中但证明不成立为 [`ErrorCode::ProofMismatch`]；挑战超期为
+    /// [`ErrorCode::SessionExpired`]。
     pub fn verify(
         &mut self,
         client_id: &str,
@@ -90,11 +106,14 @@ impl ChallengeTable {
         now_ms: u64,
     ) -> Result<(), ErrorCode> {
         let (pending, slot_left_empty) = {
-            let slots = self.pending.get_mut(client_id).ok_or(ErrorCode::Unauthenticated)?;
+            let slots = self
+                .pending
+                .get_mut(client_id)
+                .ok_or(ErrorCode::ChallengeUnknown)?;
             let pos = slots
                 .iter()
                 .position(|p| p.nonce == server_nonce)
-                .ok_or(ErrorCode::Unauthenticated)?;
+                .ok_or(ErrorCode::ChallengeUnknown)?;
             let pending = slots.remove(pos);
             (pending, slots.is_empty())
         };
@@ -105,10 +124,10 @@ impl ChallengeTable {
             return Err(ErrorCode::SessionExpired);
         }
         let expected = compute_proof(token, server_nonce, client_id, issued_at_ms);
-        let actual = hex::decode(proof_hex).map_err(|_| ErrorCode::Unauthenticated)?;
+        let actual = hex::decode(proof_hex).map_err(|_| ErrorCode::ProofMismatch)?;
         let expected_bytes = hex::decode(&expected).map_err(|_| ErrorCode::Internal)?;
         if !constant_time_eq(&actual, &expected_bytes) {
-            return Err(ErrorCode::Unauthenticated);
+            return Err(ErrorCode::ProofMismatch);
         }
         Ok(())
     }
@@ -133,7 +152,8 @@ impl ChallengeTable {
 /// 生成一次性随机数的确定性混合器。
 ///
 /// 服务端进程本身不依赖系统随机源的可得性：以启动种子、单调计数与墙钟时间
-/// 混合出 64 位 nonce，保证同一进程内不重复、不同进程间也不同。
+/// 混合出随机数，保证同一进程内不重复、不同进程间也不同。输出截断到
+/// [`NONCE_MAX`]（53 位），使客户端用 JSON 数字解析后仍能得到同一个值。
 pub struct NonceGenerator {
     seed: u64,
     counter: u64,
@@ -151,7 +171,7 @@ impl NonceGenerator {
         h.update(self.counter.to_be_bytes());
         h.update(now_ms.to_be_bytes());
         let d = h.finalize();
-        u64::from_be_bytes([d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]])
+        u64::from_be_bytes([d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]]) & NONCE_MAX
     }
 }
 
@@ -172,6 +192,20 @@ mod tests {
     }
 
     #[test]
+    fn nonces_fit_json_safe_range() {
+        // 下发的 nonce 必须落在 double/JSON 能精确表示的整数区间内，
+        // 否则客户端解析后与服务端登记值不一致，握手必然失败。
+        let mut g = NonceGenerator::new(0x9E37_79B9_7F4A_7C15);
+        let mut seen = std::collections::HashSet::new();
+        for i in 0..64u64 {
+            let n = g.next(1_700_000_000_000 + i);
+            assert!(n <= NONCE_MAX, "nonce 超出 53 位：{n}");
+            assert!(n < (1u64 << 53));
+            assert!(seen.insert(n), "同一进程内出现重复 nonce：{n}");
+        }
+    }
+
+    #[test]
     fn constant_time_eq_handles_length_and_content() {
         assert!(constant_time_eq(b"abc", b"abc"));
         assert!(!constant_time_eq(b"abc", b"abd"));
@@ -187,7 +221,7 @@ mod tests {
         assert!(t.verify("client-a", "token", 777, &proof, 1_100, 1_200).is_ok());
         assert_eq!(
             t.verify("client-a", "token", 777, &proof, 1_100, 1_200),
-            Err(ErrorCode::Unauthenticated)
+            Err(ErrorCode::ChallengeUnknown)
         );
     }
 
@@ -196,16 +230,28 @@ mod tests {
         let mut t = ChallengeTable::new(30_000);
         t.issue("c", 5, 0);
         let good = compute_proof("token", 5, "c", 10);
-        assert_eq!(t.verify("c", "token", 6, &good, 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "token", 6, &good, 10, 20),
+            Err(ErrorCode::ChallengeUnknown)
+        );
 
         t.issue("c", 5, 0);
-        assert_eq!(t.verify("c", "bad", 5, &good, 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "bad", 5, &good, 10, 20),
+            Err(ErrorCode::ProofMismatch)
+        );
 
         t.issue("c", 5, 0);
-        assert_eq!(t.verify("c", "token", 5, "00", 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "token", 5, "00", 10, 20),
+            Err(ErrorCode::ProofMismatch)
+        );
 
         t.issue("c", 5, 0);
-        assert_eq!(t.verify("c", "token", 5, "zz", 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "token", 5, "zz", 10, 20),
+            Err(ErrorCode::ProofMismatch)
+        );
     }
 
     #[test]
@@ -221,7 +267,10 @@ mod tests {
         let mut t = ChallengeTable::new(30_000);
         t.issue("client-a", 1, 0);
         let proof = compute_proof("token", 1, "client-b", 10);
-        assert_eq!(t.verify("client-b", "token", 1, &proof, 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("client-b", "token", 1, &proof, 10, 20),
+            Err(ErrorCode::ChallengeUnknown)
+        );
         assert_eq!(t.pending_count(), 1, "A 的挑战不应被 B 的失败消费");
     }
 
@@ -248,7 +297,10 @@ mod tests {
         let mut t = ChallengeTable::new(30_000);
         t.issue("c", 7, 0);
         let good = compute_proof("token", 7, "c", 10);
-        assert_eq!(t.verify("c", "token", 9, &good, 10, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "token", 9, &good, 10, 20),
+            Err(ErrorCode::ChallengeUnknown)
+        );
         assert!(t.verify("c", "token", 7, &good, 10, 20).is_ok());
     }
 
@@ -260,7 +312,10 @@ mod tests {
         }
         assert_eq!(t.pending_count(), MAX_PENDING_PER_CLIENT);
         let oldest = compute_proof("token", 1, "c", 1);
-        assert_eq!(t.verify("c", "token", 1, &oldest, 1, 20), Err(ErrorCode::Unauthenticated));
+        assert_eq!(
+            t.verify("c", "token", 1, &oldest, 1, 20),
+            Err(ErrorCode::ChallengeUnknown)
+        );
         let newest = compute_proof("token", 20, "c", 20);
         assert!(t.verify("c", "token", 20, &newest, 20, 30).is_ok());
     }

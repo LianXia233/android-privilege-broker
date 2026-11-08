@@ -97,6 +97,14 @@ pub fn archive_entries(b: &dyn PlatformBridge, uri: &str) -> Result<Vec<ArchiveE
     Ok(out)
 }
 
+/// 探测特权代理状态。
+///
+/// 这是一次**软探测**：代理没运行、端点不可连、握手被拒都属于正常业务状态，
+/// 要由 `state::classify` 转成面向用户的指导，而不能当成桥接层故障。所以平台
+/// 侧把探测失败原因放在独立的 `probeError`，不占用 `error`（后者只表示"这次
+/// 桥接调用本身坏了"）。此前探测失败也写 `error`，被 [`checked`] 统一升级成
+/// 致命错误，`classify` 里为"在跑但拒绝握手"准备的分支在生产环境根本走不到，
+/// 状态查询与安装准备会一起整体失败。
 pub fn broker_state(b: &dyn PlatformBridge) -> Result<BrokerStateRaw> {
     let v = checked("brokerState", b.call("brokerState", &json!({}))?)?;
     Ok(BrokerStateRaw {
@@ -105,7 +113,7 @@ pub fn broker_state(b: &dyn PlatformBridge) -> Result<BrokerStateRaw> {
         server_version: v.get("serverVersion").and_then(Value::as_i64).unwrap_or(0) as i32,
         server_uid: v.get("serverUid").and_then(Value::as_i64).unwrap_or(-1) as i32,
         reachable: v.get("reachable").and_then(Value::as_bool).unwrap_or(false),
-        error: field_str(&v, "error").to_string(),
+        error: field_str(&v, "probeError").to_string(),
     })
 }
 
@@ -202,6 +210,35 @@ pub fn now_millis(b: &dyn PlatformBridge) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct MockBridge(Value);
+
+    impl PlatformBridge for MockBridge {
+        fn call(&self, _method: &str, _args: &Value) -> Result<Value> {
+            Ok(self.0.clone())
+        }
+    }
+
+    #[test]
+    fn broker_state_keeps_probe_failure_soft() {
+        // 代理不可用是业务状态：必须原样交给状态机，不能升级成桥接故障。
+        let down = MockBridge(json!({
+            "available": false,
+            "permission": -1,
+            "serverVersion": 0,
+            "serverUid": -1,
+            "reachable": true,
+            "probeError": "java.lang.IllegalStateException: 握手失败: {\"code\":\"PROOF_MISMATCH\"}"
+        }));
+        let st = broker_state(&down).expect("探测失败不应升级为桥接故障");
+        assert!(!st.available);
+        assert!(st.reachable, "端点可连的信息必须保留，用于区分没跑与拒绝握手");
+        assert!(st.error.contains("握手失败"));
+
+        // 真正的桥接异常（error 字段）仍必须是致命错误。
+        let fatal = MockBridge(json!({"error": "unknown"}));
+        assert!(broker_state(&fatal).is_err());
+    }
 
     #[test]
     fn checked_rejects_bridge_error_instead_of_faking_exit_code() {

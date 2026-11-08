@@ -102,6 +102,24 @@ mod tests {
     }
 
     #[test]
+    fn nonce_precision_parse_failure_is_reported_as_handshake_rejected() {
+        // 旧版代理仍在运行、下发 64 位随机数：客户端主动中止握手并带上
+        // 「握手失败」前缀。这种形态是「进程在跑但版本不兼容」，报「服务
+        // 未运行」会把用户引向重新配对，而正确处置是重新激活以更换代理。
+        let raw = BrokerStateRaw {
+            available: false,
+            reachable: true,
+            error: "java.lang.IllegalStateException: 无法连接特权代理 (tcp:127.0.0.1:31473): \
+                    java.lang.IllegalStateException: 握手失败: 挑战随机数超出 JSON 精确整数范围\
+                    （serverNonce=1.0621E19）：特权代理随机数未限制在 53 位内，请重新激活以更新代理"
+                .into(),
+            ..Default::default()
+        };
+        assert_eq!(classify(&raw), BrokerStatus::HandshakeRejected);
+        assert_eq!(guidance(classify(&raw)).title, "特权代理握手被拒绝");
+    }
+
+    #[test]
     fn unreachable_endpoint_stays_unavailable() {
         let raw = BrokerStateRaw {
             available: false,

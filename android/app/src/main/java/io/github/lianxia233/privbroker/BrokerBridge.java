@@ -135,7 +135,12 @@ public final class BrokerBridge {
      * <p>失败时必须区分两种形态：端点根本连不上（代理没跑）与端点可连但
      * 握手被拒（代理在跑但令牌不一致）。后者如果也只报 {@code available=false}，
      * Rust 侧会统一按「服务未运行」给出诊断与降级文案，用户照着提示重启
-     * 服务也修不好。因此额外上报 {@code reachable} 与 {@code error}。</p>
+     * 服务也修不好。因此额外上报 {@code reachable} 与 {@code probeError}。</p>
+     *
+     * <p>为什么不用 {@code error}：桥接层的 {@code error} 字段语义是「这次调用
+     * 本身失败」，Rust 侧会把它升级成致命错误。代理没运行属于正常业务状态，
+     * 必须由状态机转成指导文案，所以探测原因单独放在 {@code probeError}，
+     * 避免把「代理不可用」误判成「桥接坏了」。</p>
      */
     private static JSONObject brokerState() {
         JSONObject o = new JSONObject();
@@ -146,7 +151,7 @@ public final class BrokerBridge {
             o.put("serverVersion", client.protocolVersion());
             o.put("serverUid", client.serverUid());
             o.put("reachable", true);
-            o.put("error", "");
+            o.put("probeError", "");
             client.close();
         } catch (Throwable t) {
             Log.w(TAG, "brokerState", t);
@@ -157,7 +162,7 @@ public final class BrokerBridge {
                 o.put("serverUid", -1);
                 // 只在失败时补一次端口探测：用于区分「没跑」与「在跑但拒绝握手」。
                 o.put("reachable", BrokerClient.probe(App.context()));
-                o.put("error", t.toString());
+                o.put("probeError", t.toString());
             } catch (Throwable ignored) {
             }
         }
