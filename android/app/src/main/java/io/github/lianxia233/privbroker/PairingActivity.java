@@ -53,8 +53,6 @@ public final class PairingActivity extends Activity {
     /** 激活后轮询探测特权代理 abstract socket 的总时长与间隔。 */
     private static final long SERVICE_PROBE_TIMEOUT_MS = 7000L;
     private static final long SERVICE_PROBE_INTERVAL_MS = 400L;
-    /** 结果条里回显启动日志的最大字符数。 */
-    private static final int DIAG_CLIP = 260;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final ExecutorService probeWorker = Executors.newCachedThreadPool();
@@ -457,39 +455,54 @@ public final class PairingActivity extends Activity {
         showResult(getString(R.string.pairing_activating), RESULT_INFO);
         final int finalPort = port;
         final String host = MdnsProbe.get(this).resolvedHost();
+        final long startedAt = System.currentTimeMillis();
         worker.execute(() -> {
             String raw = WirelessRunner.start(PairingActivity.this, finalPort, host);
             // 命令投递后实测代理是否常驻；这是激活成功的唯一判据。
             final boolean up = awaitServiceUp();
-            ui(() -> onActivateResult(raw, up));
+            ui(() -> onActivateResult(raw, up, finalPort, host,
+                    System.currentTimeMillis() - startedAt));
         });
     }
 
-    private void onActivateResult(String raw, boolean serviceUp) {
+    private void onActivateResult(String raw, boolean serviceUp, int port,
+                                  String host, long durationMs) {
         working = false;
         setWorking(false);
         JSONObject j = parse(raw);
+        String code = j.optString("code", "");
+        String stage = j.optString("stage", "");
+        String message = j.optString("message", "");
+        String output = j.optString("output", "").trim();
+        // native 侧已把失败行单独结构化带回；即使启动日志被通道时序截断，
+        // 完整错误原因也不会丢。补进 output 供落库与诊断摘要共用。
+        String failure = j.optString("failureReason", "").trim();
+        if (!failure.isEmpty() && !output.contains(failure)) {
+            output = output.isEmpty() ? failure : output + "\n" + failure;
+        }
+
         if (serviceUp) {
             paired = true;
             emphasizePairEntry(false);
             showResult(getString(R.string.pairing_activate_ok), RESULT_OK);
             applyServiceState(true);
+            ActivationLog.record(this, true, port, host, "",
+                    getString(R.string.pairing_activate_ok), output, durationMs);
             return;
         }
-        String code = j.optString("code", "");
-        String stage = j.optString("stage", "");
-        String message = j.optString("message", "");
-        String output = j.optString("output", "").trim();
-        StringBuilder sb = new StringBuilder(friendlyMessage(code, stage, message));
-        // 回显启动日志：类加载/so 加载/SELinux 失败时给出真实原因，而非笼统失败。
-        if (!output.isEmpty()) {
-            sb.append("\n\n").append(getString(R.string.pairing_diag_title))
-              .append("\n").append(output.length() > DIAG_CLIP
-                    ? output.substring(0, DIAG_CLIP) + "…" : output);
+
+        // 结果条只显示人话结论 + 完整原因 + 过程要点；raw 内部字段不再外泄，
+        // 完整启动日志（含 errno）另行写入「执行日志」，不再被字符截断吃掉。
+        String summary = ActivationLog.summarize(this, output, false);
+        String lead = friendlyMessage(code, stage, message);
+        if (!lead.isEmpty() && !WirelessRunner.STAGE_STARTED.equals(stage)) {
+            summary = lead + "\n" + summary;
         }
-        // 只要没实测到服务在跑，就一律给出可操作的下一步，杜绝「命令已投递」
-        // 被当成成功、以及失败后无从下手两种情况。
+        ActivationLog.record(this, false, port, host, code, summary, output, durationMs);
+
+        StringBuilder sb = new StringBuilder(summary);
         sb.append("\n\n").append(getString(R.string.pairing_activate_failed_hint));
+        sb.append("\n").append(getString(R.string.pairing_diag_view_log));
         showResult(sb.toString(), RESULT_ERR);
         emphasizePairEntry(true);
         applyServiceState(false);
@@ -635,7 +648,8 @@ public final class PairingActivity extends Activity {
             case "BRIDGE":
                 return getString(R.string.pairing_bridge_error) + message;
             default:
-                return (stage.isEmpty() ? "" : stage + ": ") + message;
+                // 不再把 started / pairing 这类内部阶段名原样显示给用户
+                return message;
         }
     }
 

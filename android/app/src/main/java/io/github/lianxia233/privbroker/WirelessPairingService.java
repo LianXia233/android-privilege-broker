@@ -58,6 +58,7 @@ public final class WirelessPairingService extends Service {
     private static final int NOTIFICATION_ID = 42;
     private static final int REQ_REPLY = 1;
     private static final int REQ_STOP = 2;
+    private static final int REQ_LOG = 3;
     private static final long CONNECT_WAIT_MS = 8000L;
     private static final long START_VERIFY_TIMEOUT_MS = 7000L;
     private static final long START_VERIFY_INTERVAL_MS = 400L;
@@ -80,6 +81,7 @@ public final class WirelessPairingService extends Service {
     private volatile boolean awaitingConnect;
     private volatile boolean discovering;
     private volatile Runnable connectTimeout;
+    private volatile long activationStartedAt;
 
     public static Intent startIntent(Context c) {
         return new Intent(c, WirelessPairingService.class).setAction(ACTION_START);
@@ -306,6 +308,7 @@ public final class WirelessPairingService extends Service {
         cancelConnectTimeout();
         awaitingConnect = false;
         working = true;
+        activationStartedAt = System.currentTimeMillis();
         push(workingNotification());
         final String host = resolvedHost;
         new Thread(() -> {
@@ -376,15 +379,27 @@ public final class WirelessPairingService extends Service {
         String code = "";
         String message = "";
         String stage = "";
+        String output = "";
+        String failure = "";
         try {
             JSONObject j = new JSONObject(resultJson);
             ok = j.optBoolean("ok", false);
             code = j.optString("code", "");
             message = j.optString("message", "");
             stage = j.optString("stage", "");
+            output = j.optString("output", "").trim();
+            failure = j.optString("failureReason", "").trim();
         } catch (Throwable ignored) {
             message = "结果解析失败";
         }
+        // native 侧把失败行单独结构化带回，通道时序截断日志时也不丢原因
+        if (!failure.isEmpty() && !output.contains(failure)) {
+            output = output.isEmpty() ? failure : output + "\n" + failure;
+        }
+        final String diag = output;
+        final String resultCode = code;
+        final long durationMs = activationStartedAt > 0
+                ? System.currentTimeMillis() - activationStartedAt : 0L;
         working = false;
 
         if (ok && WirelessRunner.STAGE_PAIRED.equals(stage)) {
@@ -404,17 +419,27 @@ public final class WirelessPairingService extends Service {
                 final boolean up = awaitServiceUp();
                 main.post(() -> {
                     working = false;
+                    final int port = lastConnectPort;
+                    final String host = resolvedHost;
                     if (up) {
                         stopDiscovery();
                         notifyResult(getString(R.string.wireless_success_title),
                                 getString(R.string.wireless_success_text), true);
+                        ActivationLog.record(WirelessPairingService.this, true, port, host, "",
+                                getString(R.string.wireless_success_text), diag, durationMs);
                         cancelConnectTimeout();
                         stopForeground(STOP_FOREGROUND_REMOVE);
                         stopSelf();
                     } else {
                         awaitingConnect = false;
                         cancelConnectTimeout();
-                        push(inputNotification(getString(R.string.wireless_start_not_verified)));
+                        String summary = ActivationLog.summarize(
+                                WirelessPairingService.this, diag, false);
+                        ActivationLog.record(WirelessPairingService.this, false, port, host,
+                                resultCode, summary, diag, durationMs);
+                        // 失败通知仍保留输码入口，但大文本里给出人话诊断与下一步
+                        push(inputNotification(summary + "\n\n"
+                                + getString(R.string.wireless_start_not_verified)));
                     }
                 });
             }, "wireless-verify").start();
@@ -436,7 +461,8 @@ public final class WirelessPairingService extends Service {
             case "KEY":
                 return getString(R.string.wireless_key_error) + message;
             default:
-                return (stage.isEmpty() ? "" : stage + ": ") + message;
+                // 不再把 started 这类内部阶段名原样显示给用户
+                return message;
         }
     }
 
@@ -455,6 +481,8 @@ public final class WirelessPairingService extends Service {
                 .setSmallIcon(R.drawable.ic_action_broker)
                 .setContentTitle(title)
                 .setContentText(text)
+                .setStyle(new Notification.BigTextStyle().bigText(text))
+                .addAction(viewLogAction())
                 .setAutoCancel(autoCancel)
                 .build();
         try {
@@ -510,11 +538,22 @@ public final class WirelessPairingService extends Service {
         return base()
                 .setContentTitle(getString(R.string.wireless_input_title))
                 .setContentText(text)
+                // 诊断摘要往往多行；BigTextStyle 让下拉展开时完整可读，不被单行截断
+                .setStyle(new Notification.BigTextStyle().bigText(text))
                 .addAction(new Notification.Action.Builder(
                         (Icon) null, getString(R.string.wireless_input_code), pi)
                         .addRemoteInput(remoteInput)
                         .build())
+                .addAction(viewLogAction())
                 .build();
+    }
+
+    /** 通知里直达「执行日志」，完整原始启动日志在那里可查。 */
+    private Notification.Action viewLogAction() {
+        Intent logs = new Intent(this, LogActivity.class);
+        PendingIntent pi = PendingIntent.getActivity(this, REQ_LOG, logs, immutableFlags());
+        return new Notification.Action.Builder(
+                (Icon) null, getString(R.string.wireless_notif_view_log), pi).build();
     }
 
     private Notification waitingNotification() {

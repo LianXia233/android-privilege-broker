@@ -79,7 +79,9 @@ pub fn run(startup: StartupConfig) -> i32 {
             }
         };
 
-        eprintln!("监听: {}", endpoint.describe());
+        // 只表示进入绑定阶段，不代表已绑定成功；真正的成功判据是界面实测
+        // abstract socket。此前打印「监听:」容易被误读成已经监听成功。
+        eprintln!("准备监听: {}", endpoint.describe());
         tokio::select! {
             r = broker.serve(endpoint, shutdown) => {
                 if let Err(e) = r { eprintln!("监听失败: {e}"); 4 } else { 0 }

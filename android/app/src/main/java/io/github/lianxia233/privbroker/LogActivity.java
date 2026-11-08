@@ -151,10 +151,16 @@ public final class LogActivity extends Activity {
             }
             JSONObject e = rows.get(position);
             boolean ok = e.optBoolean("ok");
-            boolean uninstall = "uninstall".equals(e.optString("op"));
-            String op = getString(uninstall ? R.string.log_op_uninstall : R.string.log_op_install);
-            String source = "silent".equals(e.optString("source"))
-                    ? getString(R.string.log_source_silent) : getString(R.string.log_source_ui);
+            String opValue = e.optString("op");
+            int opRes = "uninstall".equals(opValue) ? R.string.log_op_uninstall
+                    : ActivationLog.OP_ACTIVATE.equals(opValue) ? R.string.log_op_activate
+                    : R.string.log_op_install;
+            String op = getString(opRes);
+            String src = e.optString("source");
+            int srcRes = "silent".equals(src) ? R.string.log_source_silent
+                    : ActivationLog.SOURCE_WIRELESS.equals(src) ? R.string.log_source_wireless
+                    : R.string.log_source_ui;
+            String source = getString(srcRes);
 
             TextView title = v.findViewById(R.id.itemTitle);
             TextView meta = v.findViewById(R.id.itemMeta);
@@ -183,6 +189,10 @@ public final class LogActivity extends Activity {
             if (!caller.isEmpty() && !"null".equals(caller)) {
                 m.append("  ·  ").append(getString(R.string.log_caller, caller));
             }
+            int port = e.optInt("port", 0);
+            if (port > 0) {
+                m.append("  ·  端口 ").append(port);
+            }
             long ms = e.optLong("durationMs", 0);
             if (ms > 0) {
                 m.append("  ·  ").append(ms).append(" ms");
@@ -200,7 +210,7 @@ public final class LogActivity extends Activity {
                 if (detailText.length() > 0) {
                     detailText.append('\n');
                 }
-                detailText.append(raw.length() > 400 ? raw.substring(0, 400) + "…" : raw);
+                detailText.append(clipDetail(raw));
             }
             if (detailText.length() == 0) {
                 detail.setVisibility(View.GONE);
@@ -217,5 +227,16 @@ public final class LogActivity extends Activity {
             dot.setBackgroundResource(ok ? R.drawable.bg_dot_ok : R.drawable.bg_dot_fail);
             return v;
         }
+    }
+
+    /** 详情过长时保留头尾：启动日志的失败原因在末尾，只截前段会把它吃掉。 */
+    private static String clipDetail(String raw) {
+        final int cap = 1200;
+        if (raw.length() <= cap) {
+            return raw;
+        }
+        int head = cap * 2 / 3;
+        int tail = cap - head;
+        return raw.substring(0, head) + "\n…\n" + raw.substring(raw.length() - tail);
     }
 }
