@@ -30,6 +30,7 @@ public final class ServiceStarter {
         String client = "installer";
         String endpoint = "abstract";
         String lib = "";
+        String apk = "";
         if (args != null) {
             for (String a : args) {
                 if (a == null) {
@@ -43,7 +44,16 @@ public final class ServiceStarter {
                     endpoint = a.substring("--endpoint=".length());
                 } else if (a.startsWith("--lib=")) {
                     lib = a.substring("--lib=".length());
+                } else if (a.startsWith("--apk=")) {
+                    apk = a.substring("--apk=".length());
                 }
+            }
+        }
+        // CLASSPATH 环境变量由启动命令设置，作为 --apk 缺失时的兜底来源。
+        if (apk.isEmpty()) {
+            String cp = System.getenv("CLASSPATH");
+            if (cp != null && !cp.isEmpty()) {
+                apk = cp;
             }
         }
         try {
@@ -51,7 +61,14 @@ public final class ServiceStarter {
             j.put("token", token);
             j.put("client", client);
             j.put("endpoint", endpoint);
-            WirelessCore.ensureLoaded(lib);
+            // native 库加载失败是「服务起不来」最常见的原因，这里必须最先做，
+            // 且失败信息会随启动日志回显到界面结果条，便于定位。
+            try {
+                WirelessCore.ensureLoaded(lib, apk);
+            } catch (Throwable t) {
+                System.err.println("无法加载 native 库，特权代理无法启动: " + t);
+                throw t;
+            }
             WirelessCore.startBroker(j.toString());
         } catch (Throwable t) {
             System.err.println("特权代理启动失败: " + t);

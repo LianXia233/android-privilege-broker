@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.lianxia233.privbroker"
         minSdk = 33
         targetSdk = 36
-        versionCode = 15
-        versionName = "2.1.8"
+        versionCode = 16
+        versionName = "2.1.9"
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
         }
@@ -62,6 +62,21 @@ android {
     sourceSets {
         getByName("main") {
             jniLibs.srcDirs("src/main/jniLibs")
+        }
+    }
+
+    /*
+     * 关键：特权代理由无线调试的 shell 经 app_process 拉起，ServiceStarter 用
+     * System.load(nativeLibraryDir + "/libinstaller_core.so") 绝对路径加载 so。
+     * AGP 默认 extractNativeLibs=false（so 未压缩留在 APK 内、系统不解压），
+     * 此时 nativeLibraryDir 下没有真实文件，绝对路径必然抛 UnsatisfiedLinkError，
+     * 代理进程直接退出 —— 表现为「配对成功但服务始终未运行」。
+     * 置为 true 让安装器把 so 解压到 nativeLibraryDir，绝对路径才可用。
+     * 同时 ServiceStarter 仍保留从 APK 直接加载的回退，覆盖旧安装与特殊 ROM。
+     */
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 

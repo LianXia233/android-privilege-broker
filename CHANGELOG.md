@@ -5,6 +5,33 @@
 
 ---
 
+## v2.1.9
+
+### 修复：native 库未解压导致特权代理进程无法启动（激活链路最后一处根因）
+
+v2.1.8 修好了启动命令的 stdio / 进程组与成功判据，但真机仍可能「配对成功、
+激活后服务依旧未运行」。定位到一个更底层的打包问题：
+
+- **AGP 默认 `extractNativeLibs=false`**：so 以未压缩、对齐方式留在 APK 内，
+  系统直接从 APK 映射，安装后 `nativeLibraryDir` 下**没有真实文件**。而特权代理
+  由无线调试 shell 经 `app_process` 拉起，运行在没有应用 ClassLoader 上下文的
+  shell(2000) 进程里，只能用 `System.load(nativeLibraryDir + "/libinstaller_core.so")`
+  绝对路径加载 —— 该路径必然抛 `UnsatisfiedLinkError`，进程在启动阶段就退出。
+  应用内配对不受影响（应用进程可用 `loadLibrary`），所以症状恰好是
+  「配对成功、服务起不来」。
+- **把 so 解压为真实文件**：`packaging.jniLibs.useLegacyPackaging = true` 令 AGP
+  产出 `android:extractNativeLibs="true"`，安装器把 so 解压到 `nativeLibraryDir`，
+  绝对路径加载恢复可用。
+- **shell 侧多路径加载 + 可诊断日志**：`WirelessCore.ensureLoaded(nativeLibDir, apk)`
+  依次尝试解压后的绝对路径、各 ABI 的 APK 内路径、`loadLibrary` 兜底，每次失败都
+  打到 stderr；`ServiceStarter` 从 `--apk=` / `CLASSPATH` 取 APK 路径，并在加载失败
+  时明确打印原因。启动日志会回显到界面结果条，个别 ROM 安装行为异常时也能看到
+  真实原因，而不是只剩一个无从诊断的「激活失败」。
+
+版本 2.1.9 / versionCode 16。
+
+---
+
 ## v2.1.8
 
 ### 修复：激活失败 / 提示成功但「特权代理服务未运行」
