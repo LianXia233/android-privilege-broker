@@ -13,6 +13,17 @@ use sha2::{Digest, Sha256};
 /// 证明计算所用的域分隔前缀，避免与其它哈希用途混淆。
 const PROOF_DOMAIN: &[u8] = b"privilege-broker/v2/challenge-proof";
 
+/// 挑战随机数的上界：53 位。
+///
+/// 原因：nonce 以 JSON 整数在链路上往返，而 JSON 数字在客户端（Android
+/// org.json 的 JSONTokener）会被解析成 long 或 double —— 可精确表示的整数
+/// 区间只到 2^53（double 尾数位）。超过该上限时，客户端拿到的值不再等于
+/// 服务端登记的值（精度丢失或饱和成 Long.MAX_VALUE），后续用这个值计算
+/// 证明并按值精确匹配槽位必然落空，表现为「Hello 通过、Proof 被判
+/// UNAUTHENTICATED」。把 nonce 限制在 53 位以内，双端数值才完全一致。
+/// 2^53 的空间配合 30s 重放窗口，碰撞概率可以忽略。
+const NONCE_MAX: u64 = (1u64 << 53) - 1;
+
 /// 计算挑战证明。返回小写 hex 的 SHA-256 摘要。
 pub fn compute_proof(token: &str, server_nonce: u64, client_id: &str, issued_at_ms: u64) -> String {
     let mut h = Sha256::new();
@@ -133,7 +144,8 @@ impl ChallengeTable {
 /// 生成一次性随机数的确定性混合器。
 ///
 /// 服务端进程本身不依赖系统随机源的可得性：以启动种子、单调计数与墙钟时间
-/// 混合出 64 位 nonce，保证同一进程内不重复、不同进程间也不同。
+/// 混合出随机数，保证同一进程内不重复、不同进程间也不同。输出截断到
+/// [`NONCE_MAX`]（53 位），使客户端用 JSON 数字解析后仍能得到同一个值。
 pub struct NonceGenerator {
     seed: u64,
     counter: u64,
@@ -151,7 +163,7 @@ impl NonceGenerator {
         h.update(self.counter.to_be_bytes());
         h.update(now_ms.to_be_bytes());
         let d = h.finalize();
-        u64::from_be_bytes([d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]])
+        u64::from_be_bytes([d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]]) & NONCE_MAX
     }
 }
 
@@ -169,6 +181,20 @@ mod tests {
         assert_ne!(a, compute_proof("token", 9, "client-b", 1000));
         assert_ne!(a, compute_proof("token", 9, "client-a", 1001));
         assert_eq!(a.len(), 64);
+    }
+
+    #[test]
+    fn nonces_fit_json_safe_range() {
+        // 下发的 nonce 必须落在 double/JSON 能精确表示的整数区间内，
+        // 否则客户端解析后与服务端登记值不一致，握手必然失败。
+        let mut g = NonceGenerator::new(0x9E37_79B9_7F4A_7C15);
+        let mut seen = std::collections::HashSet::new();
+        for i in 0..64u64 {
+            let n = g.next(1_700_000_000_000 + i);
+            assert!(n <= NONCE_MAX, "nonce 超出 53 位：{n}");
+            assert!(n < (1u64 << 53));
+            assert!(seen.insert(n), "同一进程内出现重复 nonce：{n}");
+        }
     }
 
     #[test]
