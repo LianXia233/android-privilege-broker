@@ -129,7 +129,14 @@ public final class BrokerBridge {
 
     // ------------------------------------------------------------ 特权代理状态
 
-    /** 探测自主特权代理的连接与握手状态，字段沿用 Rust 侧契约。 */
+    /**
+     * 探测自主特权代理的连接与握手状态，字段沿用 Rust 侧契约。
+     *
+     * <p>失败时必须区分两种形态：端点根本连不上（代理没跑）与端点可连但
+     * 握手被拒（代理在跑但令牌不一致）。后者如果也只报 {@code available=false}，
+     * Rust 侧会统一按「服务未运行」给出诊断与降级文案，用户照着提示重启
+     * 服务也修不好。因此额外上报 {@code reachable} 与 {@code error}。</p>
+     */
     private static JSONObject brokerState() {
         JSONObject o = new JSONObject();
         try {
@@ -138,6 +145,8 @@ public final class BrokerBridge {
             o.put("permission", 1);
             o.put("serverVersion", client.protocolVersion());
             o.put("serverUid", client.serverUid());
+            o.put("reachable", true);
+            o.put("error", "");
             client.close();
         } catch (Throwable t) {
             Log.w(TAG, "brokerState", t);
@@ -146,6 +155,9 @@ public final class BrokerBridge {
                 o.put("permission", -1);
                 o.put("serverVersion", 0);
                 o.put("serverUid", -1);
+                // 只在失败时补一次端口探测：用于区分「没跑」与「在跑但拒绝握手」。
+                o.put("reachable", BrokerClient.probe(App.context()));
+                o.put("error", t.toString());
             } catch (Throwable ignored) {
             }
         }

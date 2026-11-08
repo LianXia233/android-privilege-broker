@@ -208,6 +208,26 @@ final class BrokerClient {
         }
     }
 
+    /**
+     * 端点可连且握手成功才算「真的可用」。
+     *
+     * <p>只探测端口会漏掉「进程在监听但拒绝当前令牌」的陈旧实例：此时
+     * 恢复流程会误判已恢复，重试仍然是同一个 UNAUTHENTICATED。
+     * 判定用完整握手，代价是每次多一次短连接，只在恢复/诊断路径使用。</p>
+     */
+    static boolean handshake(Context c) {
+        try {
+            BrokerClient client = connect(c);
+            try {
+                return client.serverUid() > 0;
+            } finally {
+                client.close();
+            }
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     // ------------------------------------------------------------ 连接与握手
 
     /**

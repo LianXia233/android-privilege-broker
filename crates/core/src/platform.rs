@@ -104,6 +104,8 @@ pub fn broker_state(b: &dyn PlatformBridge) -> Result<BrokerStateRaw> {
         permission: v.get("permission").and_then(Value::as_i64).unwrap_or(-1) as i32,
         server_version: v.get("serverVersion").and_then(Value::as_i64).unwrap_or(0) as i32,
         server_uid: v.get("serverUid").and_then(Value::as_i64).unwrap_or(-1) as i32,
+        reachable: v.get("reachable").and_then(Value::as_bool).unwrap_or(false),
+        error: field_str(&v, "error").to_string(),
     })
 }
 

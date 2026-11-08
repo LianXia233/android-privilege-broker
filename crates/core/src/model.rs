@@ -14,12 +14,20 @@ pub struct BrokerStateRaw {
     pub server_version: i32,
     /// 服务端实测 uid（ADB Shell 应为 2000），未知为 -1。
     pub server_uid: i32,
+    /// 端点是否可连（只反映端口/套接字在监听，不代表握手通过）。
+    #[serde(default)]
+    pub reachable: bool,
+    /// 不可用时平台侧给出的原因（握手被拒时会带 REJECTED 代码）。
+    #[serde(default)]
+    pub error: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum BrokerStatus {
     Unavailable,
+    /// 端点可连但握手被拒：代理在运行，令牌与应用不一致。
+    HandshakeRejected,
     NeedPermission,
     Denied,
     Authorized,
@@ -29,6 +37,7 @@ impl BrokerStatus {
     pub fn as_str(self) -> &'static str {
         match self {
             BrokerStatus::Unavailable => "UNAVAILABLE",
+            BrokerStatus::HandshakeRejected => "HANDSHAKE_REJECTED",
             BrokerStatus::NeedPermission => "NEED_PERMISSION",
             BrokerStatus::Denied => "DENIED",
             BrokerStatus::Authorized => "AUTHORIZED",

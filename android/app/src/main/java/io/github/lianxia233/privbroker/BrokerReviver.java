@@ -18,15 +18,22 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>恢复步骤（全部后台、限时）：
  * <ol>
- *   <li>先实测端点（可能只是状态过期）——已连通直接成功；</li>
+ *   <li>先实测端点并完成一次握手——已可用直接成功；</li>
  *   <li>mDNS 发现 {@code _adb-tls-connect._tcp} 拿当前连接端口
  *       （无线调试每次开关端口都会变，不能用旧值）；</li>
  *   <li>复用激活通道 {@link WirelessRunner#start} 投递启动命令
  *       （内部含单实例清理与防幻影进程设置）；</li>
- *   <li>轮询 {@link BrokerClient#probe} 确认端点恢复监听。</li>
+ *   <li>轮询 {@link BrokerClient#handshake} 确认端点可握手（不是只看端口）。</li>
  * </ol>
  * 任一步失败立即返回原因，调用方决定降级提示。无线调试已关闭时第 2 步
  * 必然超时，这是最常见的失败形态，文案直接引导用户回激活页。</p>
+ *
+ * <p>为什么不能只用端口连通来判断：端口在监听不代表当前应用能通过鉴权。
+ * 代理进程以旧令牌启动（应用数据被清理、覆盖安装、旧版本实例残留）时，
+ * 端点一直可连，但每次握手都会 REJECTED UNAUTHENTICATED；此时若把「端口
+ * 可连」当成已恢复，重试只会原样再失败一次，最终还给出「服务未运行」的
+ * 错误诊断。本类改为以握手结果为准，并在重启后仍失败时给出令牌不一致的
+ * 可执行指引。</p>
  */
 final class BrokerReviver {
 
@@ -41,12 +48,14 @@ final class BrokerReviver {
     }
 
     /**
-     * 尝试自动恢复特权代理。返回 {@code null} 表示端点已恢复监听；
+     * 尝试自动恢复特权代理。返回 {@code null} 表示端点已恢复监听且握手通过；
      * 否则返回面向用户的原因（供执行日志与失败通知使用）。
      * 阻塞式，耗时上限约 MDNS_WAIT_MS + PROBE_TIMEOUT_MS，只可在后台线程调用。
      */
     static String revive(Context c) {
-        if (BrokerClient.probe(c)) {
+        // 端口在监听但握手被拒（典型是代理实例持有旧令牌）时，不能算已恢复，
+        // 必须走重启流程；启动命令内部会先清理旧实例再以当前令牌拉起。
+        if (BrokerClient.handshake(c)) {
             return null;
         }
         int port = discoverConnectPort(c);
@@ -56,14 +65,14 @@ final class BrokerReviver {
         }
         String host = MdnsProbe.get(c).resolvedHost();
         try {
-            // 只投递启动命令；是否真的恢复以 probe 实测为准，不信任通道返回值。
+            // 只投递启动命令；是否真的恢复以握手实测为准，不信任通道返回值。
             WirelessRunner.start(c, port, host);
         } catch (Throwable t) {
             return "自动恢复命令投递失败：" + t;
         }
         long deadline = System.currentTimeMillis() + PROBE_TIMEOUT_MS;
         while (System.currentTimeMillis() < deadline) {
-            if (BrokerClient.probe(c)) {
+            if (BrokerClient.handshake(c)) {
                 return null;
             }
             try {
@@ -73,8 +82,15 @@ final class BrokerReviver {
                 break;
             }
         }
-        return BrokerClient.probe(c) ? null
-                : "恢复命令已投递但端点未恢复监听，请回应用「激活服务」查看启动日志。";
+        if (BrokerClient.handshake(c)) {
+            return null;
+        }
+        if (BrokerClient.probe(c)) {
+            return "特权代理仍在运行但拒绝握手（代理令牌与应用不一致）。"
+                    + "请回应用首页点「查看启用步骤」重新激活，让代理以当前令牌重启；"
+                    + "若仍失败，可重启手机后再试。";
+        }
+        return "恢复命令已投递但端点未恢复监听，请回应用「激活服务」查看启动日志。";
     }
 
     /**
