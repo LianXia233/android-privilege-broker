@@ -162,14 +162,6 @@ final class StagedFiles {
         tmpPrefs(c).edit().putStringSet(KEY_TMP_DIRS, dirs).apply();
     }
 
-    static synchronized void forgetTmpDir(Context c, String dir) {
-        LinkedHashSet<String> dirs = new LinkedHashSet<>(
-                tmpPrefs(c).getStringSet(KEY_TMP_DIRS, Collections.<String>emptySet()));
-        if (dirs.remove(dir)) {
-            tmpPrefs(c).edit().putStringSet(KEY_TMP_DIRS, dirs).apply();
-        }
-    }
-
     /** 取出待清理的中转目录并清空记录；调用方负责按返回值逐个删除。 */
     static synchronized List<String> takeTmpDirs(Context c) {
         List<String> out = new ArrayList<>(
