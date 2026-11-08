@@ -124,7 +124,7 @@ public final class MainActivity extends Activity {
     private void refreshStatus() {
         runAsync("status", "{}", r -> {
             if (!r.optBoolean("ok")) {
-                showError(r);
+                showStatusFailure(r);
                 return;
             }
             JSONObject d = r.optJSONObject("data");
@@ -147,6 +147,24 @@ public final class MainActivity extends Activity {
                 applyConfigToUi(cfg);
             }
         });
+    }
+
+    /**
+     * 状态查询失败必须收敛到一个可读终态。
+     *
+     * <p>此前失败分支只往 logcat 写一行就返回，标题、提示与徽章仍停留在布局
+     * 里的初始文案「正在检查…」，界面看起来像永远卡在检查中，用户既不知道
+     * 发生了什么也没有下一步可做。这里把失败落成明确状态：徽章转「需要处理」，
+     * 标题说明无法确认代理状态，提示里带上具体原因，并把激活按钮保持可用。</p>
+     */
+    private void showStatusFailure(JSONObject r) {
+        showError(r);
+        currentState = "UNKNOWN";
+        applyStatusBadge(currentState);
+        tvStatusTitle.setText(getString(R.string.status_unknown_title));
+        tvStatusHint.setText(getString(R.string.status_unknown_hint, errorText(r)));
+        btnPermission.setText(getString(R.string.btn_request));
+        btnPermission.setEnabled(true);
     }
 
     private void applyStatusBadge(String state) {

@@ -16,6 +16,8 @@
 
     <string name="status_title">特权代理状态</string>
     <string name="status_checking">正在检查…</string>
+    <string name="status_unknown_title">无法确认特权代理状态</string>
+    <string name="status_unknown_hint">状态查询失败：%1$s。请点「刷新状态」重试；若仍失败，按下方按钮重新激活，或重启手机后再试。</string>
     <string name="status_badge_ready">已就绪</string>
     <string name="status_badge_attention">需要处理</string>
     <string name="btn_check">刷新状态</string>
