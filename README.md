@@ -10,7 +10,7 @@
 | 架构 | 业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate），无线调试链路在 `broker-wireless` |
 | 产物 | 四 ABI（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、16KB 页对齐、v2 签名 |
 | 许可 | **GNU GPL-3.0-only**，见 `LICENSE` |
-| 版本 | **2.1.0**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
+| 版本 | **2.1.14**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
 
 ## 1. 功能
 
@@ -26,7 +26,7 @@
 | F-08 | **无遮罩后台指示**：左上角科幻风旋转指示器，点击穿透、不染黑系统栏 | `FloatingIndicator`, `SciFiSpinner` |
 | F-09 | **失败降级（默认不打断）**：只发一条可点击通知，点通知才进系统安装器 | `SilentTask`, `Notifier` |
 | F-10 | **中文展示**：通知、日志、错误原因显示应用实际名称与中文说明 | `AppNames`, `apk_meta.rs`, `logbook.rs` |
-| F-11 | **写入兜底**：stdin 流式写入失败时自动改用文件路径写入 | `install.rs`, `plan.rs`, `BrokerBridge` |
+| F-11 | **写入兜底**：stdin 流式写入失败时自动改用文件路径写入；中转文件由特权代理落到 `/data/local/tmp`（system_server 可读，避开 FUSE 域） | `install.rs`, `plan.rs`, `BrokerBridge`, `StagedFiles` |
 | F-12 | **成功后删除安装包**：删除调用方原文件，读写权限不足时经代理以 shell 兜底并写日志 | `SilentTask`, `BrokerBridge` |
 | F-13 | **关于页**：简介、可点击仓库地址、开发者、开源许可 | `AboutActivity` |
 
@@ -155,6 +155,15 @@ shell 身份的特权进程里启动。
   所有策略判断在 Rust。包名经 `is_valid_package_name` 校验，避免命令注入。
 - 特权进程侧不接受 `Uri` / `ArchiveEntry` 形式的 stdin：客户端须先把内容落到绝对路径文件，
   再以 `StdinSpec::Path` 传入，避免把 Android 权限模型带进独立进程。
+- 文件路径兜底的中转落点：外部缓存属于 FUSE 域（`u:object_r:fuse:s0`），shell(2000) 可读，
+  但 `pm install-write <path>` 由 **system_server** 打开文件，会被 SELinux 拒绝（`avc: denied
+  { read } ... tclass=file`，`pm` exit 255）。因此兜底时应用只把字节写到外部缓存，再由特权
+  代理以 shell 身份复制到 `/data/local/tmp/prvbrk-stage/<随机目录>`：目录 `0711`、文件
+  `0644`，system_server 可按路径读取，其它应用无法枚举目录；安装结束或失败立即整目录删除，
+  目录按次隔离，失败当场回滚，不会误删并发的中间产物。
+- 握手鉴权允许同一客户端并发：挑战表按 `(client_id, nonce)` 多槽保存并按 nonce 精确消费，
+  客户端令牌只允许单写入者生成。状态轮询、安装各步骤、焦点快照各自新建连接时，后到的
+  握手不会作废先到的挑战。
 
 ### 日志与失败处理
 
@@ -164,6 +173,9 @@ shell 身份的特权进程里启动。
 - 准备阶段失败、授权被拒由入口通过 `logRecord` 补记；日志写入是旁路，不影响安装结果。
 - 通知标题显示应用实际名称（已安装应用名 > APK 内 `application@label` > 文件名），
   失败原因显示中文说明并保留原始错误码；日志同样以中文名作为标题。
+- 代理链路失败区分「进程没运行」与「进程在跑但拒绝握手」：后者单独给出 `HANDSHAKE_REJECTED`
+  状态与「重新激活（无需重新配对）」的指引，不再误报「服务未运行」；自动恢复以完整握手
+  （而非端口监听）判定是否真的恢复，恢复成功后重试本次操作一次。
 - 主界面不再展示「本次执行日志」，完整记录由独立的「安装日志」页承担。
 
 ## 5. 应用内启用特权代理（无需电脑）

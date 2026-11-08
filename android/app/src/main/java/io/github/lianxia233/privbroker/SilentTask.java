@@ -141,7 +141,7 @@ final class SilentTask implements Runnable {
                     .put("uris", new JSONArray(uris))
                     .put("options", opts);
             JSONObject r = call("prepareInstall", prepare.toString());
-            if (!r.optBoolean("ok") && isBrokerNotReady(r) && reviveBroker()) {
+            if (!r.optBoolean("ok") && isBrokerLinkFailure(r) && reviveBroker()) {
                 // 特权代理被系统回收（HyperOS 清理/幻影进程等）：自动重拉后重试，
                 // 用户无需感知，更不用重新输码。
                 r = call("prepareInstall", prepare.toString());
@@ -171,7 +171,7 @@ final class SilentTask implements Runnable {
                     .put("options", opts)
                     .put("context", context());
             JSONObject cr = call("commitInstall", commit.toString());
-            if (!cr.optBoolean("ok") && isBrokerNotReady(cr) && reviveBroker()) {
+            if (!cr.optBoolean("ok") && isBrokerLinkFailure(cr) && reviveBroker()) {
                 cr = call("commitInstall", commit.toString());
             }
             if (!cr.optBoolean("ok")) {
@@ -203,6 +203,9 @@ final class SilentTask implements Runnable {
         }
         String installed = AppNames.labelForPackage(app, pkg);
         label = installed == null ? pkg : installed;
+        // 卸载不可重放：先记下发起前的状态，失败后用它区分「命令没执行」与
+        // 「命令执行了但结果没回来」。
+        boolean wasInstalled = AppNames.isInstalled(app, pkg);
         Notifier.start(app, label, true);
         attachProgress();
         try {
@@ -211,8 +214,17 @@ final class SilentTask implements Runnable {
                     .put("options", new JSONObject().put("keepData", false))
                     .put("context", context());
             JSONObject r = call("uninstall", a.toString());
-            if (!r.optBoolean("ok") && isBrokerNotReady(r) && reviveBroker()) {
-                r = call("uninstall", a.toString());
+            if (!r.optBoolean("ok") && isBrokerLinkFailure(r)) {
+                // 链路类失败有两种可能：命令还没执行，或命令执行完但结果没回来。
+                // 后者若照样重试，第二次会对已卸载的包报「未安装」，把成功掩盖成失败。
+                if (wasInstalled && !AppNames.isInstalled(app, pkg)) {
+                    record("UNINSTALL_CONFIRMED", "代理未回传结果，但目标包已不在安装状态，按已完成处理");
+                    Notifier.finish(app, label, true, true, "", "");
+                    return;
+                }
+                if (reviveBroker()) {
+                    r = call("uninstall", a.toString());
+                }
             }
             if (!r.optBoolean("ok")) {
                 finishFailure(AppNames.errorText(app, errorCodeOf(r), errorText(r)));
@@ -255,7 +267,14 @@ final class SilentTask implements Runnable {
                 // 过去这里无条件 app.startActivity(i)，会弹出一个可聚焦窗口，
                 // 染黑状态栏/导航栏、吞掉触摸且不按返回不消失 —— 这正是
                 // 实机反馈「屏幕卡住、需要按返回」的持续窗口源。
-                Notifier.fallback(app, label, zh, i);
+                // 交互语义保持不变（不主动拉界面），只把后续动作写清楚：
+                // 为什么降级、点通知做什么、代理异常时回哪里修。
+                String guide = autoOpen
+                        ? "\n已按设置自动打开系统安装器，可直接继续安装；若窗口未出现，"
+                                + "请回应用首页点「查看启用步骤」检查特权代理状态。"
+                        : "\n点击此通知可改用系统安装器完成本次安装；若提示特权代理仍未就绪，"
+                                + "请回应用首页点「查看启用步骤」重新激活后重试。";
+                Notifier.fallback(app, label, zh + guide, i);
                 recordFallback(autoOpen);
                 if (autoOpen) {
                     try {
@@ -278,8 +297,9 @@ final class SilentTask implements Runnable {
                     .put("ok", false)
                     .put("code", "FALLBACK")
                     .put("detail", opened
-                            ? "已自动打开系统安装器（设置中开启）"
-                            : "仅通知，未自动拉起任何界面；点击通知可改用系统安装器");
+                            ? "已自动打开系统安装器（设置中开启）；窗口未出现时回应用点「查看启用步骤」检查代理"
+                            : "仅通知，未自动拉起任何界面；点击通知可改用系统安装器，"
+                                    + "代理异常时回应用点「查看启用步骤」重新激活后重试");
             if (caller != null && !caller.isEmpty()) {
                 e.put("caller", caller);
             }
@@ -488,11 +508,33 @@ final class SilentTask implements Runnable {
     }
 
     /**
+     * 是否为可自愈的代理链路失败。
+     *
+     * <p>除了「代理确实没跑」，还包括端点可连但握手/会话被拒的情况：
+     * 令牌不一致、挑战失效、连接在写包途中被断开。这些失败同样只需要
+     * 重新拉起代理（或换一条新连接）就能恢复，不应直接降级。</p>
+     */
+    private boolean isBrokerLinkFailure(JSONObject r) {
+        if (isBrokerNotReady(r)) {
+            return true;
+        }
+        String kind = errorCodeOf(r);
+        if (!"BRIDGE".equals(kind) && !"WRITE".equals(kind) && !"SESSION".equals(kind)) {
+            return false;
+        }
+        String msg = errorText(r);
+        return msg.contains("无法连接特权代理") || msg.contains("握手失败")
+                || msg.contains("连接已关闭") || msg.contains("Broken pipe")
+                || msg.contains("UNAUTHENTICATED") || msg.contains("SESSION_EXPIRED")
+                || msg.contains("REPLAY_DETECTED");
+    }
+
+    /**
      * 自动重拉特权代理并写日志。阻塞（最长约 20 秒），仅限 SilentTask
      * 的后台线程调用；恢复期间通知保持「进行中」，失败才发失败通知。
      */
     private boolean reviveBroker() {
-        record("REVIVE", "特权代理未运行，正在自动重新拉起（无需重新配对）");
+        record("REVIVE", "特权代理链路不可用（未运行或握手被拒），正在自动重新拉起（无需重新配对）");
         String err = BrokerReviver.revive(app);
         if (err == null) {
             record("REVIVED", "自动恢复成功，重试本次操作");

@@ -526,6 +526,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn concurrent_handshakes_from_same_client_do_not_collide() {
+        // 应用侧 status / exec / 焦点快照都是独立连接、独立握手，同一客户端
+        // 标识下可能同时存在两个握手。B 的 Hello 先到达时不能顶掉 A 的挑战，
+        // 否则 A 的证明会被拒成 UNAUTHENTICATED（现场「写入安装会话失败」）。
+        let b = broker();
+        let hello_a = msg(1, 0, 1, 3_500, Body::Hello { token: TOKEN.into(), advertised_version: PROTOCOL_VERSION });
+        let frames = b.handle(hello_a, 3_500).await;
+        let nonce_a = match &frames[0].body {
+            Body::Challenge { server_nonce } => *server_nonce,
+            _ => panic!("应为 Challenge"),
+        };
+
+        let hello_b = msg(2, 0, 2, 3_505, Body::Hello { token: TOKEN.into(), advertised_version: PROTOCOL_VERSION });
+        let frames = b.handle(hello_b, 3_505).await;
+        let nonce_b = match &frames[0].body {
+            Body::Challenge { server_nonce } => *server_nonce,
+            _ => panic!("应为 Challenge"),
+        };
+        assert_ne!(nonce_a, nonce_b);
+
+        let proof_a = compute_proof(TOKEN, nonce_a, "installer", 3_510);
+        let cp_a = msg(3, 0, 3, 3_510, Body::ChallengeProof { server_nonce: nonce_a, proof: proof_a });
+        match &b.handle(cp_a, 3_511).await[0].body {
+            Body::AuthAck { granted, .. } => assert!(*granted, "并发 Hello 不应使先到的挑战失效"),
+            other => panic!("应为 AuthAck: {other:?}"),
+        }
+
+        let proof_b = compute_proof(TOKEN, nonce_b, "installer", 3_520);
+        let cp_b = msg(4, 0, 4, 3_520, Body::ChallengeProof { server_nonce: nonce_b, proof: proof_b });
+        match &b.handle(cp_b, 3_521).await[0].body {
+            Body::AuthAck { granted, .. } => assert!(*granted),
+            other => panic!("应为 AuthAck: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn cross_client_session_borrow_is_denied() {
         let b = broker();
         let (sid, _) = handshake(&b, 4_000).await;

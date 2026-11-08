@@ -104,6 +104,8 @@ pub fn broker_state(b: &dyn PlatformBridge) -> Result<BrokerStateRaw> {
         permission: v.get("permission").and_then(Value::as_i64).unwrap_or(-1) as i32,
         server_version: v.get("serverVersion").and_then(Value::as_i64).unwrap_or(0) as i32,
         server_uid: v.get("serverUid").and_then(Value::as_i64).unwrap_or(-1) as i32,
+        reachable: v.get("reachable").and_then(Value::as_bool).unwrap_or(false),
+        error: field_str(&v, "error").to_string(),
     })
 }
 
@@ -164,8 +166,10 @@ pub fn caller_label(b: &dyn PlatformBridge, caller: &str) -> Result<String> {
     Ok(field_str(&v, "label").to_string())
 }
 
-/// stdin 流式写入失败时的兜底：把该 split 复制到 shell 可读的目录，
-/// 返回绝对路径，供 `pm install-write <session> <name> <path>` 使用。
+/// stdin 流式写入失败时的兜底：把该 split 中转成 system_server 可读的路径
+/// （/data/local/tmp 下按次隔离的目录，由特权代理以 shell 身份复制，
+/// 避开 FUSE 域的读权限限制），返回绝对路径，
+/// 供 `pm install-write <session> <name> <path>` 使用。
 pub fn stage_for_shell(
     b: &dyn PlatformBridge,
     stdin: &StdinSource,
