@@ -11,6 +11,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
  * 不创建 Activity、不启动任何界面；未授予通知权限时降级为短暂文本提示。
  */
 final class Notifier {
+    private static final String TAG = "Notifier";
     static final String CH_PROGRESS = "silent_progress";
     static final String CH_RESULT = "install_result";
     static final String CH_AUTH_HEADS_UP = "auth_heads_up";
@@ -333,9 +335,16 @@ final class Notifier {
                 .setOnlyAlertOnce(true)
                 .setVisibility(Notification.VISIBILITY_PUBLIC);
         if (installIntent != null) {
-            PendingIntent pi = PendingIntent.getActivity(c, 31, installIntent,
-                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-            b.setContentIntent(pi);
+            try {
+                PendingIntent pi = PendingIntent.getActivity(c, 31, installIntent,
+                        PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                b.setContentIntent(pi);
+            } catch (Throwable t) {
+                // 通知本身必须发出去：跳转意图不合法（例如混进 file:// 触发
+                // FileUriExposedException）时只降级成「没有点击动作的通知」。
+                // 这条路径上抛异常会直接把进程崩掉，失败提示反而看不见。
+                Log.w(TAG, "降级通知的跳转意图无效，改为发送不含动作的通知", t);
+            }
         }
         post(c, b);
     }

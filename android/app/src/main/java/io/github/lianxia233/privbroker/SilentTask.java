@@ -260,34 +260,49 @@ final class SilentTask implements Runnable {
 
     private void finishFailure(String zh) {
         Notifier.finish(app, label, uninstall, false, zh, "");
-        if (!uninstall && fallback && uris != null && !uris.isEmpty()) {
-            Intent i = buildSystemInstallIntent(uris.get(0));
-            if (i != null) {
-                // 默认只发一条可点击的通知：用户点通知才进入系统安装器。
-                // 过去这里无条件 app.startActivity(i)，会弹出一个可聚焦窗口，
-                // 染黑状态栏/导航栏、吞掉触摸且不按返回不消失 —— 这正是
-                // 实机反馈「屏幕卡住、需要按返回」的持续窗口源。
-                // 交互语义保持不变（不主动拉界面），只把后续动作写清楚：
-                // 为什么降级、点通知做什么、代理异常时回哪里修。
-                String guide = autoOpen
-                        ? "\n已按设置自动打开系统安装器，可直接继续安装；若窗口未出现，"
-                                + "请回应用首页点「查看启用步骤」检查特权代理状态。"
-                        : "\n点击此通知可改用系统安装器完成本次安装；若提示特权代理仍未就绪，"
-                                + "请回应用首页点「查看启用步骤」重新激活后重试。";
-                Notifier.fallback(app, label, zh + guide, i);
-                recordFallback(autoOpen);
-                if (autoOpen) {
-                    try {
-                        app.startActivity(i);
-                    } catch (Throwable ignored) {
-                    }
-                }
+        if (uninstall || !fallback || uris == null || uris.isEmpty()) {
+            return;
+        }
+        Intent i = buildSystemInstallIntent(uris.get(0));
+        if (i == null) {
+            // 拿不到可以交给系统安装器的 content://：安装包根本没读进来
+            // （例如调用方给的是别的应用目录下的 file://），使命中安装器也
+            // 无济于事。仍然发一条失败通知，只是不带「点击改用系统安装器」
+            // 这个做不到的入口，改成告诉用户怎么重来。
+            Notifier.fallback(app, label, zh
+                    + "\n未能读取到安装包内容，无法改用系统安装器；"
+                    + "请回应用首页点「选择安装包并安装」重新选择该文件。", null);
+            recordFallback(false, false);
+            return;
+        }
+        // 默认只发一条可点击的通知：用户点通知才进入系统安装器。
+        // 过去这里无条件 app.startActivity(i)，会弹出一个可聚焦窗口，
+        // 染黑状态栏/导航栏、吞掉触摸且不按返回不消失 —— 这正是
+        // 实机反馈「屏幕卡住、需要按返回」的持续窗口源。
+        // 交互语义保持不变（不主动拉界面），只把后续动作写清楚：
+        // 为什么降级、点通知做什么、代理异常时回哪里修。
+        String guide = autoOpen
+                ? "\n已按设置自动打开系统安装器，可直接继续安装；若窗口未出现，"
+                        + "请回应用首页点「查看启用步骤」检查特权代理状态。"
+                : "\n点击此通知可改用系统安装器完成本次安装；若提示特权代理仍未就绪，"
+                        + "请回应用首页点「查看启用步骤」重新激活后重试。";
+        Notifier.fallback(app, label, zh + guide, i);
+        recordFallback(autoOpen, true);
+        if (autoOpen) {
+            try {
+                app.startActivity(i);
+            } catch (Throwable ignored) {
             }
         }
     }
 
-    /** 把降级方式写入日志，便于实机定位「到底是哪个窗口弹出来了」。 */
-    private void recordFallback(boolean opened) {
+    /**
+     * 把降级方式写入日志，便于实机定位「到底是哪个窗口弹出来了」。
+     *
+     * @param opened       是否已自动拉起系统安装器（设置中开启）
+     * @param canHandOver  通知上是否真的挂了「改用系统安装器」的点击入口
+     */
+    private void recordFallback(boolean opened, boolean canHandOver) {
         try {
             JSONObject e = new JSONObject()
                     .put("op", "install")
@@ -296,10 +311,12 @@ final class SilentTask implements Runnable {
                     .put("source", "silent")
                     .put("ok", false)
                     .put("code", "FALLBACK")
-                    .put("detail", opened
-                            ? "已自动打开系统安装器（设置中开启）；窗口未出现时回应用点「查看启用步骤」检查代理"
-                            : "仅通知，未自动拉起任何界面；点击通知可改用系统安装器，"
-                                    + "代理异常时回应用点「查看启用步骤」重新激活后重试");
+                    .put("detail", !canHandOver
+                            ? "仅通知，未自动拉起任何界面；安装包未能读取，无法改用系统安装器，需重新选择文件"
+                            : opened
+                                    ? "已自动打开系统安装器（设置中开启）；窗口未出现时回应用点「查看启用步骤」检查代理"
+                                    : "仅通知，未自动拉起任何界面；点击通知可改用系统安装器，"
+                                            + "代理异常时回应用点「查看启用步骤」重新激活后重试");
             if (caller != null && !caller.isEmpty()) {
                 e.put("caller", caller);
             }
@@ -316,6 +333,14 @@ final class SilentTask implements Runnable {
     private Intent buildSystemInstallIntent(String uriString) {
         try {
             Uri u = Uri.parse(uriString);
+            // 只有自家 StagedProvider 的 content:// 能连同读授权一起交给别的应用。
+            // file://（调用方直接给了路径、且暂存复制失败时 StagedFiles 会把原始
+            // URI 原样带回）一旦进入交给外部的 Intent，framework 会抛
+            // FileUriExposedException —— 通知的 PendingIntent 由系统代发，这个异常
+            // 在 Notifier 里才抛出，直接把进程崩掉，失败降级反而变成崩溃。
+            if (!"content".equals(u.getScheme())) {
+                return null;
+            }
             PackageManager pm = app.getPackageManager();
             String self = app.getPackageName();
             Intent base = new Intent(Intent.ACTION_INSTALL_PACKAGE);

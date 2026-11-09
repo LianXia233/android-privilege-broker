@@ -2,8 +2,6 @@ package io.github.lianxia233.privbroker;
 
 import android.content.Context;
 
-import org.json.JSONObject;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,7 +31,11 @@ final class TaskLauncher {
     static void launch(Context c, boolean uninstall, List<String> uris, List<String> sources,
                        String uninstallPkg, String caller, String label) {
         Context app = c.getApplicationContext();
-        FloatingIndicator.show(app, floatingEnabled());
+        // 指示器不在这里显示：本方法由入口 Activity 的主线程调用，读配置要向
+        // 特权代理发起 TCP 连接，在 targetSdk 26+ 上会被判为
+        // NetworkOnMainThreadException 而恒定失败并回落成「开启」，用户关掉
+        // 「后台指示」也会照样显示。改由 SilentTask.run() 在工作线程里按真实
+        // 配置显示（show 幂等）。
         List<String> snapshot = new ArrayList<>();
         if (uris != null) {
             snapshot.addAll(uris);
@@ -45,16 +47,5 @@ final class TaskLauncher {
         App.executor().execute(uninstall
                 ? SilentTask.uninstall(app, uninstallPkg, caller)
                 : SilentTask.install(app, snapshot, originals, caller, label));
-    }
-
-    private static boolean floatingEnabled() {
-        try {
-            JSONObject r = new JSONObject(RustCore.dispatch("status", "{}"));
-            JSONObject d = r.optJSONObject("data");
-            JSONObject cfg = d == null ? null : d.optJSONObject("config");
-            return cfg == null || cfg.optBoolean("floatingIndicator", true);
-        } catch (Throwable t) {
-            return true;
-        }
     }
 }

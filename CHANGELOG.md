@@ -5,6 +5,50 @@
 
 ---
 
+## v2.1.17
+
+### 修复失败降级路径崩溃与「后台指示」开关失效
+
+v2.1.16 的真机端到端复验（升级安装 → 杀陈旧实例 → 激活 → 触发静默安装）暴露出
+两个独立缺陷，都在静默安装这条主链路上。
+
+- **安装失败时应用直接崩溃**（`FileUriExposedException`）：调用方给的是
+  `file://` 路径、且暂存复制失败时，`StagedFiles.stage` 会把**原始 URI 原样**
+  交给下游；该 URI 一路流到失败降级的 `buildSystemInstallIntent`，被塞进
+  `setDataAndType` 与 `ClipData`，再交给通知的 `PendingIntent`。Android 7+
+  禁止把 `file://` 交给别的应用，异常在 `PendingIntent.getActivity` 里才抛出，
+  此时已不在任何 `try` 内 —— 进程 FATAL，用户既看不到失败原因、也看不到通知。
+  现在只允许自家 `StagedProvider` 的 `content://` 进入交给外部的 Intent，
+  其余一律返回 `null`；`Notifier.fallback` 也补了兜底，跳转意图不合法时降级成
+  「没有点击动作的通知」，不再让失败提示本身变成崩溃。
+- **安装包读不到时不再假装能改用系统安装器**：拿不到可交接的 `content://`
+  说明安装包根本没读进来，此时系统安装器同样读不到。通知照发，但去掉那个做
+  不到的点击入口，正文改为提示回首页重新选择文件；执行日志里的降级说明同步区分
+  这两种情形。
+- **设置里关掉「后台指示」不生效**：入口在**主线程**上调 `TaskLauncher.floatingEnabled()`
+  读配置，而读配置要向特权代理发起 TCP 连接 —— targetSdk 26+ 上被判
+  `NetworkOnMainThreadException`，恒定异常并回落成「开启」。于是先用主线程那次
+  调用把指示器显示出来，随后工作线程按真实配置再调 `show` 时已幂等命中，
+  关掉开关也照样显示。主线程那次调用已删除，指示器统一由 `SilentTask.run()`
+  在工作线程里按真实配置显示。
+
+### 验证
+
+- 真机（REDMI K80 / HyperOS / Android 17）复现并确认修复前现场：`FATAL EXCEPTION`
+  `android.os.FileUriExposedException: file:///sdcard/Download/pb-e2e.apk exposed
+  beyond app through ClipData.Item.getUri()`，栈为
+  `Notifier.fallback` ← `SilentTask.finishFailure` ← `failPrepare` ← `runInstall`；
+  同一次调用里另有 `IllegalStateException: 无法连接特权代理`，cause 为
+  `NetworkOnMainThreadException`，栈自 `TaskLauncher.launch` 起。
+- 同一轮复验中已通过的部分：build 28 覆盖安装（versionCode 23）成功；清掉上一版本
+  遗留的代理实例后，主界面正确转为「未运行」；两次连续「激活服务」都成功
+  （新实例 PID 20951、21219，`/proc/net/tcp` 中 `7AF1` 计数为 1、`ps` 中进程计数
+  为 1，启动日志「监听成功: tcp:127.0.0.1:31473」，全过程约 1.4 秒），
+  确认 v2.1.16 的三项修复在真实应用路径下生效。
+- Java 改动本机无 JDK / Android SDK 工具链，未在本机编译，以 CI 构建结果为准。
+
+---
+
 ## v2.1.16
 
 ### 修复「界面点不动」与「激活假成功」：三个独立缺陷

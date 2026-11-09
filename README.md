@@ -10,7 +10,7 @@
 | 架构 | 业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate），无线调试链路在 `broker-wireless` |
 | 产物 | 四 ABI（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、16KB 页对齐、v2 签名 |
 | 许可 | **GNU GPL-3.0-only**，见 `LICENSE` |
-| 版本 | **2.1.16**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
+| 版本 | **2.1.17**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
 
 ## 1. 功能
 
@@ -24,7 +24,7 @@
 | F-06 | 安装日志：自动记录、历史查看、导出分享、清空 | `logbook.rs`, `InstallLogStore`, `LogActivity` |
 | F-07 | **调用方授权**：首次调用由短时前台服务保活，直接在当前应用上方弹悬浮卡片询问；无悬浮窗权限时退化为可当场决策的横幅通知；设置页按用户/系统应用筛选并勾选 | `auth.rs`, `AuthPrompt`, `AuthForegroundService`, `Notifier`, `SettingsActivity`, `AppList` |
 | F-08 | **无遮罩后台指示**：左上角科幻风旋转指示器，点击穿透、不染黑系统栏 | `FloatingIndicator`, `SciFiSpinner` |
-| F-09 | **失败降级（默认不打断）**：只发一条可点击通知，点通知才进系统安装器 | `SilentTask`, `Notifier` |
+| F-09 | **失败降级（默认不打断）**：只发一条可点击通知，点通知才进系统安装器；来源不可交接时通知不带该入口 | `SilentTask`, `Notifier` |
 | F-10 | **中文展示**：通知、日志、错误原因显示应用实际名称与中文说明 | `AppNames`, `apk_meta.rs`, `logbook.rs` |
 | F-11 | **写入兜底**：stdin 流式写入失败时自动改用文件路径写入；中转文件由特权代理落到 `/data/local/tmp`（system_server 可读，避开 FUSE 域） | `install.rs`, `plan.rs`, `BrokerBridge`, `StagedFiles` |
 | F-12 | **成功后删除安装包**：删除调用方原文件，读写权限不足时经代理以 shell 兜底并写日志 | `SilentTask`, `BrokerBridge` |
@@ -151,7 +151,8 @@ shell 身份的特权进程里启动。
   激活结果、状态区刷新、通知栏自动激活三处判据已统一到它。
 
 旧实例清不掉的后果是升级后新客户端仍连上旧代理，激活看着成功、静默安装全部失败，
-详见 [CHANGELOG.md](CHANGELOG.md) 的 v2.1.15；判据与时间预算的修正见 v2.1.16。
+详见 [CHANGELOG.md](CHANGELOG.md) 的 v2.1.15；判据与时间预算的修正见 v2.1.16；
+失败降级路径不再崩溃、以及「后台指示」开关真正生效，见 v2.1.17。
 
 ### 调用方授权
 
@@ -204,6 +205,10 @@ shell 身份的特权进程里启动。
 - 代理链路失败区分「进程没运行」与「进程在跑但拒绝握手」：后者单独给出 `HANDSHAKE_REJECTED`
   状态与「重新激活（无需重新配对）」的指引，不再误报「服务未运行」；自动恢复以完整握手
   （而非端口监听）判定是否真的恢复，恢复成功后重试本次操作一次。
+- 失败降级只把自家 `StagedProvider` 的 `content://` 交给系统安装器：`file://`
+  在 Android 7+ 不允许跨应用传递（`FileUriExposedException`），且调用方给的路径
+  本应用未必读得到 —— 这类来源不可能改用系统安装器，通知照发但不挂点击入口，
+  正文改为提示回首页重新选择文件。降级路径不会因构造跳转意图失败而崩溃。
 - 主界面不再展示「本次执行日志」，完整记录由独立的「安装日志」页承担。
 
 ## 5. 应用内启用特权代理（无需电脑）
