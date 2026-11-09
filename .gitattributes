@@ -1,0 +1,27 @@
+# 入库内容统一归一为 LF，检出也为 LF。
+# 本仓库面向 Android / Linux 侧运行（APK 内的 shell 片段、CI 的 ubuntu-latest），
+# CRLF 会让 BusyBox ash / procd 一类解析器直接启动失败，因此不依赖各机器上的
+# core.autocrlf 设置，在此显式固定。
+* text=auto eol=lf
+
+# 二进制资源不参与行尾转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.so binary
+*.a binary
+*.jar binary
+*.apk binary
+*.ipk binary
+*.zip binary
+*.gz binary
+*.xz binary
+*.keystore binary
+*.jks binary

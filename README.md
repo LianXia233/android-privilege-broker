@@ -10,7 +10,7 @@
 | 架构 | 业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate），无线调试链路在 `broker-wireless` |
 | 产物 | 四 ABI（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、16KB 页对齐、v2 签名 |
 | 许可 | **GNU GPL-3.0-only**，见 `LICENSE` |
-| 版本 | **2.1.15**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
+| 版本 | **2.1.16**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
 
 ## 1. 功能
 
@@ -128,11 +128,30 @@ shell 身份的特权进程里启动。
 ### 代理单实例
 
 每次激活都由 shell 先遍历 `/proc`、把同名旧实例全部 `SIGKILL`，再拉起新进程，
-保证同一时刻只有一个代理在监听端点。判据取 `/proc/pid/cmdline` 而不是
-`/proc/pid/comm`：`app_process --nice-name=` 只改写 cmdline，`comm` 会被运行时
-改写成 `main`（Java 主线程名），按 comm 匹配在真机上恒不命中。匹配锚定首个参数，
-避免误杀执行清理的 `sh -c` 自身。旧实例清不掉的后果是升级后新客户端仍连上旧代理，
-激活看着成功、静默安装全部失败，详见 [CHANGELOG.md](CHANGELOG.md) 的 v2.1.15。
+保证同一时刻只有一个代理在监听端点。这里有三个真机踩出来的坑，都已固定下来：
+
+- **判据取 `/proc/pid/cmdline` 而不是 `/proc/pid/comm`**：`app_process --nice-name=`
+  只改写 cmdline，`comm` 会被运行时改写成 `main`（Java 主线程名），按 comm 匹配在
+  真机上恒不命中。匹配锚定首个参数、用前缀匹配，同时保证不会把执行清理的
+  `sh -c` 自身算进去（它的 cmdline 以 `sh` 开头）。
+- **读取必须用 shell 内建 `read`，不能逐进程 fork 外部命令**：整条启动命令由 native
+  在无线调试 shell 里后台执行，投递后只等 6 秒（`DETACHED_READ_TIMEOUT`）就断开；
+  一旦超时，adbd 会连同本次会话的进程组一起清理，而那时命令很可能还停在启动前的
+  准备工作里。真机实测 882 个进程逐个 `$(tr -d '\000' < "$p/cmdline")` 要 26 秒，
+  单这一段就吃满预算、整条命令 28.5 秒才返回 —— 表现正是「命令确实下发过
+  （logcat 能看到 `adbd service requested 'shell:...'`），进程却始终没起来、
+  启动日志也没有新增」。改用内建 `read` 后整条命令约 3.4 秒。
+  两个附带细节：`read` 对没有换行的 cmdline **恒返回非 0**，用 `|| continue`
+  会跳过几乎所有进程；ash 读到 NUL 是**删除后拼接**（`sh\0-c\0x` 读成 `sh-cx`），
+  所以带空格的模式 `{name} *` 永不会命中。因此每轮都要显式清空变量，模式只用前缀。
+- **成功判据必须是完整握手，不能只探端口**：端点是按配对令牌派生的固定端口，
+  被上一版本或上一次激活留下的陈旧实例占住时端口探测恒为真，激活会被误报成功
+  （结果条报激活成功、状态区也显示已激活，但所有静默安装都失败）。
+  `BrokerClient.handshake` 能识别「在监听却拒绝当前令牌 / 协议不匹配」的陈旧实例，
+  激活结果、状态区刷新、通知栏自动激活三处判据已统一到它。
+
+旧实例清不掉的后果是升级后新客户端仍连上旧代理，激活看着成功、静默安装全部失败，
+详见 [CHANGELOG.md](CHANGELOG.md) 的 v2.1.15；判据与时间预算的修正见 v2.1.16。
 
 ### 调用方授权
 

@@ -137,6 +137,15 @@ pub fn boot_log_failure_reason(log: &str) -> Option<String> {
 /// 构造在无线调试 shell 中后台启动特权代理的命令。
 ///
 /// 五个细节决定「服务能不能起来并常驻」，缺一个就会表现为「提示成功但服务未运行」：
+///
+/// **本命令有硬性时间预算**：native 投递后只等 6 秒（`DETACHED_READ_TIMEOUT`）
+/// 就断开。一旦超时，adbd 会连带清理本次 shell 会话的进程组，而那时命令很可能
+/// 还停在启动前的准备工作里 —— 表现正是「命令确实下发过（logcat 能看到
+/// `adbd service requested 'shell:...'`），进程却始终没起来、启动日志也没有新增」。
+/// 所以每一段都必须足够快：真机实测用 `$(tr -d ...)` 逐个读 `/proc/pid/cmdline`
+/// 会为每个进程 fork 一次外部命令，882 个进程耗掉 26 秒，单这一段就吃满了预算；
+/// 改用 shell 内建 `read` 读同一个文件只需约 0.1 秒，且匹配语义不变。
+///
 /// 0. **单实例（对齐成熟实现的「启动前清理旧进程」）**：启动前遍历
 ///    `/proc/*/cmdline`，把同名旧实例全部 `SIGKILL`。此前每次「激活」都无脑再拉
 ///    一个 app_process，旧进程仍占着监听端点，新进程 bind 必然
@@ -180,20 +189,26 @@ pub fn build_start_command(req: &WirelessRequest) -> String {
         shell_quote(&req.endpoint),
         shell_quote(&req.native_lib_dir),
     );
-    // 判据取自 `/proc/pid/cmdline`（去 NUL 后）而非 comm：`--nice-name=` 只改写
-    // cmdline，comm 会被运行时改成 `main`（Java 主线程名），按 comm 匹配恒不命中
-    // ——真机实测残留实例的 comm 就是 `main`，旧逻辑 0 命中。
-    // 匹配锚定首个参数：执行本段清理的 `sh -c` 自身 cmdline 里也含该进程名字样，
-    // 用 `*prvbrk_svc*` 会把清理者自己算进去（实测还会命中无关的长驻进程）。
+    // 判据取自 `/proc/pid/cmdline` 而非 comm：`--nice-name=` 只改写 cmdline，
+    // comm 会被运行时改成 `main`（Java 主线程名），按 comm 匹配恒不命中 ——
+    // 真机实测残留实例的 comm 就是 `main`，旧逻辑 0 命中。
+    // 匹配锚定首个参数（前缀匹配）：执行本段清理的 `sh -c` 自身 cmdline 以
+    // `sh` 开头，用 `*prvbrk_svc*` 会把清理者自己算进去（实测还会命中无关的
+    // 长驻进程）。但前缀之后不能用 `\\ *`：ash 读 cmdline 是把 NUL **删除后
+    // 拼接**（实测 `sh -c ...` 读到的是 `/system/bin/sh-cecho ...`），带空格的
+    // 形态永远不会出现，所以统一用 `{new}*` 覆盖「只有名字」与「名字后跟参数」
+    // 两种 cmdline 形态。
+    // 读取必须用 shell 内建 `read`：`$(tr -d '\\000' < ...)` 会为每个进程
+    // fork 一次外部命令，882 个进程 26 秒，直接吃满 native 的 6 秒预算
+    // （见本函数文档的「硬性时间预算」）。`read` 对无换行的 cmdline 恒返回
+    // 非 0，所以不能写 `|| continue`，改为每轮显式 `c=` 清空，避免读取失败时
+    // 沿用上一轮的值误杀。
     // 同时兼容旧版进程名 `privilege-broker`，确保从旧版本升级后第一次激活就能
     // 清掉残留实例 —— 残留实例正是本轮「升级后安装全失败」的直接来源。
-    // 命令替换外那层 `2>/dev/null` 不能省：遍历时必然撞上刚好退出的 pid，
-    // 重定向失败是 shell 报的（内层的 `2>/dev/null` 只作用于 `tr`），会往通道
-    // 刷一堆 `can't open ... No such file or directory`。
     let kill_old = format!(
         "SELF=$$; for p in /proc/[0-9]*; do \
-           c=$(tr -d '\\000' < \"$p/cmdline\" 2>/dev/null) 2>/dev/null || continue; \
-           case \"$c\" in {new}|{new}\\ *|privilege-brok*) \
+           c=; read -r c < \"$p/cmdline\" 2>/dev/null; \
+           case \"$c\" in {new}*|privilege-broker*) \
              pid=${{p##*/}}; [ \"$pid\" = \"$SELF\" ] && continue; \
              kill -9 \"$pid\" 2>/dev/null ;; \
            esac; \
@@ -204,7 +219,11 @@ pub fn build_start_command(req: &WirelessRequest) -> String {
     // app_process 子进程——即使它已 setsid 脱离会话，激活几分钟后代理无故
     // 消失、安装时报「特权代理服务未运行」正是它干的。shell(2000) 恰好有
     // 权限直接关掉这两项设置；失败（老系统无此命令）不影响启动。
-    let keep_alive = "settings put settings enable_phantom_process_monitoring false 2>/dev/null; \
+    // 命名空间必须是 `global`、键名是 `settings_enable_monitor_phantom_procs`：
+    // 旧写法 `settings put settings enable_phantom_process_monitoring` 里
+    // `settings` 不是合法命名空间，真机实测直接返回 `Invalid namespace 'settings'`
+    // （rc=255），等于这项保活从未生效过。
+    let keep_alive = "settings put global settings_enable_monitor_phantom_procs false 2>/dev/null; \
                       device_config put activity_manager max_phantom_processes 2147483647 2>/dev/null";
     format!(
         "{kill_old}; {keep_alive}; \
@@ -395,16 +414,19 @@ mod tests {
         assert!(cmd.contains("/proc/[0-9]*"), "必须遍历 /proc");
         assert!(cmd.contains("< \"$p/cmdline\""), "按 cmdline 识别进程");
         assert!(!cmd.contains("/comm"), "不得再使用 comm 判据");
-        assert!(cmd.contains("tr -d '\\000'"), "去掉 cmdline 的 NUL 分隔符");
+        // 必须用 shell 内建 read：`$(tr -d ...)` 逐个 fork 外部命令读 cmdline，
+        // 真机 882 个进程要 26 秒，单这一段就吃满 native 的 6 秒投递预算。
+        assert!(!cmd.contains("tr -d"), "不得逐进程 fork 外部命令读 cmdline");
         assert!(
-            cmd.contains(") 2>/dev/null || continue"),
-            "抑制 PID 竞态产生的 shell 噪音"
+            cmd.contains("c=; read -r c < \"$p/cmdline\""),
+            "用内建 read 读 cmdline（read 对无换行文件恒返回非 0，故每轮显式清空）"
         );
         assert!(cmd.contains("kill -9"), "SIGKILL 旧实例");
-        // 锚定首个参数：执行清理的 sh -c 自身 cmdline 里也含该进程名字样。
+        // 锚定首个参数（前缀匹配）：执行清理的 sh -c 自身 cmdline 以 sh 开头。
+        // ash 读 cmdline 会删除 NUL 后拼接，带空格的形态不会出现，统一用 `*`。
         assert!(
-            cmd.contains("prvbrk_svc|prvbrk_svc\\ *|privilege-brok*"),
-            "按首参数精确匹配，兼容旧进程名"
+            cmd.contains("prvbrk_svc*|privilege-broker*)"),
+            "按首参数前缀匹配，兼容旧进程名"
         );
         // 清理必须发生在启动之前，否则清掉的是刚拉起的新进程。
         let kill_at = cmd.find("kill -9").unwrap();
@@ -448,14 +470,18 @@ mod tests {
     #[test]
     fn start_command_disables_phantom_process_monitoring() {
         let cmd = build_start_command(&request());
+        // 命名空间必须是 global：旧写法 `settings put settings ...` 的
+        // `settings` 不是合法命名空间，真机实测恒返回
+        // `Invalid namespace 'settings'`(rc=255)，该项保活从未生效。
         assert!(cmd.contains(
-            "settings put settings enable_phantom_process_monitoring false 2>/dev/null"),
-            "关闭幻影进程监控");
+            "settings put global settings_enable_monitor_phantom_procs false 2>/dev/null"),
+            "关闭幻影进程监控（global 命名空间 + 正确键名）");
+        assert!(!cmd.contains("settings put settings"), "不得使用非法命名空间");
         assert!(cmd.contains(
             "device_config put activity_manager max_phantom_processes 2147483647 2>/dev/null"),
             "抬高幻影进程上限");
         // 必须发生在启动体之前
-        let ka_at = cmd.find("enable_phantom_process_monitoring").unwrap();
+        let ka_at = cmd.find("settings_enable_monitor_phantom_procs").unwrap();
         let app_at = cmd.find("app_process").unwrap();
         assert!(ka_at < app_at, "防幻影进程设置必须早于启动");
     }

@@ -34,7 +34,9 @@ final class ActivationLog {
     /**
      * 解析 native 返回结果：启动日志是否出现「服务已监听 / 已有实例在运行」。
      * 仅用于失败诊断（区分「进程没起来」与「起来了但 app 连不上」），
-     * 不再是激活成功的判据 —— 成功一律以 {@link BrokerClient#probe} 实测为准。
+     * 不再是激活成功的判据 —— 成功一律以 {@link BrokerClient#handshake} 完整握手为准。
+     * 只探端口不够：陈旧实例占着派生端点时端口探测恒为真，会把「在监听却拒绝当前
+     * 令牌」误判成一次成功激活。
      */
     static boolean startLogConfirmsRunning(String rawJson) {
         try {

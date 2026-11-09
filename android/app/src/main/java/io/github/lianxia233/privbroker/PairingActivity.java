@@ -206,8 +206,9 @@ public final class PairingActivity extends Activity {
     // ------------------------------------------------------------ 服务状态
 
     /**
-     * 刷新服务状态。判据统一走 {@link BrokerClient#probe}，与激活结果、通知栏
-     * 自动激活完全一致，避免出现「结果条报成功、状态区却显示未运行」。
+     * 刷新服务状态。判据统一走 {@link #isServiceUp}（完整握手），与激活结果、
+     * 通知栏自动激活完全一致，避免出现「结果条报成功、状态区却显示未运行」，
+     * 也避免陈旧实例占着端点时被误判成「已激活」。
      * 探测放在独立线程池，绝不阻塞激活/配对的 worker，也不卡 UI。
      */
     private void refreshServiceState() {
@@ -239,14 +240,22 @@ public final class PairingActivity extends Activity {
         uiHandler.removeCallbacks(statePoller);
     }
 
-    /** 同步探测代理监听端点是否可连，可在 worker 线程调用。 */
+    /**
+     * 同步判定「特权代理可用」，可在 worker 线程调用。
+     *
+     * <p>必须用完整握手，不能只探端口：端点是按配对令牌派生的固定端口，被
+     * 上一版本或上一次激活留下的陈旧实例占住时，端口探测恒为真，激活会被误报
+     * 成功 —— 真机上「结果条报激活成功、状态区也显示已激活，但所有静默安装都
+     * 失败」正是这一条造成的。握手能识别「在监听却拒绝当前令牌 / 协议不匹配」
+     * 的陈旧实例，与 {@link BrokerClient#handshake} 的判据完全一致。</p>
+     */
     private boolean isServiceUp() {
-        return BrokerClient.probe(getApplicationContext());
+        return BrokerClient.handshake(getApplicationContext());
     }
 
     /**
      * 投递启动命令后轮询等待代理真正常驻。命令投递成功不等于服务已起来，
-     * 只有 abstract socket 被监听才算激活成功，避免出现「假成功」。
+     * 只有完整握手成功才算激活成功，避免出现「假成功」。
      */
     private boolean awaitServiceUp() {
         long deadline = System.currentTimeMillis() + SERVICE_PROBE_TIMEOUT_MS;
@@ -483,16 +492,63 @@ public final class PairingActivity extends Activity {
         final String host = MdnsProbe.get(this).resolvedHost();
         final long startedAt = System.currentTimeMillis();
         worker.execute(() -> {
-            String raw = WirelessRunner.start(PairingActivity.this, finalPort, host);
-            // 唯一成功判据：app 侧实测到代理监听端点。启动日志只作诊断线索，
-            // 不能再充当成功证据 —— 否则会出现「结果条报激活成功、状态区却
-            // 显示特权代理未运行」的自相矛盾。端点已改为 TCP loopback，
-            // SELinux 不再拦截 app 直连，实测结果真实可用。
-            final boolean probed = awaitServiceUp();
-            final boolean confirmed = ActivationLog.startLogConfirmsRunning(raw);
-            ui(() -> onActivateResult(raw, probed, confirmed, finalPort, host,
+            String raw;
+            boolean probed = false;
+            boolean confirmed = false;
+            try {
+                raw = WirelessRunner.start(PairingActivity.this, finalPort, host);
+                // 唯一成功判据：app 侧实测到代理可用（完整握手）。启动日志只作
+                // 诊断线索，不能再充当成功证据 —— 否则会出现「结果条报激活
+                // 成功、状态区却显示特权代理未运行」的自相矛盾。
+                probed = awaitServiceUp();
+                confirmed = ActivationLog.startLogConfirmsRunning(raw);
+            } catch (Throwable t) {
+                // 必须兜住所有异常：onActivateResult 是唯一把 working 复位、
+                // 把两个按钮重新放开的地方。异常直接穿透会让这个 lambda 提前
+                // 终止，working 永久为 true、按钮永久置灰，此后激活/配对/自动
+                // 激活全部变成静默 no-op —— 界面表现就是「点不动」。
+                Log.w(TAG, "激活流程异常", t);
+                raw = errorResult(t);
+            }
+            final String rawResult = raw;
+            final boolean serviceUp = probed;
+            final boolean logConfirmed = confirmed;
+            ui(() -> onActivateResult(rawResult, serviceUp, logConfirmed, finalPort, host,
                     System.currentTimeMillis() - startedAt));
         });
+    }
+
+    /**
+     * 把 worker 线程里的异常转成与 native 同构的结果 JSON，供结果条与「执行日志」
+     * 复用同一条解析路径，不需要为异常单开一条分支。
+     *
+     * <p>{@code output} 与 {@code failureReason} 都以「错误:」开头 —— 这是
+     * native 启动脚本里失败行的既有前缀，也是 {@link ActivationLog#failureReason}
+     * 识别失败行的确定判据（不依赖异常类名里恰好有 Exception），所以异常原因
+     * 会像 native 报错一样被完整带回界面与「执行日志」。</p>
+     */
+    private String errorResult(Throwable t) {
+        String detail = t.getClass().getSimpleName();
+        String msg = t.getMessage();
+        if (msg != null && !msg.isEmpty()) {
+            detail = detail + ": " + msg;
+        }
+        String line = "错误: " + detail;
+        try {
+            return new JSONObject()
+                    .put("ok", false)
+                    .put("stage", "")
+                    .put("code", "INTERNAL")
+                    .put("message", getString(R.string.pairing_activate_failed))
+                    .put("output", line)
+                    .put("failureReason", line)
+                    .toString();
+        } catch (Throwable ignored) {
+            // JSONObject 构造失败（极端内存压力）时也不能让异常继续穿透：
+            // 调用方依赖本方法永远返回，否则按钮又会卡在置灰状态。
+            return "{\"ok\":false,\"stage\":\"\",\"code\":\"INTERNAL\",\"output\":\""
+                    + line + "\"}";
+        }
     }
 
     private void onActivateResult(String raw, boolean serviceUp, boolean confirmed,
@@ -571,8 +627,17 @@ public final class PairingActivity extends Activity {
         final String finalCode = code;
         final String host = MdnsProbe.get(this).resolvedHost();
         worker.execute(() -> {
-            String raw = WirelessRunner.pair(PairingActivity.this, finalPort, finalCode, host);
-            ui(() -> onPairResult(raw));
+            String raw;
+            try {
+                raw = WirelessRunner.pair(PairingActivity.this, finalPort, finalCode, host);
+            } catch (Throwable t) {
+                // 与 doActivate 同理：onPairResult 是唯一把 working 复位、把两个
+                // 按钮重新放开的地方，异常穿透会让整页永久卡在置灰状态。
+                Log.w(TAG, "配对流程异常", t);
+                raw = errorResult(t);
+            }
+            final String rawResult = raw;
+            ui(() -> onPairResult(rawResult));
         });
     }
 

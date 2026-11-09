@@ -339,10 +339,15 @@ public final class WirelessPairingService extends Service {
         }
     }
 
-    /** 同步探测 abstract socket 是否被监听，联上即代表特权代理在跑。 */
-    /** 与激活页共用全局唯一判据，保证通知栏自动激活与页面状态一致。 */
+    /**
+     * 同步判定「特权代理可用」，与激活页共用同一判据，保证通知栏自动激活与
+     * 页面状态一致。
+     *
+     * <p>必须用完整握手而不是只探端口：端点是按配对令牌派生的固定端口，被
+     * 陈旧实例占住时端口探测恒为真，一次实际失败的激活会被误报成成功。</p>
+     */
     private boolean isServiceUp() {
-        return BrokerClient.probe(getApplicationContext());
+        return BrokerClient.handshake(getApplicationContext());
     }
 
     /** 投递启动命令后轮询等待代理真正常驻，返回是否实测到。 */
@@ -405,7 +410,16 @@ public final class WirelessPairingService extends Service {
             working = true;
             push(workingNotification());
             new Thread(() -> {
-                final boolean probed = awaitServiceUp();
+                boolean up = false;
+                try {
+                    up = awaitServiceUp();
+                } catch (Throwable t) {
+                    // 校验线程里的异常同样不能穿透：它是唯一复位 working、
+                    // 发出结果通知的地方，穿透会让通知栏永久停在「激活中」，
+                    // 之后所有激活/配对点击都变成静默 no-op。
+                    Log.w(TAG, "无线激活校验异常", t);
+                }
+                final boolean probed = up;
                 main.post(() -> {
                     working = false;
                     final int port = lastConnectPort;
