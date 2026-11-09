@@ -139,7 +139,10 @@ public final class MainActivity extends Activity {
             tvStatusHint.setText(hint);
             String action = g == null ? "" : g.optString("action");
             btnPermission.setText(action.isEmpty() ? getString(R.string.btn_request) : action);
-            btnPermission.setEnabled(!action.isEmpty());
+            // 就绪态也保持可点：本按钮是配对/激活页（PairingActivity）的唯一
+            // 常驻入口，重启手机或无线调试被关闭后重新激活正是从该页操作，
+            // 禁用会把「已就绪但需要重新激活」的用户堵死在主界面。
+            btnPermission.setEnabled(true);
             JSONObject cfg = d.optJSONObject("config");
             if (cfg != null) {
                 JSONArray al = cfg.optJSONArray("allowList");
