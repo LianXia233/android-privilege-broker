@@ -1,7 +1,24 @@
-# 更新日志
+# 📝 更新日志 (Changelog)
 
-本文件记录各版本的可见变更。按时间倒序排列，版本号与 `android/app/build.gradle.kts`
-中的 `versionName`、`Cargo.toml` 中的 `version` 一致。
+本文件按时间倒序记录各版本的可见变更与关键演进。版本号与 `android/app/build.gradle.kts` 中的 `versionName` 及 `Cargo.toml` 中的 `version` 保持一致。
+
+<div align="center">
+
+[![Latest Version](https://img.shields.io/badge/Release-v2.1.17-blue.svg?style=flat-square&logo=android)](https://github.com/LianXia233/android-privilege-broker/releases/latest)
+[![License](https://img.shields.io/badge/License-GPL--3.0-orange.svg?style=flat-square)](LICENSE)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/LianXia233/android-privilege-broker/build.yml?branch=main&style=flat-square&logo=github&label=Build)](https://github.com/LianXia233/android-privilege-broker/actions)
+
+</div>
+
+---
+
+## 📌 版本快速索引
+
+| 分支 / 主版本 | 包含版本 | 演进重点与关键里程碑 |
+| :--- | :--- | :--- |
+| **v2.1.x 系列**<br/>*(当前维护)* | [v2.1.17](#v2117) · [v2.1.16](#v2116) · [v2.1.15](#v2115) · [v2.1.14](#v2114) · [v2.1.13](#v2113) · [v2.1.12](#v2112)<br/>[v2.1.11](#v2111) · [v2.1.10](#v2110) · [v2.1.9](#v219) · [v2.1.8](#v218) · [v2.1.7](#v217) · [v2.1.6](#v216)<br/>[v2.1.5](#v215) · [v2.1.4](#v214) · [v2.1.3](#v213) · [v2.1.2](#v212) · [v2.1.1](#v211) · [v2.1.0](#v210) | **高可用与真机调优**：修复失败降级与指示器开关；ash read 优化规避 6 秒超时；幻影进程监控关闭；端点自愈重拉与挑战响应握手鉴权 |
+| **v2.0.x 系列** | [v2.0.0](#v200) | **重构自研特权架构**：全新包名 `io.github.lianxia233.privbroker`，全面转向自主 Broker（Shell uid 2000 唯一后端），引入 12 个 Rust Crate 组成的 Tokio 特权服务与免电脑无线配对 |
+| **v1.0.x 系列**<br/>*(历史版本)* | [v1.0.4](#v104) · [v1.0.3](#v103) · [v1.0.2](#v102) · [v1.0.1](#v101) · [v1.0.0](#v100) | **早期架构探索**：零窗口静默技术落地、MIUI 结果忽略窗口避让、多格式分片解包与本地日志系统构建 |
 
 ---
 

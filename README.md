@@ -1,351 +1,468 @@
-# android-privilege-broker
+<div align="center">
 
-基于 **Rust 核心 + 自主 ADB 特权代理** 的 Android 静默安装器。特权进程由应用内的无线调试自助链路以 shell(uid 2000) 身份启动一次，全程不需要电脑或 USB；应用与代理之间用自研的长度前缀帧协议通信，安装 / 卸载时无需拉起系统安装界面，也不会跳到应用主界面，每一次后台操作都会写入本地安装日志。
+<img src="icons/app_icon_source.png" width="128" height="128" alt="PrivilegeBroker Logo" style="border-radius: 26px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);" />
 
-| 项目 | 值 |
-|---|---|
-| 包名 | `io.github.lianxia233.privbroker`（v2.0.0 启用，与历史版本不互通） |
-| 系统要求 | minSdk **26**（Android 8+）/ targetSdk **36**（Android 16）/ compileSdk **36** |
-| 权限来源 | 自主 Broker，**ADB Shell / uid 2000 唯一后端**；不提供 root 后端，不引入第三方特权框架 |
-| 架构 | 业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate），无线调试链路在 `broker-wireless` |
-| 产物 | 四 ABI（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、16KB 页对齐、v2 签名 |
-| 许可 | **GNU GPL-3.0-only**，见 `LICENSE` |
-| 版本 | **2.1.17**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
+# Android Privilege Broker
 
-## 1. 功能
+<p align="center">
+  <b>⚡ 基于 Rust 核心与自主 ADB 特权代理的高性能 Android 静默安装与生命周期套件 ⚡</b>
+</p>
 
-| 编号 | 功能 | 实现位置 |
-|---|---|---|
-| F-01 | 特权代理状态检查、连接探测、**应用内无线调试启用与配对**（无需电脑） | `crates/core/src/state.rs`, `WirelessPairingService`, `WirelessCore`, `ServiceStarter`, `broker-wireless`, `BrokerClient`, `broker-android` |
-| F-02 | 静默安装（无确认、不弹界面）：单 APK / 多 split / 归档格式，含社交软件追加的 `.apk.1` 后缀 | `install.rs`, `archive.rs`, `plan.rs`, `util.rs`, `FileNames` |
-| F-03 | 静默卸载（含保留数据），从应用列表选择目标 | `uninstall.rs`, `AppPickerActivity`, `Uninstaller` |
-| F-04 | 免确认包名白名单；安装前确认为可选开关（默认关闭） | `config.rs`, `SettingsActivity` |
-| F-05 | 通知气泡显示安装中 / 进度 / 结果，一键启动、查看日志 | `Notifier`, `SilentTask` |
-| F-06 | 安装日志：自动记录、历史查看、导出分享、清空 | `logbook.rs`, `InstallLogStore`, `LogActivity` |
-| F-07 | **调用方授权**：首次调用由短时前台服务保活，直接在当前应用上方弹悬浮卡片询问；无悬浮窗权限时退化为可当场决策的横幅通知；设置页按用户/系统应用筛选并勾选 | `auth.rs`, `AuthPrompt`, `AuthForegroundService`, `Notifier`, `SettingsActivity`, `AppList` |
-| F-08 | **无遮罩后台指示**：左上角科幻风旋转指示器，点击穿透、不染黑系统栏 | `FloatingIndicator`, `SciFiSpinner` |
-| F-09 | **失败降级（默认不打断）**：只发一条可点击通知，点通知才进系统安装器；来源不可交接时通知不带该入口 | `SilentTask`, `Notifier` |
-| F-10 | **中文展示**：通知、日志、错误原因显示应用实际名称与中文说明 | `AppNames`, `apk_meta.rs`, `logbook.rs` |
-| F-11 | **写入兜底**：stdin 流式写入失败时自动改用文件路径写入；中转文件由特权代理落到 `/data/local/tmp`（system_server 可读，避开 FUSE 域） | `install.rs`, `plan.rs`, `BrokerBridge`, `StagedFiles` |
-| F-12 | **成功后删除安装包**：删除调用方原文件，读写权限不足时经代理以 shell 兜底并写日志 | `SilentTask`, `BrokerBridge` |
-| F-13 | **关于页**：简介、可点击仓库地址、开发者、开源许可 | `AboutActivity` |
+<p align="center">
+  <i>零弹窗交互 · 免电脑无线自启 · 16KB 内存页对齐 · 跨应用浮窗授权 · 本地原子审计日志</i>
+</p>
 
-## 2. 支持格式与拉起方式
+<p align="center">
+  <a href="https://github.com/LianXia233/android-privilege-broker/releases/latest"><img src="https://img.shields.io/badge/Release-v2.1.17-blue.svg?style=flat-square&logo=android" alt="Release Version" /></a>
+  <a href="https://github.com/LianXia233/android-privilege-broker/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/LianXia233/android-privilege-broker/build.yml?branch=main&style=flat-square&logo=github&label=Build" alt="CI Status" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-orange.svg?style=flat-square" alt="License" /></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-2021%20(12%20Crates)-DEA584.svg?style=flat-square&logo=rust&logoColor=white" alt="Rust" /></a>
+  <a href="https://developer.android.com/about/versions/16"><img src="https://img.shields.io/badge/Android-minSdk%2033%20%7C%20targetSdk%2036-3DDC84.svg?style=flat-square&logo=android&logoColor=white" alt="Android SDK" /></a>
+  <img src="https://img.shields.io/badge/Page%20Size-16KB%20Aligned-success.svg?style=flat-square" alt="16KB Aligned" />
+  <img src="https://img.shields.io/badge/Backend-ADB%20Shell%20(uid%202000)-8A2BE2.svg?style=flat-square" alt="Backend" />
+</p>
 
-`AndroidManifest.xml` 对全部支持格式做了显式声明，`SilentInstallActivity` 统一接管。
+<p align="center">
+  <a href="#-核心亮点">✨ 核心亮点</a> •
+  <a href="#-快速开始无需电脑">🚀 快速开始</a> •
+  <a href="#-系统架构">🏗️ 系统架构</a> •
+  <a href="#-支持格式与交互协议">📦 支持格式</a> •
+  <a href="#-深度工程机制与真机踩坑">🔬 深度机制</a> •
+  <a href="#-编译构建与签名">🛠️ 编译构建</a> •
+  <a href="CHANGELOG.md">📝 更新日志</a>
+</p>
 
-| 扩展名 | 说明 | 处理方式 |
-|---|---|---|
-| `.apk` | 单个 APK | 直接建立会话 |
-| `.apks` | Android App Bundle 导出的分片归档 | 按 zip 挑 `.apk` 条目，`base.apk` 优先 |
-| `.xapk` / `.akp` | APKPure 等渠道的分片包 | 同上 |
-| `.apkm` / `.apkmx` | APKMirror 等渠道的分片包 | 同上 |
-| `.zip` | 包含多个 `.apk` 的通用归档 | 同上 |
-| `*.apk.1` / `*.apk.2` / `*.apk.bin` … | 微信 / QQ 等社交软件转发时追加的备份后缀，文件本体仍是原安装包 | 先剥掉后缀，再按真实扩展名处理 |
-| 多个 APK | 系统分享 / 文件管理器多选 | 合并为一次 multi-split 会话 |
+---
 
-> 社交软件转发会把 `xxx.apk` 改成 `xxx.apk.1`（也有 `.2`、多位数字、`.bin`、
-> `.download` 等）以绕过系统安装器识别。`FileNames.normalize()` 与 Rust
-> `util::normalize_name()` 在链路最前端统一剥掉这层后缀：`xxx.apk.1` 按单个
-> APK 安装，`xxx.apks.1` 仍按归档拆分；staged 缓存文件名与通知 / 日志里的
-> 显示名同步归一，不会出现 `xxx.apk.1.apk` 这类拼接结果。
+</div>
 
-拉起通道：
+## 📌 项目基本概览
 
-- **打开方式 / 安装**：`ACTION_VIEW`、`ACTION_INSTALL_PACKAGE`，匹配 `content://` 与
-  `file://` + APK / 归档类 MIME，末尾用 `*/*` 兜底未知类型；另有独立的扩展名
-  分组（含大写形式）与「备份后缀」分组（`.*\.apk\.1`、`.*\.apk\..*` 等），
-  适配只给路径、不给 MIME 的调用方。
-- **系统分享**：`ACTION_SEND` / `ACTION_SEND_MULTIPLE` 独立分组，不声明 scheme，
-  `mimeType` 用 `*/*` 兜底，保证系统分享菜单与第三方应用分享都能拉起。
-  入口会按显示名过滤明显无关的类型（图片 / 文本 / 音视频等），不会误触发安装。
-- **卸载**：`ACTION_DELETE` / `ACTION_UNINSTALL_PACKAGE` + `package:` URI。
-- **应用内**：主界面「选择安装包并安装」支持 SAF 多选；「卸载应用」从已安装应用列表选择。
+| 维度 | 规格 / 说明 |
+| :--- | :--- |
+| **应用包名** | `io.github.lianxia233.privbroker`（v2.0.0 起启用全新包名，与历史版本不互通） |
+| **系统兼容** | minSdk **33**（Android 13+）/ targetSdk **36**（Android 16）/ compileSdk **36**，核心机制覆盖向下适配 |
+| **特权边界** | 自主 Broker，**ADB Shell / uid 2000 唯一后端**；零 Root 依赖，不引入任何第三方特权框架 |
+| **架构组成** | 纯业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate）；无线链路在 `broker-wireless` |
+| **产物交付** | 全 ABI 支持（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、**16KB 内存页对齐**、v1+v2 签名 |
+| **开源许可** | **GNU General Public License v3.0（GPL-3.0-only）**，详见 [LICENSE](LICENSE) |
+| **当前版本** | **2.1.17**（versionCode 24）；完整演进历史参见 [CHANGELOG.md](CHANGELOG.md) |
 
-## 3. 架构
+---
+
+## ✨ 核心亮点
 
 ```
-   用户（应用内：开启无线调试 → 通知栏输入 6 位配对码）
-                    │  mDNS 发现 → TLS 配对 → ADB TLS → shell 启动
-                    ▼
-┌────────── broker-server：独立特权进程 ──────────────────────────┐
-│  Rust + Tokio，启动即 getuid() 实测；非 shell(2000) 退出码 3     │
-│  broker-core   状态机 / 调度 / 会话 / 维护清理                    │
-│  broker-auth   挑战响应、nonce、时间窗口、撤销                    │
-│  broker-exec   执行规格抽取（参数数组、stdin 校验）              │
-│  broker-process 进程创建、超时 SIGKILL、stdout/stderr 分路        │
-│  broker-ipc    abstract Unix socket / Unix path / TCP loopback    │
-│  broker-protocol v2：4 字节大端长度前缀 + UTF-8 JSON             │
-└───────────────────────▲──────────────────────────────────────────┘
-                        │  帧协议 + 挑战响应认证
-                        │  Hello → Challenge → Proof → AuthAck
-┌───────────────────────┴────────── Android App ───────────────────┐
-│  MainActivity / SettingsActivity / AppPickerActivity / AboutActivity│
-│  LogActivity · SilentInstallActivity (零/短窗口入口)               │
-│  WirelessPairingService · WirelessCore · ServiceStarter            │
-│  broker-wireless：mDNS 后的 TLS / SPAKE2 / ADB TLS / shell 启动     │
-│  AuthPrompt · AuthForegroundService · StagedFiles · StagedProvider │
-│  TaskLauncher · SilentTask · FloatingIndicator · Notifier          │
-│        │  RustCore.dispatch(method, argsJson) : String             │
-│        ▼                                                          │
-│  libinstaller_core.so (crates/android-ffi, JNI, Rust)              │
-│        │  PlatformBridge.call(method, args) -> JSON                │
-│        ▼                                                          │
-│  installer-core (Rust, 纯逻辑, host 可单测)                       │
-│   状态机 · 命令构造 · 会话流程 · 归档拆分 · 结果解析              │
-│        │  BrokerBridge.call(...) 回调 Java                         │
-│        ▼                                                          │
-│  BrokerClient.java  帧协议客户端（LocalSocket / TCP）              │
-│  BrokerBridge.java  I/O 胶水：ContentResolver / 文件 / 配置        │
-│  InstallLogStore    本地 JSONL 日志                                │
-└──────────────────────────────────────────────────────────────────┘
+  ⚡ 真正的零感静默          📡 免电脑自主配对          🛡️ 跨应用卡片授权
+  不弹界面 · 1x1 隐形窗口    mDNS + TLS 1.3 + SPAKE2   shortService 前台保活
+  适配国产 ROM 过滤窗口      通知栏一键输入配对自启    无权限退化为交互横幅
+──────────────────────────────────────────────────────────────────────────
+  📦 全格式与恶意后缀还原    🔒 安全隔离与全量审计      🦀 模块化 Rust 特权后台
+  APKS / XAPK / 分片归档    Shell uid 2000 隔离       12 个 Workspace Crate
+  自动剥离 .apk.1 备份后缀   原子 JSONL 本地结构化日志  Tokio 异步引擎 + 端点自愈
 ```
 
-只有一个 JNI 入口、一个平台桥接原语，便于审计与测试。业务 core 的
-`exec / stat / archiveEntries / readBytes / deleteSource / config…` JSON 契约在
-v1 → v2 迁移中保持不变，只替换「特权状态 / 授权 / 执行」三个入口。
-`broker-wireless` 与 `broker-server` 由 `android-ffi` 链接进 APK 的 native 库：
-配对 / 启动桥与业务 JNI 入口共用同一个 `libinstaller_core.so`，Tokio 运行时只在
-shell 身份的特权进程里启动。
+### 功能清单 (Feature Matrix)
 
-## 4. 关键行为
+| 编号 | 核心功能 | 说明与技术特性 | 实现组件 / 源码位置 |
+| :---: | :--- | :--- | :--- |
+| **F-01** | **应用内无线自启** | 设备内自主启用无线调试与配对，**全程无需电脑或 USB 线** | `broker-wireless`, `WirelessPairingService`, `WirelessCore` |
+| **F-02** | **零感静默安装** | 单 APK / 多 split / 归档分片包，自动处理社交软件追加的 `.apk.1` 等备份后缀 | `installer-core/install.rs`, `archive.rs`, `plan.rs`, `FileNames` |
+| **F-03** | **静默安全卸载** | 支持保留数据卸载，提供已安装应用列表选择与高危系统应用二次警示 | `installer-core/uninstall.rs`, `AppPickerActivity`, `Uninstaller` |
+| **F-04** | **免确认白名单** | 允许为可信调用方设置免确认白名单；安装前确认弹窗支持全局开关 | `crates/core/src/config.rs`, `SettingsActivity` |
+| **F-05** | **动态通知交互** | 通知栏动态气泡展示安装进度与结果，支持一键拉起新应用或跳转查看日志 | `Notifier.java`, `SilentTask.java` |
+| **F-06** | **结构化安装日志** | 本地自动记录安装时间、应用名、分片数、耗时、原始输出，支持分享与导出 | `logbook.rs`, `InstallLogStore.java`, `LogActivity.java` |
+| **F-07** | **调用方弹性授权** | 首次调用由短时前台服务保活拉起悬浮卡片；无悬浮权限时自动退化为可交互横幅通知 | `auth.rs`, `AuthPrompt.java`, `AuthForegroundService.java` |
+| **F-08** | **轻量后台指示器** | 屏幕左上角科幻风轻量旋转指示器，全屏点击穿透、不染黑系统状态栏 | `FloatingIndicator.java`, `SciFiSpinner.java` |
+| **F-09** | **优雅失败降级** | 安装失败时默认仅发送一条低打扰通知，仅在用户点击时才交接给系统安装器 | `SilentTask.java`, `Notifier.java` |
+| **F-10** | **本地化中文展示** | 通知、日志、错误堆栈精准显示 APK 内部 Label 中文名与易读错误原因 | `AppNames.java`, `apk_meta.rs`, `logbook.rs` |
+| **F-11** | **双模写入与安全中转** | stdin 流式写入失败自动兜底为路径写入；中转落盘规避 FUSE 域 SELinux 拦截 | `install.rs`, `BrokerBridge.java`, `StagedFiles.java` |
+| **F-12** | **安装后自动清理** | 支持安装成功后删除原始安装包；权限不足时特权代理以 shell 身份执行安全删除 | `SilentTask.java`, `BrokerBridge.java` |
+| **F-13** | **关于与合规信息** | 提供完整构建版本、证书指纹、源码仓库直达与 GPL-3.0 许可说明 | `AboutActivity.java` |
 
-### 静默与窗口
+---
 
-- 入口按「调用方是否等待结果」走两条路径：**不等待结果**（多数文件管理器 / 分享）在
-  `onCreate` 内立即 `finish()`，framework 因 `mFinished=true` 跳过 `wm.addView`，
-  完全零窗口；**等待结果**（`startActivityForResult` / `EXTRA_RETURN_RESULT`）用
-  `@style/SilentEntryTheme` 驻留 1400ms，把结果回推过调用方在 MIUI 上的 1 秒
-  「结果忽略窗口」，窗口被压到 1x1、全透明、不可聚焦、不可触摸、无 dim、系统栏透明。
-- 延迟只作用于**结果回传**，后台安装在 `onCreate` 立即开始，通知与进度不等待。
-- 主题刻意不设 `windowIsFloating`：floating + translucent 在部分 ROM 上会被铺成
-  整屏半透明背板，是早期「一层透明遮罩」的来源。
-- **安装链路零窗口**：失败降级默认只发通知，不自动 `startActivity`；指示器与授权卡片
-  只用 `TYPE_APPLICATION_OVERLAY`，不会切换 task、不会 pause 前台应用。
-- 「按返回才能继续操作」是顶层存在**可聚焦窗口**的确定信号，且该窗口未必属于本应用，
-  排查时先看 `mCurrentFocus` 属主。完整定位过程见 [CHANGELOG.md](CHANGELOG.md) 的 v1.0.2。
+## 🚀 快速开始（无需电脑）
 
-### 代理单实例
+普通 Android 应用无法自行获取特权，本项目创新性地将 **「无线调试服务发现 + TLS 配对 + ADB 协议握手 + 代理拉起」** 做成了无需电脑的自助闭环。
 
-每次激活都由 shell 先遍历 `/proc`、把同名旧实例全部 `SIGKILL`，再拉起新进程，
-保证同一时刻只有一个代理在监听端点。这里有三个真机踩出来的坑，都已固定下来：
+```mermaid
+flowchart LR
+    A["📱 1. 开启无线调试<br/>(开发者选项)"] --> B["🔑 2. 获取配对码<br/>(点使用配对码配对设备)"]
+    B --> C["💬 3. 通知栏填入<br/>(下拉输入 6 位配对码)"]
+    C --> D["⚡ 4. 自动激活 Broker<br/>(TLS 1.3 + SPAKE2)"]
+    D --> E["✅ 5. 就绪可用<br/>(状态显示已就绪)"]
 
-- **判据取 `/proc/pid/cmdline` 而不是 `/proc/pid/comm`**：`app_process --nice-name=`
-  只改写 cmdline，`comm` 会被运行时改写成 `main`（Java 主线程名），按 comm 匹配在
-  真机上恒不命中。匹配锚定首个参数、用前缀匹配，同时保证不会把执行清理的
-  `sh -c` 自身算进去（它的 cmdline 以 `sh` 开头）。
-- **读取必须用 shell 内建 `read`，不能逐进程 fork 外部命令**：整条启动命令由 native
-  在无线调试 shell 里后台执行，投递后只等 6 秒（`DETACHED_READ_TIMEOUT`）就断开；
-  一旦超时，adbd 会连同本次会话的进程组一起清理，而那时命令很可能还停在启动前的
-  准备工作里。真机实测 882 个进程逐个 `$(tr -d '\000' < "$p/cmdline")` 要 26 秒，
-  单这一段就吃满预算、整条命令 28.6 秒才返回 —— 表现正是「命令确实下发过
-  （logcat 能看到 `adbd service requested 'shell:...'`），进程却始终没起来、
-  启动日志也没有新增」。改用内建 `read` 后整条命令约 3.4 秒。
-  两个附带细节：`read` 对没有换行的 cmdline **恒返回非 0**，用 `|| continue`
-  会跳过几乎所有进程；ash 读到 NUL 是**删除后拼接**（`sh\0-c\0x` 读成 `sh-cx`），
-  所以带空格的模式 `{name} *` 永不会命中。因此每轮都要显式清空变量，模式只用前缀。
-- **成功判据必须是完整握手，不能只探端口**：端点是按配对令牌派生的固定端口，
-  被上一版本或上一次激活留下的陈旧实例占住时端口探测恒为真，激活会被误报成功
-  （结果条报激活成功、状态区也显示已激活，但所有静默安装都失败）。
-  `BrokerClient.handshake` 能识别「在监听却拒绝当前令牌 / 协议不匹配」的陈旧实例，
-  激活结果、状态区刷新、通知栏自动激活三处判据已统一到它。
+    classDef step fill:#1e88e5,stroke:#1565c0,stroke-width:2px,color:#fff;
+    classDef finish fill:#43a047,stroke:#2e7d32,stroke-width:2px,color:#fff;
+    class A,B,C,D step;
+    class E finish;
+```
 
-旧实例清不掉的后果是升级后新客户端仍连上旧代理，激活看着成功、静默安装全部失败，
-详见 [CHANGELOG.md](CHANGELOG.md) 的 v2.1.15；判据与时间预算的修正见 v2.1.16；
-失败降级路径不再崩溃、以及「后台指示」开关真正生效，见 v2.1.17。
+### 操作步骤
 
-### 调用方授权
+1. **开启无线调试**：
+   - 打开系统「设置」→「开发者选项」→「无线调试」，打开总开关，并连接至 Wi-Fi 或自身热点。
+2. **获取 6 位配对码**：
+   - 在系统无线调试页面中，点击 **「使用配对码配对设备」**，界面将弹出 6 位数字配对码及配对端口。
+3. **通知栏快速配对**：
+   - 切换回本应用，点击 **「开始配对」**；
+   - 系统通知栏将出现常驻前台服务通知，下拉通知栏，**直接在通知输入框内输入这 6 位配对码并点击发送**。
+4. **自动激活与验证**：
+   - 应用底层自动完成 mDNS 发现、RSA 证书注册、SPAKE2 密钥协商与 ADB TLS 握手，以 `shell(uid 2000)` 身份启动特权代理；
+   - 回到应用首页，状态区自动更新为 **「已就绪」**，即可开始静默安装。
 
-- Rust `auth::decide` 返回 `ALLOW` / `ASK` / `DENY`：
-  - `ALLOW`：立即后台安装，回传 `RESULT_OK`；
-  - `ASK`：**跨应用悬浮卡片**叠在当前应用上方直接询问，允许后立即续装本次请求，
-    入口回传 `RESULT_CANCELED` + `CALLER_PENDING`；
-  - `DENY`：静默阻止、记一条日志，回传 `RESULT_CANCELED`。
-- 卡片由 `AuthForegroundService`（`shortService`）承载：入口对普通调用会立即
-  `finish`，进程随即降为 cached，异步申请完悬浮窗权限再 `addView` 往往来不及，
-  国产 ROM 上表现为「弹窗没弹出来」。前台服务把进程钉在前台优先级，
-  决策完成或 90 秒超时后立即 `stopForeground` + `stopSelf`，不做常驻。
-- 拿不到悬浮窗权限时，先经自主通道以 shell 身份尝试开启 AppOps 权限；仍失败则退化为一条
-  **带「允许并继续 / 拒绝」按钮的横幅通知**，按钮携带完整请求快照，
-  点按即完成授权并续装本次请求，**不降级成需要切回本应用的普通页面**。
-  通知正文点击才进入普通不透明授权页，全程不弹 Activity/Dialog 遮罩窗口。
-- 匿名来源（识别不到调用方）**永远不能被永久记住**，否则一次允许会放行后续所有匿名调用。
-- 设置页列出系统已安装应用：支持「全部 / 用户应用 / 系统应用」筛选、搜索、一键清空，
-  **已授权应用置顶**并带绿色徽章，系统应用以独立徽章标出。
+> [!TIP]
+> **私钥安全保证**：配对所用的 2048 位 RSA 密钥由应用在本地安全生成，存放于私有保护目录 `filesDir/adb_key.pk8`，并在系统备份规则中显式排除，绝不上传云端，确保单机凭证安全。
 
-### 数据生命周期
+---
 
-- 外部 `content://` 的读权限只在本 Activity 存活期间有效，入口在仍持有权限时把安装包
-  复制到应用私有缓存，由自家只读 `StagedProvider` 暴露；后台任务全程只读这个 URI。
-- 调用方给的**原始 URI** 单独保留一份：开启「成功后删除安装包」时删的是原文件。
-  `ContentResolver.delete` 常因只有读权限而失败，此时经代理以 shell 身份解析真实路径
-  执行 `rm -f`（argv 数组，不经 shell 拼接），并把删除结果写入安装日志。
-- 输入统一走 `content://`；`stat` / `archiveEntries` / `readBytes` 只做字节与元数据搬运，
-  所有策略判断在 Rust。包名经 `is_valid_package_name` 校验，避免命令注入。
-- 特权进程侧不接受 `Uri` / `ArchiveEntry` 形式的 stdin：客户端须先把内容落到绝对路径文件，
-  再以 `StdinSpec::Path` 传入，避免把 Android 权限模型带进独立进程。
-- 文件路径兜底的中转落点：外部缓存属于 FUSE 域（`u:object_r:fuse:s0`），shell(2000) 可读，
-  但 `pm install-write <path>` 由 **system_server** 打开文件，会被 SELinux 拒绝（`avc: denied
-  { read } ... tclass=file`，`pm` exit 255）。因此兜底时应用只把字节写到外部缓存，再由特权
-  代理以 shell 身份复制到 `/data/local/tmp/prvbrk-stage/<随机目录>`：目录 `0711`、文件
-  `0644`，system_server 可按路径读取，其它应用无法枚举目录；安装结束或失败立即整目录删除，
-  目录按次隔离，失败当场回滚，不会误删并发的中间产物。
-- 握手鉴权允许同一客户端并发：挑战表按 `(client_id, nonce)` 多槽保存并按 nonce 精确消费，
-  客户端令牌只允许单写入者生成。状态轮询、安装各步骤、焦点快照各自新建连接时，后到的
-  握手不会作废先到的挑战。
+## 🏗️ 系统架构
 
-### 日志与失败处理
+本项目采用清晰的三层解耦架构：**Android 交互与 I/O 适配层**、**Rust 业务核心逻辑层**、**独立特权执行代理（Tokio 异步运行时）**。
 
-- Rust 核心在成功与失败两条路径都生成结构化记录（操作类型、应用名、包名/版本、
-  分片数与大小、结果码、原始输出、耗时、来源、调用方），落到
-  `filesDir/logs/install-log.jsonl`，保留最近 **500** 条，原子替换、统一 LF。
-- 准备阶段失败、授权被拒由入口通过 `logRecord` 补记；日志写入是旁路，不影响安装结果。
-- 通知标题显示应用实际名称（已安装应用名 > APK 内 `application@label` > 文件名），
-  失败原因显示中文说明并保留原始错误码；日志同样以中文名作为标题。
-- 代理链路失败区分「进程没运行」与「进程在跑但拒绝握手」：后者单独给出 `HANDSHAKE_REJECTED`
-  状态与「重新激活（无需重新配对）」的指引，不再误报「服务未运行」；自动恢复以完整握手
-  （而非端口监听）判定是否真的恢复，恢复成功后重试本次操作一次。
-- 失败降级只把自家 `StagedProvider` 的 `content://` 交给系统安装器：`file://`
-  在 Android 7+ 不允许跨应用传递（`FileUriExposedException`），且调用方给的路径
-  本应用未必读得到 —— 这类来源不可能改用系统安装器，通知照发但不挂点击入口，
-  正文改为提示回首页重新选择文件。降级路径不会因构造跳转意图失败而崩溃。
-- 主界面不再展示「本次执行日志」，完整记录由独立的「安装日志」页承担。
+<details>
+<summary><b>📜 展开查阅：v2 长度前缀通信协议白皮书与密码学细节</b></summary>
 
-## 5. 应用内启用特权代理（无需电脑）
+### 1. 二进制长度前缀帧规范 (Wire Format)
+每个数据包由固定 **4 字节大端长度前缀** 和后续紧随的 **UTF-8 JSON Payload** 组成：
+```
++-----------------------------------+---------------------------------------+
+|  Length Prefix (4 Bytes, Big-End) |         Payload (UTF-8 JSON)          |
+|           u32 (0 .. 1MB)          |            Envelope JSON              |
++-----------------------------------+---------------------------------------+
+```
+- **单帧上限**：`MAX_FRAME_BYTES = 1024 * 1024`（1MB），防止异常数据流耗尽代理内存。
+- **协议版本**：当前为 `PROTOCOL_VERSION = 2`。版本不匹配直接返回 `VERSION_MISMATCH`。
 
-普通应用无法自行获得 shell 身份，代理必须由设备上的无线调试以 shell(uid 2000)
-启动一次。本应用把「启用无线调试 + 配对 + 启动」做成无需电脑的自助链路，
-由 `broker-wireless`（Rust）与 `WirelessPairingService`（Java 前台服务）协作完成。
+### 2. 消息信封结构 (Envelope)
+```json
+{
+  "version": 2,
+  "seq": 1001,
+  "client_id": "io.github.lianxia233.privbroker:client_01",
+  "session_id": 2048,
+  "timestamp_ms": 1731150000000,
+  "ttl_ms": 10000,
+  "body": {
+    "type": "EXEC",
+    "argv": ["pm", "install-create", "-r"],
+    "stdin": { "type": "PATH", "path": "/data/local/tmp/prvbrk-stage/uuid/base.apk" },
+    "env": [],
+    "timeout_ms": 30000,
+    "cancel_group": 1001
+  }
+}
+```
 
-### 用户步骤
+### 3. SPAKE2 与 ADB TLS 密码学保障
+- **密码协商**：采用 Edwards25519 曲线的 SPAKE2 算法，基于用户输入的 6 位瞬态数字完成强鉴权，免除证书导入门槛；
+- **传输安全**：建立 TLS 1.3 隧道后，通过 24 字节小端 `A_*` 帧完成 `A_STLS` 协议升级并拉起 Shell 独立代理。
 
-1. 主界面点「启用无线调试」→「去设置」，打开「开发者选项 → 无线调试」并开启开关。
-2. 在无线调试页点「使用配对码配对设备」，记下系统显示的 6 位配对码。
-3. 回到应用点「开始配对」；应用启动前台服务，通知栏出现常驻提示。
-4. 下拉通知栏，直接在通知里输入 6 位配对码并发送。
-5. 应用自动完成剩余步骤：注册 ADB 公钥、建立 ADB TLS 通道、以 shell 身份启动特权代理。
-6. 返回应用点「刷新状态」，状态变为「已就绪」即可使用。
+</details>
 
-全程不需要电脑、USB 数据线或任何第三方特权框架。配对用 RSA 私钥保存在应用私有目录
-`filesDir/adb_key.pk8`，已在备份规则中排除，不会随备份或云端同步外泄。
-`broker-server` 启动即调用 `getuid()`，非 2000 以退出码 3 拒绝，不提供任何绕过开关。
+```mermaid
+flowchart TD
+    subgraph UI_Layer ["📱 Android Client Application (Java & AndroidX)"]
+        Activities["UI 界面层<br/>MainActivity / Settings / Picker / Log"]
+        ST["SilentTask<br/>后台安装编排"]
+        AuthComp["AuthPrompt & AuthForegroundService<br/>短时保活与卡片弹窗"]
+        WPS["WirelessPairingService<br/>mDNS 发现 & 通知交互"]
+        Bridge["BrokerBridge / StagedFiles<br/>I/O 与 ContentProvider 适配"]
+    end
 
-### 链路分层
+    subgraph Core_Layer ["🦀 installer-core (Rust 纯业务逻辑 / Host 可单测)"]
+        JNI["libinstaller_core.so<br/>(crates/android-ffi JNI 边界)"]
+        StateMachine["状态机调度 / 会话流程"]
+        ArchiveEngine["归档解包与分片挑选<br/>(APKS / XAPK / APKM / ZIP)"]
+        NameNormalizer["后缀净化与规整<br/>(*.apk.1 -> 标准分片)"]
+        MetaParser["AXML 元数据与 Label 解析"]
+    end
 
-| 层 | 位置 | 职责 |
-|---|---|---|
-| 服务发现 | `WirelessPairingService` | mDNS 发现 `_adb-tls-pairing._tcp` 与 `_adb-tls-connect._tcp`，通知栏 RemoteInput 收配对码 |
-| 密钥 | `broker-wireless/src/key.rs` | RSA 2048、ADB 公钥结构编码、TLS 客户端证书、认证签名 |
-| 配对 | `broker-wireless/src/pairing.rs` | TLS 1.3 握手、密钥导出、SPAKE2 交换、AES-128-GCM 序列帧、PeerInfo 公钥注册 |
-| 密码学 | `broker-wireless/src/spake2.rs`, `crypto.rs` | Edwards25519 SPAKE2、HMAC/HKDF-SHA256、GCM nonce 序列 |
-| 传输 | `broker-wireless/src/adb.rs`, `tls.rs` | 24 字节小端 A_* 帧、`A_STLS` 升级、`A_AUTH` 回退、`shell:` 通道 |
-| 编排 | `broker-wireless/src/orchestrate.rs`, `WirelessCore` | 单次 JNI 调用返回稳定 JSON（ok / stage / code / message） |
-| 启动 | `ServiceStarter`, `broker-server` | `app_process` 以 shell 身份加载 native 库并阻塞运行 Tokio 服务 |
+    subgraph Broker_Layer ["⚡ broker-server (独立特权进程 / Shell uid 2000)"]
+        TokioServer["Tokio 异步运行时入口<br/>(启动即验证 getuid == 2000)"]
+        BrokerCore["broker-core<br/>调度状态机 / 会话管理 / TTL 清理"]
+        BrokerAuth["broker-auth<br/>时间窗口挑战响应 (Nonce 鉴权)"]
+        BrokerExec["broker-exec<br/>参数规格抽取与安全校验"]
+        BrokerProcess["broker-process<br/>进程创建 / SIGKILL / 超时管理"]
+        BrokerIPC["broker-ipc<br/>Unix Abstract / TCP Loopback 帧读写"]
+    end
 
-### 验证状态
+    WPS -->|"mDNS 配对 / SPAKE2 / ADB TLS"| TokioServer
+    Activities --> ST
+    ST --> AuthComp
+    ST --> Bridge
+    ST --> JNI
+    JNI --> StateMachine
+    StateMachine --> ArchiveEngine
+    StateMachine --> NameNormalizer
+    StateMachine --> MetaParser
+    StateMachine -.->|"长度前缀帧协议 (Length-Prefixed JSON)<br/>Hello ➔ Challenge ➔ Proof ➔ Ack"| BrokerIPC
+    BrokerIPC --> BrokerCore
+    BrokerCore --> BrokerAuth
+    BrokerCore --> BrokerExec
+    BrokerExec --> BrokerProcess
+    BrokerProcess -->|"pm install-create / write / commit"| SystemPM["⚙️ Android system_server (Package Manager)"]
 
-沙箱内已验证：SPAKE2 与固定测试向量逐字节一致、HKDF 符合 RFC 5869、
-本地 TLS 端到端配对与公钥注册、`A_STLS` 升级与 `shell:` 通道、帧协议与错误码。
+    classDef android fill:#e3f2fd,stroke:#1e88e5,stroke-width:2px,color:#0d47a1;
+    classDef rust fill:#efebe9,stroke:#8d6e63,stroke-width:2px,color:#3e2723;
+    classDef broker fill:#ede7f6,stroke:#7e57c2,stroke-width:2px,color:#311b92;
+    classDef os fill:#e8f5e9,stroke:#43a047,stroke-width:2px,color:#1b5e20;
+    class Activities,ST,AuthComp,WPS,Bridge android;
+    class JNI,StateMachine,ArchiveEngine,NameNormalizer,MetaParser rust;
+    class TokioServer,BrokerCore,BrokerAuth,BrokerExec,BrokerProcess,BrokerIPC broker;
+    class SystemPM os;
+```
 
-**待设备验证**：真机的无线调试服务发现、通知栏配对码交互、设备端 TLS 实现差异、
-`app_process` 加载 APK 内 native 库、SELinux 下的 abstract socket 连通性，
-以及最终的安装链路。这些环节无法在沙箱中模拟，UI 与关于页已如实标注。
+### 完整静默安装执行时序
 
-> 协议细节见 `crates/broker-protocol`，执行规格见 `crates/broker-exec`。
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Caller as 📂 外部应用 / 文件管理器
+    participant Entry as 🚪 SilentInstallActivity
+    participant Auth as 🛡️ AuthForegroundService
+    participant Rust as 🦀 installer-core
+    participant Broker as ⚡ broker-server (uid 2000)
+    participant PM as ⚙️ system_server (pm)
+    participant UI as 🔔 Notifier (通知与指示器)
 
-## 6. 构建
+    Caller->>Entry: 发送安装意图 (ACTION_VIEW / SEND)
+    Entry->>UI: 启动轻量左上角旋转指示器 (SciFiSpinner)
+    Entry->>Auth: 查询调用方授权规则 (ALLOW / ASK / DENY)
+    
+    alt 未授权调用方 (ASK)
+        Auth-->>Caller: 保持前台优先级，弹出悬浮决策卡片 / 横幅
+        Caller->>Auth: 用户点击「允许并记住」
+    end
 
-依赖：Rust stable + 4 个 Android target、cargo-ndk、Android SDK 36 / build-tools 36 /
-NDK 27.2.12479018、JDK 17+、Gradle 8.14（wrapper 已包含）、Python 3 + Pillow。
+    Entry->>Rust: 暂存文件并交给 Rust 核心解析
+    Rust->>Rust: 解包归档 / 过滤分片 / 剥离 .apk.1 备份后缀
+    Rust->>Broker: 建立连接并发送 Hello 帧
+    Broker-->>Rust: 返回 AuthChallenge (包含动态 Nonce)
+    Rust->>Broker: 回传计算后的 AuthProof
+    Broker-->>Rust: 鉴权通过 (AuthAck + SessionToken)
+    
+    Rust->>Broker: 下发 InstallCommand (参数数组与输入规格)
+    Broker->>PM: 执行 pm install-create / install-write
+    PM-->>Broker: Session Committed / Success
+    Broker-->>Rust: 返回执行结果与原始控制台输出
+    
+    Rust->>Entry: 生成结构化记录并持久化至 install-log.jsonl
+    Entry->>UI: 移除指示器，更新结果通知 (带「一键打开」与中文说明)
+    Entry->>Entry: 零窗口立即 finish() / 回传 RESULT_OK
+```
+
+---
+
+## 📦 支持格式与交互协议
+
+应用通过在 `AndroidManifest.xml` 中配置精细的 Intent 过滤器，实现了对各大应用市场、社交软件分发包的全面覆盖。
+
+| 扩展名 / 格式 | 文件类型与来源 | 内部处理策略 |
+| :--- | :--- | :--- |
+| **`.apk`** | 标准单个 Android 安装包 | 直接建立会话并流式写入安装 |
+| **`.apks`** | Android App Bundle (AAB) 导出的分片归档 | 自动解析 ZIP 目录，挑选有效 `.apk` 分片，优先挂载 `base.apk` |
+| **`.xapk` / `.akp`** | APKPure 等三方平台的分片打包格式 | 按分片归档处理，提取内部全部分片 APK |
+| **`.apkm` / `.apkmx`** | APKMirror 分片安装包格式 | 同上，自动识别架构并组合分片会话 |
+| **`.zip`** | 包含多个 `.apk` 的通用压缩归档 | 同上，免解压流式过滤有效 APK 实体 |
+| **`*.apk.1` / `*.apk.bin`** | **微信、QQ 等社交软件恶意改名的防拦截后缀** | **链路最前端统一剥离恶意后缀**，按原真实格式还原安装 |
+| **多选文件** | 系统文件管理器多选分享 | 合并为单次 Multi-Split 协同安装会话 |
+
+### 社交软件追加后缀处理机制
+
+> [!NOTE]
+> 微信、QQ 等社交平台在接收和转发 APK 时，会将 `app.apk` 强行重命名为 `app.apk.1`、`app.apk.2` 或追加 `.bin`、`.download`，从而阻止触发系统安装器。
+> 
+> 本项目在链路最前端通过 `FileNames.normalize()`（Java 端）与 `util::normalize_name()`（Rust 核心）实现双重净化：
+> 1. `sample.apk.1` 会被精准剥离为 `sample.apk` 并按单包处理；
+> 2. `bundle.apks.1` 会被正确剥离为 `bundle.apks` 并按分片归档解析；
+> 3. 暂存文件名与日志中的显示名同步净化，彻底避免出现 `sample.apk.1.apk` 这种畸变命名。
+
+---
+
+## 🔬 深度工程机制与真机踩坑
+
+本项目在真机（包括 HyperOS、MIUI、原生 Android 14/15/16 等系统）的实际调试中，攻克了大量系统底层限制与特殊场景。
+
+<details>
+<summary><b>1. 真正的零感静默：MIUI 结果忽略窗口与 1x1 隐形浮窗</b></summary>
+
+- **零窗口执行**：多数文件管理器和分享操作不需要接收回执，入口 `SilentInstallActivity` 在 `onCreate()` 内立即触发 `finish()`。Android Framework 检测到 `mFinished = true` 会直接跳过 `wm.addView`，达成真正意义上的 **0 毫秒零窗口**。
+- **1x1 隐形窗口适配**：对于通过 `startActivityForResult` 或带有 `EXTRA_RETURN_RESULT` 请求回执的调用方，入口使用定制的 `@style/SilentEntryTheme` 保持存活 1400ms，以绕过 MIUI/HyperOS 上著名的 **「1 秒结果忽略窗口」**。窗口被精确限制为 `1x1` 像素、全透明、不可聚焦、不可触摸、无 Dim、系统栏透明。
+- **杜绝全屏灰色蒙层**：主题坚决不配置 `windowIsFloating`。在大量国内厂商 ROM 上，`floating + translucent` 会被窗口管理器错误铺成整屏半透明蒙层（早期版本偶尔出现的透明遮罩的根因）。
+
+</details>
+
+<details>
+<summary><b>2. 代理单实例拉起：ash 内建 read 性能飞跃与进程名匹配坑</b></summary>
+
+特权代理在每次激活时，必须先将历史残留实例清理干净，确保同一端点无端口冲突。在真机实测中解决了三个致命问题：
+
+- **判据必须取 `/proc/pid/cmdline` 而非 `comm`**：
+  `app_process --nice-name=xxx` 只会修改进程的 cmdline，Linux 内核中的 `comm` 依然会被 Android 运行时强制覆盖为 `main`（Java 主线程名）。若依据 `comm` 过滤，真机命中率永远为 0。因此必须解析 `/proc/pid/cmdline` 并对首参数做前缀锚定匹配（同时避开执行清理自身的 `sh -c`）。
+- **Shell 内建 `read` 取代外部进程 fork（26 秒 ➔ 0.13 秒）**：
+  启动命令是在无线调试 Shell 中异步下发的，投递后等待超时设定为 6 秒（`DETACHED_READ_TIMEOUT`），超时后 adbd 会强杀整个进程组。
+  - **严重缺陷**：若使用 `$(tr -d '\000' < "$p/cmdline")` 遍历 `/proc`，在有 882 个进程的真机上会反复 fork 外部进程，耗时高达 **26.1 秒**，整条命令 28.6 秒才返回，必定触发超时被 adbd 强制清理，导致服务永远拉不起来！
+  - **优化方案**：改用 Shell 内建的 `read` 命令直接读取 `/proc/pid/cmdline`，真机扫描时间直接骤降至 **0.13 秒**，整条启动命令 3.4 秒即可平稳返回！
+- **握手全量验证判据**：
+  端点端口是根据令牌派生的，若上个版本遗留了陈旧实例占住端口，纯端口探测会恒为真（导致假激活）。现全部统一为 `BrokerClient.handshake` 完整握手鉴权，杜绝假成功。
+
+</details>
+
+<details>
+<summary><b>3. 跨应用授权：shortService 前台保活与无缝横幅降级</b></summary>
+
+- **shortService 前台保活**：由于入口 Activity 追求零感静默会在拉起后立即 `finish`，Android 进程会瞬间降级为 `cached` 状态。在国产 ROM 上异步申请悬浮窗往往来不及弹出即被系统冻结。本项目通过拉起类型为 `shortService` 的 `AuthForegroundService`，将进程优先级钉在前台，决策完成或 90 秒超时后立即自我销毁，安全且合规。
+- **通知横幅决策降级**：当设备未授予悬浮窗权限时，应用不会强行跳转主页打断用户，而是自动退化为一条**带有「允许并继续 / 拒绝」Action 按钮的即时横幅通知**。按钮携带完整请求上下文，用户直接在通知栏点击即可完成授权并无缝继续安装。
+- **匿名调用安全防御**：无法识别调用方包名的匿名请求**绝对禁止勾选「永久记住」**，防止一次恶意放行导致系统安全防线失守。
+
+</details>
+
+<details>
+<summary><b>4. 数据生命周期与 SELinux FUSE 域避坑</b></summary>
+
+- **SELinux FUSE 域阻断**：应用私有外部存储虽然能被特权代理读取，但 `pm install-write <path>` 是由系统核心进程 **`system_server`** 打开文件的。`system_server` 访问属于 FUSE 域（`u:object_r:fuse:s0`）的文件时会被 SELinux 强制阻断（`avc: denied { read }`，`pm` 返回 255）。
+- **随机临时中转机制**：兜底时应用将文件写到缓存后，特权代理以 shell 身份将文件复制到 `/data/local/tmp/prvbrk-stage/<随机目录>`。目录权限严格设为 `0711`，文件权限设为 `0644`，保证 `system_server` 可以按具体路径读取，其他普通应用无权枚举该目录。安装结束或异常退出时立即完整清空回滚。
+
+</details>
+
+<details>
+<summary><b>5. 幻影进程防杀与端点自愈重拉 (BrokerReviver)</b></summary>
+
+- **修正幻影进程配置**：早期指令中针对 Android 12+ 幻影进程监控的关闭命令存在命名空间错误。现已正规化为：
+  ```bash
+  settings put global settings_enable_monitor_phantom_procs false
+  device_config put activity_manager max_phantom_processes 2147483647
+  ```
+- **安装中途端点自愈**：当安装或卸载链路偶发遇到 `BROKER_NOT_READY` 时，内置 `BrokerReviver` 会自动通过 mDNS 重新嗅探可用端口，并发起重拉与全握手校验。自愈成功后自动重试当次任务，全程无需用户重新输入配对码。
+
+</details>
+
+---
+
+## 📱 平台兼容性矩阵
+
+| 平台版本 | 对应 API | 重点适配特性与安全机制 |
+| :--- | :---: | :--- |
+| **Android 16** | API 36 | 严格 16KB 内存页对齐；显式声明 `android:exported`；适配最新编译工具链 |
+| **Android 15** | API 35 | 全局 Edge-to-Edge 沉浸与 `fitsSystemWindows` 配色；1x1 隐形浮窗避让状态栏 |
+| **Android 14** | API 34 | 跨应用授权采用 `shortService` 类型前台服务保活；所有 Intent 显式添加 `FLAG_IMMUTABLE` |
+| **Android 13** | API 33 | 适配运行时 `POST_NOTIFICATIONS` 权限申请；通知分组与 Themed Icon 原生着色 |
+| **Android 11+** | API 30~32 | 原生 ADB 无线调试通信通道；配置 `<queries>` 声明；`QUERY_ALL_PACKAGES` 枚举支持 |
+| **Android 8~10** | API 26~29 | 系统悬浮窗 `TYPE_APPLICATION_OVERLAY` 兼容；自适应图标适配与旧版后台启动限制规避 |
+
+### 关键权限声明说明
+
+- `POST_NOTIFICATIONS`：用于展示安装进度气泡、结果通知以及在无悬浮窗权限时的横幅授权交互。
+- `INTERNET` & `ACCESS_NETWORK_STATE`：无线调试与特权代理建立本地环回（Loopback TCP / Socket）通信的法定权限。
+- `CHANGE_WIFI_MULTICAST_STATE`：用于 mDNS 组播发现局域网内的无线调试配对与连接服务。
+- `SYSTEM_ALERT_WINDOW`：用于弹出优雅的跨应用授权悬浮卡片与左上角轻量进度指示器（可选，支持横幅通知降级）。
+- `QUERY_ALL_PACKAGES`：仅用于在「设置」与「卸载应用」页面中枚举设备本地应用以供筛选配置，**绝不进行任何数据上传**。
+
+---
+
+## 🛠️ 编译构建与签名
+
+### 构建环境依赖
+
+- **Rust 工具链**：`stable` 版本，需安装 4 个 Android Target：
+  ```bash
+  rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+  ```
+- **构建工具**：`cargo-ndk` (`cargo install cargo-ndk`)
+- **Android SDK & NDK**：
+  - Android SDK Platform 36 / Build-Tools 36
+  - Android NDK `27.2.12479018`
+- **Java / Gradle**：JDK 17+，Gradle 8.14（仓库内置 `gradlew`）
+- **Python 环境**：Python 3 + Pillow（用于图标及测试数据生成）
+
+### 一键构建指令
 
 ```bash
+# 1. 配置环境变量
 export ANDROID_HOME=/path/to/android-sdk
 export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018
+
+# 2. 运行一键构建脚本
 bash scripts/build.sh
-# 产物: PrivilegeBroker.apk
+
+# 产物输出于: PrivilegeBroker.apk
 ```
 
-分步：
+<details>
+<summary><b>分步手动编译流程</b></summary>
 
 ```bash
-cargo test --workspace                           # 协议/认证/IPC/进程/状态机/端到端单测
+# 1. 运行全 workspace 单元测试 (含协议/鉴权/会话/IPC 测试)
+cargo test --workspace
+
+# 2. 交叉编译 4 个 ABI 的 Native 动态库
 cargo ndk -t arm64-v8a -t armeabi-v7a -t x86 -t x86_64 \
     -o android/app/src/main/jniLibs build --release -p installer-android-ffi
+
+# 3. 编译打包 Android APK
 cd android && ./gradlew assembleDebug
-python3 scripts/gen_icons.py                     # 生成各密度图标资源（可复现）
-python3 scripts/gen_axml_fixture.py              # 重新生成测试样本
+
+# 4. 可选：资源生成脚本
+python3 scripts/gen_icons.py        # 重新生成各分辨率图标
+python3 scripts/gen_axml_fixture.py # 重新生成测试样本
 ```
 
-**云编译已启用**：`.github/workflows/build.yml` 在 `push main` 或手动
-`workflow_dispatch` 时构建，产物为 `PrivilegeBroker.apk`，并默认创建 GitHub Release
-附上 APK（tag 形如 `v<version>-build.<run_number>`，依赖 `permissions: contents: write`，
-由 runner 预装的 `gh` CLI 完成，不使用第三方 release action）。
+</details>
 
-### 签名一致性
+### 构建可复现性与固定签名保证
 
-`android/app/signing/release.keystore` 随仓库分发，`build.gradle.kts` 让 `debug`
-（`scripts/build.sh` 走 `assembleDebug`）与 `release` 都显式指向它。因此**沙箱本地
-构建与 GitHub Actions 云构建产出的 APK 证书逐字节一致**，同包名下可互相覆盖安装。
+仓库在 `android/app/signing/release.keystore` 中分发了固定的自签名密钥，`build.gradle.kts` 将 `debug` 与 `release` 构建均强制指向该文件：
 
-> `build.gradle.kts` 中的 `storePassword` / `keyAlias` / `keyPassword` 是该 keystore
-> 内部的条目常量，必须与文件逐字一致；改动会令证书指纹变化。该密钥是**公开的自签名
-> 密钥**，只用于保证构建可复现与版本间签名一致，不提供任何身份信任。
-> v2.0.0 启用全新 applicationId，与历史版本包名不同：从任意旧版本升级都必须先卸载
-> 旧包，授权列表与安装日志不会自动迁移。
+> [!IMPORTANT]
+> - **沙箱本地构建与 GitHub Actions 云编译产出的 APK 签名证书完全一致（逐字节指纹相同）**，跨环境构建产物可直接相互覆盖安装。
+> - 该密钥属于**公开的自签名可复现构建凭据**，专用于保证开源分发一致性与版本无缝升级，请勿当作私有商业发布证书使用。
+> - 自 `v2.0.0` 起启用了全新 `applicationId`，如从旧版升级，请先卸载旧版本应用。
 
-## 7. 使用
+---
 
-1. 按「启动特权代理」一节在无线调试 shell 中启动一次代理进程，回主界面刷新状态。
-2. 允许通知权限（进度气泡需要）。
-3. 在「设置」里确认静默安装授权总开关，按用户 / 系统应用筛选并勾选允许发起静默安装的应用。
-4. 从文件管理器用「打开方式 / 系统分享」把 APK 交给本应用：已授权来源直接后台执行；
-   首次调用直接在当前应用上方弹卡片询问，允许后立即安装。
-5. 安装期间停留在当前应用，通知栏显示进度，屏幕左上角有小旋转指示器；不跳主界面。
-6. 结果更新同一条通知；成功可一键启动，失败显示中文原因并可点通知改用系统安装器。
-7. 「卸载应用」从应用列表选择，可筛选系统应用，确认时提示风险；卸载意图
-   （`package:` URI）同样静默执行。
-8. 打开「安装日志」查看每一次操作的时间、应用名、结果、耗时与原因，可导出或清空。
-
-## 8. 兼容性
-
-| 平台要求 | 处理 |
-|---|---|
-| Android 16 (API 36) | targetSdk 36；`android:exported` 显式声明；16KB page size |
-| Android 15 (API 35) | `fitsSystemWindows` + 系统栏配色；小窗口避开状态栏 |
-| Android 14 (API 34) | 授权询问用 `shortService` 前台服务保活；`PendingIntent.FLAG_IMMUTABLE`；FGS type 与 manifest 声明一致 |
-| Android 13 (API 33) | `POST_NOTIFICATIONS` 动态申请；通知渠道；themed icon |
-| Android 11+ (API 30) | 无线调试；`<queries>` 包可见性；`QUERY_ALL_PACKAGES` 用于枚举应用；全量 SAF |
-| Android 10+ (API 29) | 后台启动 Activity 受限，指示器与授权卡片改用系统悬浮窗 |
-| Android 8+ (API 26) | `TYPE_APPLICATION_OVERLAY`；adaptive icon + 单色图标 |
-
-`SYSTEM_ALERT_WINDOW` 只用于可选的进度指示器与跨应用授权卡片，可经自主通道以 shell
-身份尝试开启；未授予时退化为纯通知反馈。`QUERY_ALL_PACKAGES` 只用于设置页与卸载选择器
-展示应用列表，不上传、不持久化到任何远端。
-
-## 9. 目录
+## 📂 仓库工程结构
 
 ```
-Cargo.toml                  Cargo workspace（12 个 crate）
-crates/core/                纯 Rust 业务逻辑 installer-core + 单元测试
-crates/android-ffi/         JNI cdylib installer-android-ffi
-crates/broker-protocol/     协议 v2、帧格式、错误码、会话
-crates/broker-auth/         挑战响应、nonce、常量时间比较
-crates/broker-exec/         执行规格与结果模型
-crates/broker-process/      进程引擎、超时与取消
-crates/broker-ipc/          传输层与帧读写
-crates/broker-android/      uid / SELinux / 端点派生 / 启动参数
-crates/broker-core/         Tokio Broker 服务状态机
-crates/broker-client/       Rust 客户端 SDK 与端到端测试
-crates/broker-server/       独立特权进程入口
-android/                    Gradle 工程（Java 胶水、Manifest、资源）
-android/app/signing/        固定签名密钥（本地与云编译共用）
-icons/ scripts/             图标素材与构建 / 资源生成脚本
-.github/workflows/          CI（云编译并发布 Release）
-CHANGELOG.md                版本更新日志
-LICENSE                     GPL-3.0
+android-privilege-broker/
+├── .github/workflows/          # GitHub Actions 云编译与 Release 自动发布工作流
+├── android/                    # Android 模块 (Gradle、Java 桥接、Manifest、资源)
+│   ├── app/
+│   │   ├── signing/            # 固定的可复现签名密钥 (release.keystore)
+│   │   └── src/main/
+│   │       ├── java/           # Android UI、前台服务、悬浮窗、协议客户端
+│   │       └── res/            # 多语言字符串、布局、矢量资源
+├── crates/                     # Rust 核心 Workspace (12 个独立 Crate)
+│   ├── core/                   # installer-core: 业务状态机、命令规划、分片解包
+│   ├── android-ffi/            # JNI cdylib 桥接层 (libinstaller_core.so)
+│   ├── broker-protocol/        # v2 帧协议、4 字节大端长度前缀与数据结构定义
+│   ├── broker-auth/            # 挑战响应鉴权、Nonce 管理与常量时间校验
+│   ├── broker-exec/            # 特权执行规则定义、安全白名单参数审计
+│   ├── broker-process/         # 异步进程引擎、SIGKILL 与超时销毁
+│   ├── broker-ipc/             # Unix Abstract Socket / TCP Loopback 帧读写
+│   ├── broker-android/         # UID 校验、SELinux 域嗅探与端点派生
+│   ├── broker-core/            # Tokio 特权代理核心状态机与会话生命周期
+│   ├── broker-client/          # Rust 客户端 SDK 与端到端集成测试套件
+│   ├── broker-server/          # 独立特权后台进程主入口 (独立二进制/app_process)
+│   └── broker-wireless/        # 无线调试协议栈 (mDNS / SPAKE2 / TLS 1.3 / ADB TLS)
+├── icons/                      # 原始图标矢量素材与源图像
+├── scripts/                    # 一键构建脚本 (build.sh) 与资源生成脚本
+├── AGENTS.md                   # 仓库协作、编码与提交脱敏规范
+├── CHANGELOG.md                # 完整版本演进历史记录
+└── LICENSE                     # GNU GPL-3.0 开源许可协议
 ```
 
-## 10. 许可
+---
 
-本项目以 **GNU General Public License v3.0（GPL-3.0-only）** 发布，完整条款见 `LICENSE`。
-图标素材与生成的图形资源随仓库一同提供，同样适用该许可。
+## 📜 开源许可与免责声明
+
+- 本项目采用 **GNU General Public License v3.0（GPL-3.0-only）** 协议开源，完整协议文本请查阅 [LICENSE](LICENSE)。
+- 仓库内附带的全部图标设计、图形资源与测试用例同样遵循 GPL-3.0 协议。
+- **免责声明**：本项目通过 Android 官方无线调试规范获取 `shell(uid 2000)` 权限以执行常规的包管理操作，不提供 Root 越权能力。请确保安装来源合法可靠，开发者不对因安装第三方未知来源应用所导致的任何软硬件异常或数据丢失承担责任。
+
+---
+
+<div align="center">
+  <b>Android Privilege Broker</b> • 由开源社区共同维护构建
+</div>
