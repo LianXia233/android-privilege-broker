@@ -138,10 +138,17 @@ pub fn boot_log_failure_reason(log: &str) -> Option<String> {
 ///
 /// 五个细节决定「服务能不能起来并常驻」，缺一个就会表现为「提示成功但服务未运行」：
 /// 0. **单实例（对齐成熟实现的「启动前清理旧进程」）**：启动前遍历
-///    `/proc/*/comm`，把同名旧实例全部 `SIGKILL`。此前每次「激活」都无脑再拉
+///    `/proc/*/cmdline`，把同名旧实例全部 `SIGKILL`。此前每次「激活」都无脑再拉
 ///    一个 app_process，旧进程仍占着监听端点，新进程 bind 必然
 ///    `Address already in use (os error 98)` 并退出。成熟实现用 C 层的
 ///    `foreach_proc` + `kill(pid, SIGKILL)` 做同一件事，这里用 shell 等价实现。
+///
+///    **判据必须取 cmdline，不能取 comm**：`app_process --nice-name=` 只把
+///    `/proc/pid/cmdline` 收缩成该短名，而 `comm` 会被运行时改写成 `main`
+///    （Java 主线程名）。按 comm 匹配在真机上恒为 0 命中，旧实例永远清不掉，
+///    升级后新客户端仍连上旧代理（旧代理的挑战随机数未限制在 JSON 精确整数
+///    范围内），表现为「激活看着成功、所有静默安装都失败」。匹配还必须锚定
+///    **首个参数**：执行这段清理的 `sh -c` 自身 cmdline 里也含该进程名字样。
 /// 1. **重定向 stdio**：常驻的 app_process 若继承 shell 通道的 stdout/stderr，
 ///    adbd 会一直等这些 fd 关闭才发 `A_CLSE`；客户端读超时断开后，adbd 又会
 ///    kill 掉整个进程组。所以后台进程必须 `</dev/null >>log 2>&1`。
@@ -173,13 +180,20 @@ pub fn build_start_command(req: &WirelessRequest) -> String {
         shell_quote(&req.endpoint),
         shell_quote(&req.native_lib_dir),
     );
-    // 进程名与成熟实现的固定进程名同义。同时兼容旧版
-    // `--nice-name=privilege-broker`（Linux comm 上限 15 字符，被截成
-    // `privilege-brok*`），确保从旧版本升级后第一次激活就能清掉残留实例。
+    // 判据取自 `/proc/pid/cmdline`（去 NUL 后）而非 comm：`--nice-name=` 只改写
+    // cmdline，comm 会被运行时改成 `main`（Java 主线程名），按 comm 匹配恒不命中
+    // ——真机实测残留实例的 comm 就是 `main`，旧逻辑 0 命中。
+    // 匹配锚定首个参数：执行本段清理的 `sh -c` 自身 cmdline 里也含该进程名字样，
+    // 用 `*prvbrk_svc*` 会把清理者自己算进去（实测还会命中无关的长驻进程）。
+    // 同时兼容旧版进程名 `privilege-broker`，确保从旧版本升级后第一次激活就能
+    // 清掉残留实例 —— 残留实例正是本轮「升级后安装全失败」的直接来源。
+    // 命令替换外那层 `2>/dev/null` 不能省：遍历时必然撞上刚好退出的 pid，
+    // 重定向失败是 shell 报的（内层的 `2>/dev/null` 只作用于 `tr`），会往通道
+    // 刷一堆 `can't open ... No such file or directory`。
     let kill_old = format!(
         "SELF=$$; for p in /proc/[0-9]*; do \
-           IFS= read -r n < \"$p/comm\" 2>/dev/null || continue; \
-           case \"$n\" in {new}|privilege-brok*) \
+           c=$(tr -d '\\000' < \"$p/cmdline\" 2>/dev/null) 2>/dev/null || continue; \
+           case \"$c\" in {new}|{new}\\ *|privilege-brok*) \
              pid=${{p##*/}}; [ \"$pid\" = \"$SELF\" ] && continue; \
              kill -9 \"$pid\" 2>/dev/null ;; \
            esac; \
@@ -372,15 +386,26 @@ mod tests {
     }
 
     /// 对齐成熟实现 的 kill old process：启动前必须清理旧实例，
-    /// 否则旧进程占着 abstract socket，新进程 bind 必然 EADDRINUSE(os error 98)。
+    /// 否则旧进程占着监听端点，新进程 bind 必然 EADDRINUSE(os error 98)。
+    /// 判据必须是 cmdline：`--nice-name=` 只改写 cmdline，`comm` 恒为 `main`。
     #[test]
     fn start_command_kills_old_instances_before_start() {
         let cmd = build_start_command(&request());
         assert!(cmd.contains("--nice-name=prvbrk_svc"));
         assert!(cmd.contains("/proc/[0-9]*"), "必须遍历 /proc");
-        assert!(cmd.contains("/comm"), "按进程名 comm 匹配");
+        assert!(cmd.contains("< \"$p/cmdline\""), "按 cmdline 识别进程");
+        assert!(!cmd.contains("/comm"), "不得再使用 comm 判据");
+        assert!(cmd.contains("tr -d '\\000'"), "去掉 cmdline 的 NUL 分隔符");
+        assert!(
+            cmd.contains(") 2>/dev/null || continue"),
+            "抑制 PID 竞态产生的 shell 噪音"
+        );
         assert!(cmd.contains("kill -9"), "SIGKILL 旧实例");
-        assert!(cmd.contains("prvbrk_svc|privilege-brok*"), "兼容旧进程名");
+        // 锚定首个参数：执行清理的 sh -c 自身 cmdline 里也含该进程名字样。
+        assert!(
+            cmd.contains("prvbrk_svc|prvbrk_svc\\ *|privilege-brok*"),
+            "按首参数精确匹配，兼容旧进程名"
+        );
         // 清理必须发生在启动之前，否则清掉的是刚拉起的新进程。
         let kill_at = cmd.find("kill -9").unwrap();
         let start_at = cmd.find("app_process").unwrap();

@@ -5,6 +5,38 @@
 
 ---
 
+## v2.1.15
+
+### 修复「升级后静默安装全失败」：旧代理实例永远清不掉
+
+- **根因**：启动命令里「先清理同名旧实例」那一步的判据取的是 `/proc/pid/comm`，
+  而 `app_process --nice-name=` 只把 `/proc/pid/cmdline` 收缩成短名，`comm` 会被
+  运行时改写成 `main`（Java 主线程名）。真机实测代理进程是 `comm=main`、
+  `cmdline=prvbrk_svc`，旧判据命中数为 0 —— 旧实例始终占着监听端点，新进程
+  `bind` 直接 `Address already in use (os error 98)` 并退出，启动日志随后打印
+  「特权代理已在运行（复用现有实例）」，被判成一次成功的幂等重复激活。
+- **表现**：客户端升级后仍连上启动于旧版本的代理，握手被拒
+  （`serverNonce` 超出 JSON 精确整数范围），自动恢复又复用同一个旧实例并误报
+  「自动恢复成功」，重试后以 `BROKER_NOT_READY` 收尾、最终降级为只发通知，
+  用户侧看到的就是「激活像是成功、所有静默安装都失败」。
+- **修复**：判据改为读 `/proc/pid/cmdline`（先去掉 NUL 分隔符），并**锚定首个参数**
+  匹配 `prvbrk_svc` 与旧版进程名 `privilege-broker`，同时保留跳过自身的保护。
+  锚定是必须的：执行清理的 `sh -c` 自身 cmdline 里也含该进程名字样，非锚定匹配
+  实测还会命中无关的长驻进程。命令替换外再抑制一次 `stderr`，避免遍历时撞上刚好
+  退出的 PID 而往通道刷 `can't open ... No such file or directory`。
+- **效果**：从任意旧版本升级后，第一次激活即清掉残留实例并拉起新代理，不需要
+  重启设备、强停应用或手动清数据。
+
+### 验证
+
+- Rust 单测 `start_command_kills_old_instances_before_start` 同步改为断言 cmdline 判据、
+  首参数锚定、NUL 处理与噪音抑制，`cargo test -p broker-wireless` 24 项全部通过。
+- 真机只读复核（不改设备状态）：旧 comm 判据命中 0 个进程；新 cmdline 判据命中两个
+  残留实例，`cmdline` 分别为 `prvbrk_svc` 与 `privilege-broker`，两者的 `comm`
+  实测都是 `main`，与根因一致。
+
+---
+
 ## v2.1.14
 
 ### 修复「写入安装包失败」的三条独立故障链

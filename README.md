@@ -10,7 +10,7 @@
 | 架构 | 业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate），无线调试链路在 `broker-wireless` |
 | 产物 | 四 ABI（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、16KB 页对齐、v2 签名 |
 | 许可 | **GNU GPL-3.0-only**，见 `LICENSE` |
-| 版本 | **2.1.14**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
+| 版本 | **2.1.15**；版本记录见 [CHANGELOG.md](CHANGELOG.md) |
 
 ## 1. 功能
 
@@ -124,6 +124,15 @@ shell 身份的特权进程里启动。
   只用 `TYPE_APPLICATION_OVERLAY`，不会切换 task、不会 pause 前台应用。
 - 「按返回才能继续操作」是顶层存在**可聚焦窗口**的确定信号，且该窗口未必属于本应用，
   排查时先看 `mCurrentFocus` 属主。完整定位过程见 [CHANGELOG.md](CHANGELOG.md) 的 v1.0.2。
+
+### 代理单实例
+
+每次激活都由 shell 先遍历 `/proc`、把同名旧实例全部 `SIGKILL`，再拉起新进程，
+保证同一时刻只有一个代理在监听端点。判据取 `/proc/pid/cmdline` 而不是
+`/proc/pid/comm`：`app_process --nice-name=` 只改写 cmdline，`comm` 会被运行时
+改写成 `main`（Java 主线程名），按 comm 匹配在真机上恒不命中。匹配锚定首个参数，
+避免误杀执行清理的 `sh -c` 自身。旧实例清不掉的后果是升级后新客户端仍连上旧代理，
+激活看着成功、静默安装全部失败，详见 [CHANGELOG.md](CHANGELOG.md) 的 v2.1.15。
 
 ### 调用方授权
 
