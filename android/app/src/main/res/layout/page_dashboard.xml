@@ -719,24 +719,32 @@
                 android:layout_height="wrap_content"
                 android:text="@string/dash_actions" />
 
-            <TextView
+            <LinearLayout
                 android:id="@+id/btnInstall"
-                style="@style/PbText.Subheadline"
                 android:layout_width="match_parent"
                 android:layout_height="54dp"
                 android:layout_marginTop="12dp"
                 android:background="@drawable/pb_pill"
                 android:clickable="true"
-                android:drawableStart="@drawable/ic_action_apk"
-                android:drawablePadding="8dp"
-                android:drawableTint="?attr/pbOnPrimary"
                 android:focusable="true"
-                android:fontFamily="sans-serif-medium"
                 android:gravity="center"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp"
-                android:text="@string/btn_install"
-                android:textColor="?attr/pbOnPrimary" />
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_action_apk"
+                    android:tint="?attr/pbOnPrimary" />
+
+                <TextView
+                    style="@style/PbText.Subheadline"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="@string/btn_install"
+                    android:textColor="?attr/pbOnPrimary" />
+            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -745,40 +753,60 @@
                 android:baselineAligned="false"
                 android:orientation="horizontal">
 
-                <TextView
+                <LinearLayout
                     android:id="@+id/btnUninstall"
-                    style="@style/PbText.Subheadline"
                     android:layout_width="0dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
                     android:background="@drawable/pb_block"
                     android:clickable="true"
-                    android:drawableStart="@drawable/ic_action_uninstall"
-                    android:drawablePadding="6dp"
-                    android:drawableTint="?attr/pbTextPrimary"
                     android:focusable="true"
-                    android:fontFamily="sans-serif-medium"
                     android:gravity="center"
-                    android:text="@string/btn_uninstall"
-                    android:textColor="?attr/pbTextPrimary" />
+                    android:orientation="horizontal">
 
-                <TextView
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_action_uninstall"
+                        android:tint="?attr/pbTextPrimary" />
+
+                    <TextView
+                        style="@style/PbText.Subheadline"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/btn_uninstall"
+                        android:textColor="?attr/pbTextPrimary" />
+                </LinearLayout>
+
+                <LinearLayout
                     android:id="@+id/btnLaunch"
-                    style="@style/PbText.Subheadline"
                     android:layout_width="0dp"
                     android:layout_height="48dp"
                     android:layout_marginStart="10dp"
                     android:layout_weight="1"
                     android:background="@drawable/pb_block"
                     android:clickable="true"
-                    android:drawableStart="@drawable/ic_action_launch"
-                    android:drawablePadding="6dp"
-                    android:drawableTint="?attr/pbTextPrimary"
                     android:focusable="true"
-                    android:fontFamily="sans-serif-medium"
                     android:gravity="center"
-                    android:text="@string/btn_launch"
-                    android:textColor="?attr/pbTextPrimary" />
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_action_launch"
+                        android:tint="?attr/pbTextPrimary" />
+
+                    <TextView
+                        style="@style/PbText.Subheadline"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/btn_launch"
+                        android:textColor="?attr/pbTextPrimary" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
 

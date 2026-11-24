@@ -98,6 +98,18 @@ final class Prism {
                 Color.red(color), Color.green(color), Color.blue(color));
     }
 
+    /** 生效的明暗：用户强制浅/深优先，否则跟随系统。 */
+    static boolean effectiveDark(Context c) {
+        String mode = UiPrefs.themeMode(c);
+        if ("dark".equals(mode)) {
+            return true;
+        }
+        if ("light".equals(mode)) {
+            return false;
+        }
+        return isNight(c);
+    }
+
     static boolean isNight(Context c) {
         return (c.getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
@@ -232,14 +244,16 @@ final class Prism {
         Window w = activity.getWindow();
         w.setStatusBarColor(Color.TRANSPARENT);
         w.setNavigationBarColor(Color.TRANSPARENT);
-        w.setDecorFitsSystemWindows(false);
+        if (Build.VERSION.SDK_INT >= 30) {
+            w.setDecorFitsSystemWindows(false);
+        }
         View decor = w.getDecorView();
         decor.setSystemUiVisibility(decor.getSystemUiVisibility()
                 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         int flags = decor.getSystemUiVisibility();
-        boolean night = isNight(activity);
+        boolean night = effectiveDark(activity);
         if (!night) {
             flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
                     | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
@@ -258,13 +272,29 @@ final class Prism {
         int originalBottom = v.getPaddingBottom();
         int extra = dp(v.getContext(), topExtraDp(v.getContext()));
         v.setOnApplyWindowInsetsListener((view, insets) -> {
-            android.graphics.Insets bars = insets.getInsets(
-                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-            view.setPadding(originalLeft, originalTop + bars.top + extra,
+            int top = insetTop(insets);
+            view.setPadding(originalLeft, originalTop + top + extra,
                     originalRight, originalBottom);
             return insets;
         });
         v.requestApplyInsets();
+    }
+
+    /** API 29 只有旧接口；30+ 用带类型的 inset。 */
+    static int insetTop(WindowInsets insets) {
+        if (Build.VERSION.SDK_INT >= 30) {
+            return insets.getInsets(WindowInsets.Type.systemBars()
+                    | WindowInsets.Type.displayCutout()).top;
+        }
+        return insets.getSystemWindowInsetTop();
+    }
+
+    static int insetBottom(WindowInsets insets) {
+        if (Build.VERSION.SDK_INT >= 30) {
+            return insets.getInsets(WindowInsets.Type.systemBars()
+                    | WindowInsets.Type.displayCutout()).bottom;
+        }
+        return insets.getSystemWindowInsetBottom();
     }
 
     /**
@@ -274,7 +304,8 @@ final class Prism {
      * 属于系统自己的事，应用只按上报的 inset 排版。</p>
      */
     static int topExtraDp(Context c) {
-        return 8;
+        // 统一 32dp：让标题与页头落在状态栏（含第二行信息）之下，不特判厂商
+        return 32;
     }
 
     /** 颜色混合：把 over 以 alpha 叠在 base 上，返回不透明结果。 */
@@ -300,11 +331,10 @@ final class Prism {
     static void padBottomForNavBar(View v) {
         int originalBottom = v.getPaddingBottom();
         v.setOnApplyWindowInsetsListener((view, insets) -> {
-            android.graphics.Insets bars = insets.getInsets(
-                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+            int bottom = insetBottom(insets);
             ViewGroup.LayoutParams lp = view.getLayoutParams();
             if (lp instanceof ViewGroup.MarginLayoutParams m) {
-                m.bottomMargin = originalBottom + bars.bottom;
+                m.bottomMargin = originalBottom + bottom;
                 view.setLayoutParams(m);
             }
             return insets;
@@ -353,8 +383,18 @@ final class Prism {
      */
     static void applyTheme(android.app.Activity a) {
         a.getTheme().applyStyle(seedStyle(a), true);
-        if (UiPrefs.pureBlack(a) && isNight(a)) {
-            a.getTheme().applyStyle(R.style.PbPureBlack, true);
+        boolean dark = effectiveDark(a);
+        if (dark) {
+            a.getTheme().applyStyle(R.style.PbNight, true);
+            if (UiPrefs.pureBlack(a)) {
+                a.getTheme().applyStyle(R.style.PbPureBlack, true);
+            }
+        }
+        // 窗口底色也要跟着换，否则强制深色时首帧会闪白
+        try {
+            a.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(
+                    color(a, R.attr.pbSurfacePage)));
+        } catch (Throwable ignored) {
         }
         switch (UiPrefs.font(a)) {
             case "serif" -> a.getTheme().applyStyle(R.style.PbFontSerif, true);

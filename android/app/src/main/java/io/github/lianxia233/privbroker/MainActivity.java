@@ -82,6 +82,7 @@ public final class MainActivity extends Activity implements NavigationDock.Liste
     @Override
     protected void onResume() {
         super.onResume();
+        Keeper.ensure(this);
         if (dashboard != null) {
             dashboard.onResume();
         }

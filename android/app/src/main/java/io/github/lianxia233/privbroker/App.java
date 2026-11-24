@@ -14,8 +14,8 @@ public final class App extends Application {
     public void onCreate() {
         super.onCreate();
         appContext = getApplicationContext();
+        Keeper.ensure(appContext);
         // 启动时应用用户选择的明暗模式：system / light / dark
-        Prism.applyThemeMode(this, UiPrefs.themeMode(this));
         // 生命周期跟随进程：静默安装不依赖任何 Activity 是否存活。
         worker = Executors.newCachedThreadPool();
     }

@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/LianXia233/android-privilege-broker/releases/latest"><img src="https://img.shields.io/badge/Release-v2.2.3-blue.svg?style=flat-square&logo=android" alt="Release Version" /></a>
+  <a href="https://github.com/LianXia233/android-privilege-broker/releases/latest"><img src="https://img.shields.io/badge/Release-v2.2.4-blue.svg?style=flat-square&logo=android" alt="Release Version" /></a>
   <a href="https://github.com/LianXia233/android-privilege-broker/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/LianXia233/android-privilege-broker/build.yml?branch=main&style=flat-square&logo=github&label=Build" alt="CI Status" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-orange.svg?style=flat-square" alt="License" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-2021%20(12%20Crates)-DEA584.svg?style=flat-square&logo=rust&logoColor=white" alt="Rust" /></a>
@@ -46,7 +46,7 @@
 | **架构组成** | 纯业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate）；无线链路在 `broker-wireless` |
 | **产物交付** | 全 ABI 支持（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、**16KB 内存页对齐**、v1+v2 签名 |
 | **开源许可** | **GNU General Public License v3.0（GPL-3.0-only）**，详见 [LICENSE](LICENSE) |
-| **当前版本** | **2.2.3**（versionCode 29）；完整演进历史参见 [CHANGELOG.md](CHANGELOG.md) |
+| **当前版本** | **2.2.4**（versionCode 30）；完整演进历史参见 [CHANGELOG.md](CHANGELOG.md) |
 
 ---
 

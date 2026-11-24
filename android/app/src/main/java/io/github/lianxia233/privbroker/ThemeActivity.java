@@ -109,7 +109,6 @@ public final class ThemeActivity extends Activity {
         }, i -> {
             String next = i == 1 ? "light" : i == 2 ? "dark" : "system";
             UiPrefs.setThemeMode(this, next);
-            Prism.applyThemeMode(this, next);
             recreate();
         }));
 

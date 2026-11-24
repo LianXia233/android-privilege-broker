@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 深色覆盖层：用户强制深色时叠加，不依赖系统夜间模式 -->
+<resources>
+    <style name="PbNight">
+        <item name="pbSurfacePage">#131314</item>
+        <item name="pbSurfaceCard">#252628</item>
+        <item name="pbSurfaceBlock">#323235</item>
+        <item name="pbSurfaceInset">#404042</item>
+        <item name="pbSurfaceFloating">#323235</item>
+        <item name="pbTextPrimary">#F5F6FF</item>
+        <item name="pbTextSecondary">#C1C6D7</item>
+        <item name="pbTextMuted">#8C93A6</item>
+        <item name="pbDivider">#26262A</item>
+    </style>
+</resources>
