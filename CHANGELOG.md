@@ -4,7 +4,7 @@
 
 <div align="center">
 
-[![Latest Version](https://img.shields.io/badge/Release-v2.2.0-blue.svg?style=flat-square&logo=android)](https://github.com/LianXia233/android-privilege-broker/releases/latest)
+[![Latest Version](https://img.shields.io/badge/Release-v2.2.2-blue.svg?style=flat-square&logo=android)](https://github.com/LianXia233/android-privilege-broker/releases/latest)
 [![License](https://img.shields.io/badge/License-GPL--3.0-orange.svg?style=flat-square)](LICENSE)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/LianXia233/android-privilege-broker/build.yml?branch=main&style=flat-square&logo=github&label=Build)](https://github.com/LianXia233/android-privilege-broker/actions)
 
@@ -16,10 +16,29 @@
 
 | 分支 / 主版本 | 包含版本 | 演进重点与关键里程碑 |
 | :--- | :--- | :--- |
-| **v2.2.x 系列**<br/>*(当前维护)* | [v2.2.1](#v221) · [v2.2.0](#v220) | **界面复刻 FlClash**：M3 tonal 四层表面 / squircle 卡片 / 悬浮 Dock / 滑动·淡入切页；**删除安装包修复**：五级删除阶梯 + 大小与 SHA-256 校验，经软件自带的无线调试授权（shell uid 2000）落地 |
+| **v2.2.x 系列**<br/>*(当前维护)* | [v2.2.2](#v222) · [v2.2.1](#v221) · [v2.2.0](#v220) | **主题体系与视觉升级**：Theme Attribute 体系与 AMOLED 纯黑色板；**结构化审计日志**：展开追加全量结构化元数据；**界面复刻 FlClash**：M3 四层表面 / squircle 卡片 / 悬浮 Dock / 滑动·淡入切页；**删除安装包修复**：五级删除阶梯 + 大小与 SHA-256 校验，经自带无线调试授权（shell uid 2000）落地 |
 | **v2.1.x 系列** | [v2.1.18](#v2118) · [v2.1.17](#v2117) · [v2.1.16](#v2116) · [v2.1.15](#v2115) · [v2.1.14](#v2114) · [v2.1.13](#v2113) · [v2.1.12](#v2112)<br/>[v2.1.11](#v2111) · [v2.1.10](#v2110) · [v2.1.9](#v219) · [v2.1.8](#v218) · [v2.1.7](#v217) · [v2.1.6](#v216)<br/>[v2.1.5](#v215) · [v2.1.4](#v214) · [v2.1.3](#v213) · [v2.1.2](#v212) · [v2.1.1](#v211) · [v2.1.0](#v210) | **高可用与真机调优**：修复失败降级与指示器开关；ash read 优化规避 6 秒超时；幻影进程监控关闭；端点自愈重拉与挑战响应握手鉴权 |
 | **v2.0.x 系列** | [v2.0.0](#v200) | **重构自研特权架构**：全新包名 `io.github.lianxia233.privbroker`，全面转向自主 Broker（Shell uid 2000 唯一后端），引入 12 个 Rust Crate 组成的 Tokio 特权服务与免电脑无线配对 |
 | **v1.0.x 系列**<br/>*(历史版本)* | [v1.0.4](#v104) · [v1.0.3](#v103) · [v1.0.2](#v102) · [v1.0.1](#v101) · [v1.0.0](#v100) | **早期架构探索**：零窗口静默技术落地、MIUI 结果忽略窗口避让、多格式分片解包与本地日志系统构建 |
+
+---
+
+## v2.2.2
+
+### 日志
+- **展开详情追加结构化全景字段**：展开任何一条安装/卸载记录时，始终显示结构化摘要：
+  - 基础字段：记录 ID（`id`）、操作类型（`op`）、来源路径（`source`）；
+  - 业务字段：目标包名（`package`）、触发调用方（`caller`）、触发时间（`time`）、执行耗时（`durationMs`）；
+  - 终态字段：执行结果（成功 / 失败错误码 `code`）；
+  - 解决短记录（如标准成功安装日志通常仅一两行）展开后缺乏视觉变化、让用户误以为「点击未生效」的体验问题；折叠状态维持简洁的 2 行省略摘要，兼顾快速浏览与深度排错。
+
+### 界面与主题
+- **引入 Theme Attribute 主题属性系统**：新增 16 项统一主题属性（`pbPrimary` / `pbSurface*` / `pbText*` / `pbDivider` / 状态语义色等），挂载至 `AppTheme` 基础体系。
+- **支持 AMOLED 纯黑色板**：新增 `PbPalette.PureBlack` 纯黑表面色板，在 OLED / AMOLED 屏幕上提供深邃无光纯黑背景与极致功耗表现。
+- **Prism 动态主题解析**：新增 `Prism.attrColor()` 工具方法，支持在代码侧动态、安全解析当前活动主题的主题属性，为后续多主题灵活无缝切换打下坚实基础。
+
+### 工程与依赖
+- **版本号同步升级**：版本升至 `2.2.2`（versionCode 28，build 38）；Rust Workspace 12 个 Crate、`Cargo.lock`、`Cargo.toml`、`android/app/build.gradle.kts` 与各端文档全量对齐。
 
 ---
 ## v2.2.1

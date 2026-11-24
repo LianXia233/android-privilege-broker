@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <i>零弹窗交互 · 免电脑无线自启 · 16KB 内存页对齐 · 跨应用浮窗授权 · 本地原子审计日志</i>
+  <i>零感交互 · 免电脑无线自启 · 16KB 内存页对齐 · 跨应用弹性授权 · FlClash 灵动设计 · 原子审计日志</i>
 </p>
 
 <p align="center">
@@ -20,15 +20,22 @@
   <a href="https://developer.android.com/about/versions/16"><img src="https://img.shields.io/badge/Android-minSdk%2033%20%7C%20targetSdk%2036-3DDC84.svg?style=flat-square&logo=android&logoColor=white" alt="Android SDK" /></a>
   <img src="https://img.shields.io/badge/Page%20Size-16KB%20Aligned-success.svg?style=flat-square" alt="16KB Aligned" />
   <img src="https://img.shields.io/badge/Backend-ADB%20Shell%20(uid%202000)-8A2BE2.svg?style=flat-square" alt="Backend" />
+  <img src="https://img.shields.io/badge/UI%20Style-FlClash%20%2F%20Prism%20M3-007AFF.svg?style=flat-square" alt="UI Style" />
+  <img src="https://img.shields.io/badge/Themes-Light%20%7C%20Dark%20%7C%20AMOLED-000000.svg?style=flat-square" alt="Themes" />
 </p>
 
 <p align="center">
+  <a href="#-项目基本概览">📌 项目概览</a> •
   <a href="#-核心亮点">✨ 核心亮点</a> •
+  <a href="#-界面设计与开源致谢">🎨 界面美学</a> •
   <a href="#-快速开始无需电脑">🚀 快速开始</a> •
+  <a href="#-四大核心页面与独立交互架构">📱 页面架构</a> •
   <a href="#-系统架构">🏗️ 系统架构</a> •
+  <a href="#-五级阶梯安装包自动清理机制">🧹 自动清理</a> •
   <a href="#-支持格式与交互协议">📦 支持格式</a> •
   <a href="#-深度工程机制与真机踩坑">🔬 深度机制</a> •
   <a href="#-编译构建与签名">🛠️ 编译构建</a> •
+  <a href="#-仓库工程结构">📂 仓库结构</a> •
   <a href="CHANGELOG.md">📝 更新日志</a>
 </p>
 
@@ -42,20 +49,25 @@
 | :--- | :--- |
 | **应用包名** | `io.github.lianxia233.privbroker`（v2.0.0 起启用全新包名，与历史版本不互通） |
 | **系统兼容** | minSdk **33**（Android 13+）/ targetSdk **36**（Android 16）/ compileSdk **36**，核心机制覆盖向下适配 |
-| **特权边界** | 自主 Broker，**ADB Shell / uid 2000 唯一后端**；零 Root 依赖，不引入任何第三方特权框架 |
-| **架构组成** | 纯业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate）；无线链路在 `broker-wireless` |
-| **产物交付** | 全 ABI 支持（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、**16KB 内存页对齐**、v1+v2 签名 |
-| **开源许可** | **GNU General Public License v3.0（GPL-3.0-only）**，详见 [LICENSE](LICENSE) |
-| **当前版本** | **2.2.2**（versionCode 28）；完整演进历史参见 [CHANGELOG.md](CHANGELOG.md) |
+| **特权边界** | 自主 Broker，**ADB Shell / uid 2000 唯一特权后端**；零 Root 依赖，不引入任何第三方特权框架 |
+| **架构组成** | 纯业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 Workspace Crate）；无线配对在 `broker-wireless`；原生 Android 现代化交互层 |
+| **界面体系** | 参考 [FlClash (prism_ui)](https://github.com/chen08209/FlClash) 交互设计：M3 动态 Tonal 四层表面、Squircle 连续圆角卡片、单 Activity 悬浮胶囊 Dock、AMOLED 纯黑夜间模式、滑动与淡入切页动效 |
+| **产物交付** | 全 ABI 支持（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、**16KB 内存页对齐**、v1+v2 可复现构建签名 |
+| **开源许可** | **GNU General Public License v3.0（GPL-3.0-only）**，第三方与设计参考归属详见 [NOTICE](NOTICE) 与 [LICENSE](LICENSE) |
+| **当前版本** | **2.2.2**（versionCode 28，build 38）；完整演进历史参见 [CHANGELOG.md](CHANGELOG.md) |
 
 ---
 
 ## ✨ 核心亮点
 
 ```
-  ⚡ 真正的零感静默          📡 免电脑自主配对          🛡️ 跨应用卡片授权
+  ⚡ 真正的零感静默          📡 免电脑自主配对          🛡️ 跨应用弹性授权
   不弹界面 · 1x1 隐形窗口    mDNS + TLS 1.3 + SPAKE2   shortService 前台保活
   适配国产 ROM 过滤窗口      通知栏一键输入配对自启    无权限退化为交互横幅
+──────────────────────────────────────────────────────────────────────────
+  🎨 FlClash 灵动美学        📊 实时性能与内存看板      🧹 五级安全自动清理
+  M3 四层表面 · Squircle 卡片 PSS + Java 堆 3 秒刷新    应用侧 ➔ Shell ➔ 哈希校验
+  悬浮 Dock · AMOLED 纯黑   14 天 Sparkline 走势图    绝不误删同名文件
 ──────────────────────────────────────────────────────────────────────────
   📦 全格式与恶意后缀还原    🔒 安全隔离与全量审计      🦀 模块化 Rust 特权后台
   APKS / XAPK / 分片归档    Shell uid 2000 隔离       12 个 Workspace Crate
@@ -66,33 +78,114 @@
 
 | 编号 | 核心功能 | 说明与技术特性 | 实现组件 / 源码位置 |
 | :---: | :--- | :--- | :--- |
-| **F-01** | **应用内无线自启** | 设备内自主启用无线调试与配对，**全程无需电脑或 USB 线** | `broker-wireless`, `WirelessPairingService`, `WirelessCore` |
-| **F-02** | **零感静默安装** | 单 APK / 多 split / 归档分片包，自动处理社交软件追加的 `.apk.1` 等备份后缀 | `installer-core/install.rs`, `archive.rs`, `plan.rs`, `FileNames` |
-| **F-03** | **静默安全卸载** | 支持保留数据卸载，提供已安装应用列表选择与高危系统应用二次警示 | `installer-core/uninstall.rs`, `AppPickerActivity`, `Uninstaller` |
-| **F-04** | **免确认白名单** | 允许为可信调用方设置免确认白名单；安装前确认弹窗支持全局开关 | `crates/core/src/config.rs`, `SettingsActivity` |
+| **F-01** | **应用内无线自启** | 设备内自主启用无线调试与配对，**全程无需电脑或 USB 线** | `broker-wireless`, `WirelessPairingService`, `PairingActivity` |
+| **F-02** | **零感静默安装** | 单 APK / 多 split / 归档分片包，自动处理社交软件追加的 `.apk.1` 等备份后缀 | `installer-core/install.rs`, `archive.rs`, `FileNames.java`, `SilentInstallActivity.java` |
+| **F-03** | **静默安全卸载** | 支持保留数据卸载，提供已安装应用列表选择与高危系统应用二次警示 | `installer-core/uninstall.rs`, `AppPickerActivity.java`, `Uninstaller.java` |
+| **F-04** | **免确认白名单** | 允许为可信调用方设置免确认白名单；安装前确认弹窗支持全局开关与独立应用管理 | `crates/core/src/config.rs`, `SettingsPage.java`, `AllowAppsActivity.java` |
 | **F-05** | **动态通知交互** | 通知栏动态气泡展示安装进度与结果，支持一键拉起新应用或跳转查看日志 | `Notifier.java`, `SilentTask.java` |
-| **F-06** | **结构化安装日志** | 本地自动记录安装时间、应用名、分片数、耗时、原始输出，支持分享与导出 | `logbook.rs`, `InstallLogStore.java`, `LogActivity.java` |
-| **F-07** | **调用方弹性授权** | 首次调用由短时前台服务保活拉起悬浮卡片；无悬浮权限时自动退化为可交互横幅通知 | `auth.rs`, `AuthPrompt.java`, `AuthForegroundService.java` |
+| **F-06** | **结构化安装日志** | 本地自动记录安装时间、应用名、分片数、耗时、原始输出，展开详情呈现全景结构化元数据 | `logbook.rs`, `InstallLogStore.java`, `LogsPage.java` |
+| **F-07** | **调用方弹性授权** | 首次调用由短时前台服务保活拉起悬浮卡片；无悬浮权限时自动退化为可交互横幅通知 | `auth.rs`, `AuthPrompt.java`, `AuthForegroundService.java`, `CallerAuthActivity.java` |
 | **F-08** | **轻量后台指示器** | 屏幕左上角科幻风轻量旋转指示器，全屏点击穿透、不染黑系统状态栏 | `FloatingIndicator.java`, `SciFiSpinner.java` |
 | **F-09** | **优雅失败降级** | 安装失败时默认仅发送一条低打扰通知，仅在用户点击时才交接给系统安装器 | `SilentTask.java`, `Notifier.java` |
 | **F-10** | **本地化中文展示** | 通知、日志、错误堆栈精准显示 APK 内部 Label 中文名与易读错误原因 | `AppNames.java`, `apk_meta.rs`, `logbook.rs` |
 | **F-11** | **双模写入与安全中转** | stdin 流式写入失败自动兜底为路径写入；中转落盘规避 FUSE 域 SELinux 拦截 | `install.rs`, `BrokerBridge.java`, `StagedFiles.java` |
-| **F-12** | **安装后自动清理** | 安装成功后可删除原始安装包：暂存阶段采集路径 / 大小 / SHA-256，删除时按「应用侧 → shell 路径 → content query → content delete → 内容指纹」五级阶梯执行，每级先校验再删，绝不误删同名文件 | `SourceFacts.java`, `SilentTask.java`, `BrokerBridge.java` |
-| **F-13** | **关于与合规信息** | 提供完整构建版本、证书指纹、源码仓库直达与 GPL-3.0 许可说明 | `AboutActivity.java` |
-| **F-14** | **FlClash 风格界面** | 复刻 FlClash（prism_ui）设计系统：同源 M3 色板、四级 tonal 表面、squircle 卡片、悬浮胶囊 Dock、滑动 / 淡入切页、弹性按压与弹簧开关 | `Prism.java`, `NavigationDock.java`, `PageSwitcher.java`, `PrismSwitch.java`, `scripts/gen_palette.py` |
+| **F-12** | **安装后自动清理** | 暂存阶段采集路径/大小/SHA-256，按「应用侧 ➔ shell 路径 ➔ content query ➔ content delete ➔ 内容指纹」五级阶梯执行，强校验绝不误删 | `SourceFacts.java`, `SilentTask.java`, `BrokerBridge.java` |
+| **F-13** | **关于与合规信息** | 提供完整构建版本、证书指纹、源码仓库直达与 GPL-3.0 许可说明 | `AboutPage.java`, `NOTICE`, `LICENSE` |
+| **F-14** | **FlClash 风格界面** | 复刻 FlClash（prism_ui）设计系统：同源 M3 色板、四级表面、Squircle 卡片、悬浮胶囊 Dock、滑动 / 淡入切页、弹性按压与弹簧开关 | `Prism.java`, `NavigationDock.java`, `PageSwitcher.java`, `PrismSwitch.java`, `SquircleDrawable.java` |
+| **F-15** | **实时内存看板** | 仪表盘展示应用 PSS、Java 堆占用单行数值与进度条（3 秒刷新）；缓存卡支持一键即时清理与 1GB 满格可视化 | `DashboardPage.java`, `Sparkline.java`, `ic_action_memory.xml` |
+| **F-16** | **主题属性与纯黑模式** | 抽象 16 项 Theme Attribute，支持浅色、深色及针对 OLED 屏幕优化的 AMOLED Pure Black 纯黑色板 | `Prism.java`, `pb_palette.xml`, `attrs.xml`, `themes.xml` |
+| **F-17** | **逐应用独立授权** | 独立管理已授权应用，支持即时模糊搜索、全部 / 用户 / 系统应用分类筛选与一键弹簧动效撤销/授予 | `AllowAppsActivity.java`, `item_app.xml`, `PrismSwitch.java` |
 
 ---
 
 ## 🎨 界面设计与开源致谢
 
-本版本的界面、配色与动画参考了 [FlClash](https://github.com/chen08209/FlClash) 及其子模块
-[prism_ui](https://github.com/chen08209/prism_ui)（均为 GPL-3.0）。本项目没有链接或分发其
-Dart 代码，而是按相同的设计令牌（色板生成规则、四级表面、圆角与字号阶梯、切页与按压
-动效时长）用 Android 原生 View / 动画重写；配色算法源自 Google 的
-[material-color-utilities](https://github.com/material-foundation/material-color-utilities)
-（Apache-2.0），开发期通过其 Python 端口
-[materialyoucolor](https://pypi.org/project/materialyoucolor/)（MIT）离线生成静态色板，
-色值随源码分发。完整归属说明见 [NOTICE](NOTICE)。
+本项目自 `v2.2.0` 起全面重构前端视觉体验，界面、配色方案与交互动效深度参考了著名开源代理客户端 [FlClash](https://github.com/chen08209/FlClash) 及其核心设计子模块 [prism_ui](https://github.com/chen08209/prism_ui)（均为 GPL-3.0）。
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        FlClash / Prism 原生重构设计体系                │
+├────────────────────────────────────────────────────────────────────────┤
+│ 🌈 M3 动态色板   基于 Google material-color-utilities 离线生成色板     │
+│ 📐 超椭圆圆角     SquircleDrawable 连续曲率采样，告别突兀圆角          │
+│ 🛸 灵动胶囊 Dock  悬浮 / 停靠双形态，选中项 16% 镜头放大与 260ms 过冲回弹  │
+│ 🌌 AMOLED 纯黑   专为 OLED 屏幕打造的深邃纯黑（Pure Black）夜间色板   │
+│ 💫 丝滑切页动效   300ms easeOut 整页滑动 与 220ms easeInOut 交叉淡入   │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+> [!NOTE]
+> **设计与代码实现说明**：
+> - 本项目**未链接亦未分发任何 FlClash / prism_ui 的 Dart 或 Flutter 代码**，而是提炼其设计令牌（Design Tokens，包括色板生成规则、四级表面深度、字号阶梯、弹性按压阻尼与转场时长），以 Android 原生 View、自定义 Drawable 及属性动画体系从零重写。
+> - 配色算法源自 Google 官方的 [material-color-utilities](https://github.com/material-foundation/material-color-utilities)（Apache-2.0），开发期通过其 Python 端口 [materialyoucolor](https://pypi.org/project/materialyoucolor/)（MIT）离线生成静态色板（参见 `scripts/gen_palette.py`），色值嵌入源码分发。完整致谢与许可归属详见 [NOTICE](NOTICE)。
+
+---
+
+## 📱 四大核心页面与独立交互架构
+
+应用采用现代化 **Single-Activity + 常驻多页挂载 + 悬浮胶囊 Dock** 架构。各功能页面常驻内存，切换无闪烁、无状态丢失，极致轻快流畅：
+
+```mermaid
+flowchart TD
+    Main["📱 MainActivity<br/>(Prism Edge-to-Edge 沉浸 / UiPrefs 偏好持久化)"]
+    Dock["🛸 NavigationDock<br/>(悬浮胶囊 / 底部停靠 · 250ms 过冲回弹 · 镜头放大 16%)"]
+    Switcher["🔀 PageSwitcher<br/>(整页滑动 300ms / 交叉淡入 220ms)"]
+
+    Main --> Dock
+    Main --> Switcher
+
+    Switcher --> Page1["📊 仪表盘 (DashboardPage)<br/>• Hero 状态指示胶囊与主操作<br/>• 分段安装模式 (智能/全部/基础)<br/>• 实时内存看板 (PSS + Java 堆)<br/>• 14 天 Sparkline 迷你走势图<br/>• 快捷安装/卸载与最近任务"]
+    Switcher --> Page2["📜 审计记录 (LogsPage)<br/>• 安装 / 卸载 / 激活分段筛选<br/>• 展开追加结构化全景元数据<br/>• 原始控制台输出与耗时记录<br/>• 一键复制、导出与日志清空"]
+    Switcher --> Page3["⚙️ 通用设置 (SettingsPage)<br/>• 外观 (浅色/暗色/AMOLED纯黑)<br/>• 动效 (滑动/淡入 · 浮动/停靠)<br/>• 安装行为 (确认弹窗/自动清理)<br/>• 跨应用鉴权总控与自愈维护"]
+    Switcher --> Page4["ℹ️ 关于本软 (AboutPage)<br/>• 软件版本与构建序列号<br/>• 证书 SHA-256 指纹公示<br/>• 官方源码仓库与 Issue 直达<br/>• 开源许可与第三方设计致谢"]
+
+    Page3 -.->|"跳转"| Sub1["🛡️ 逐应用授权 (AllowAppsActivity)<br/>即时搜索 · 用户/系统分类 · 弹簧开关"]
+    Main -.->|"配对引导"| Sub2["📡 无线配对 (PairingActivity)<br/>mDNS 嗅探 · 配对码输入 · 激活服务"]
+    Main -.->|"快捷卸载"| Sub3["🗑️ 应用选择器 (AppPickerActivity)<br/>系统/用户应用枚举 · 保留数据卸载"]
+    Silent["⚡ 零感静默中枢 (SilentInstallActivity)<br/>0ms finish() 零窗口 · 1x1 隐形浮窗"] -.->|"后台调度"| Main
+
+    classDef host fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
+    classDef page fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1.5px,color:#4a148c;
+    classDef sub fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
+    class Main,Dock,Switcher host;
+    class Page1,Page2,Page3,Page4 page;
+    class Sub1,Sub2,Sub3,Silent sub;
+```
+
+### 1. 仪表盘 (DashboardPage)
+- **Hero 状态横幅**：顶部大圆角 Hero 卡片集成状态胶囊（未激活 / 检测中 / 已就绪）、24sp 醒目标题与 84dp 强交互主操作按钮（一键激活服务或开始配对）；
+- **安装模式三选一**：基于 `SegmentedControl` 平滑滑块提供「智能挑选（默认推荐）」、「全部安装」与「仅基础包」三种安装分段策略；
+- **实时内存看板**：3 秒定时采样展示应用实际物理内存（PSS）与 Java 堆占用量，配备单行清晰数值与百分比进度指示条；
+- **缓存卡片与维护**：实时统计当前应用暂存中转与图片缓存大小，提供一键即时清理入口，进度条按 1GB 满格比例直观呈现；
+- **14 天动态走势**：内置 `Sparkline` 贝塞尔平滑迷你面积图，直观展示最近两周的安装频次与成功率；
+- **最近安装列表**：卡片式收拢展示最近执行的安装任务，支持快速重试或直达详情。
+
+### 2. 审计记录 (LogsPage)
+- **多维度分段筛选**：支持按「全部」、「安装」、「卸载」及「服务激活」快速归类过滤；
+- **结构化元数据展开**：在 `v2.2.2` 中全新升级，展开任何一条记录时，无论长短均呈现格式化全景字段：
+  - **基础信息**：记录唯一 ID、操作类型（`op`）、安装包来源路径（`source`）；
+  - **业务信息**：目标包名（`package`）、触发调用方应用（`caller`）、触发时间点（`time`）、全链路执行耗时（`durationMs`）；
+  - **结果状态**：执行状态（成功 / 失败原因及对应错误码 `code`）；
+  - **原始输出**：底端完整回显 Android 底层 `pm` 命令原始控制台输出；
+- **便捷管理**：提供单项长按快速复制、一键导出分享至外部及本地日志全量清空功能。
+
+### 3. 通用设置 (SettingsPage)
+- **外观与个性化**：
+  - 主题切换：跟随系统 / 浅色模式 / 深色模式 / **AMOLED 纯黑（Pure Black）**；
+  - 切页动画：整页位移滑动（300ms easeOut） / 原地交叉淡入（220ms easeInOut）；
+  - 导航形态：悬浮胶囊 Dock（悬浮于内容之上） / 底部停靠 Dock（传统贴底样式）；
+- **安装行为管控**：
+  - 安装前确认：开启后每次接收到外部安装请求均强制弹出二次确认卡片；
+  - **安装成功后自动删除安装包**：开启后触发五级阶梯式安全清理，彻底释放本地存储空间；
+- **调用方鉴权与安全**：
+  - 鉴权总控：设置调用方权限检查策略（始终询问 / 仅首次询问 / 全部放行）；
+  - 免确认白名单管理：管理系统级和常用文件管理器免弹窗信任名单；
+  - **逐应用独立授权入口**：点击直达 `AllowAppsActivity`。
+
+### 4. 逐应用授权管理 (AllowAppsActivity)
+- **即时模糊搜索**：支持按应用名称或包名字段实时响应过滤；
+- **三段式分类筛选**：支持「全部应用」、「用户应用」与「系统应用」一键切换；
+- **弹性弹簧开关**：每项配备 `PrismSwitch` 阻尼弹簧开关，点击即时写入特权白名单配置，杜绝误授权风险。
 
 ---
 
@@ -102,10 +195,10 @@ Dart 代码，而是按相同的设计令牌（色板生成规则、四级表面
 
 ```mermaid
 flowchart LR
-    A["📱 1. 开启无线调试<br/>(开发者选项)"] --> B["🔑 2. 获取配对码<br/>(点使用配对码配对设备)"]
+    A["📱 1. 开启无线调试<br/>(系统开发者选项)"] --> B["🔑 2. 获取配对码<br/>(点使用配对码配对设备)"]
     B --> C["💬 3. 通知栏填入<br/>(下拉输入 6 位配对码)"]
     C --> D["⚡ 4. 自动激活 Broker<br/>(TLS 1.3 + SPAKE2)"]
-    D --> E["✅ 5. 就绪可用<br/>(状态显示已就绪)"]
+    D --> E["✅ 5. 就绪可用<br/>(仪表盘显示已就绪)"]
 
     classDef step fill:#1e88e5,stroke:#1565c0,stroke-width:2px,color:#fff;
     classDef finish fill:#43a047,stroke:#2e7d32,stroke-width:2px,color:#fff;
@@ -116,7 +209,7 @@ flowchart LR
 ### 操作步骤
 
 1. **开启无线调试**：
-   - 打开系统「设置」→「开发者选项」→「无线调试」，打开总开关，并连接至 Wi-Fi 或自身热点。
+   - 打开系统「设置」➔「开发者选项」➔「无线调试」，打开总开关，并连接至 Wi-Fi 或开启自身热点。
 2. **获取 6 位配对码**：
    - 在系统无线调试页面中，点击 **「使用配对码配对设备」**，界面将弹出 6 位数字配对码及配对端口。
 3. **通知栏快速配对**：
@@ -124,7 +217,7 @@ flowchart LR
    - 系统通知栏将出现常驻前台服务通知，下拉通知栏，**直接在通知输入框内输入这 6 位配对码并点击发送**。
 4. **自动激活与验证**：
    - 应用底层自动完成 mDNS 发现、RSA 证书注册、SPAKE2 密钥协商与 ADB TLS 握手，以 `shell(uid 2000)` 身份启动特权代理；
-   - 回到应用首页，状态区自动更新为 **「已就绪」**，即可开始静默安装。
+   - 回到应用首页，仪表盘状态区自动更新为 **「已就绪」**，即可开始静默安装。
 
 > [!TIP]
 > **私钥安全保证**：配对所用的 2048 位 RSA 密钥由应用在本地安全生成，存放于私有保护目录 `filesDir/adb_key.pk8`，并在系统备份规则中显式排除，绝不上传云端，确保单机凭证安全。
@@ -178,11 +271,13 @@ flowchart LR
 ```mermaid
 flowchart TD
     subgraph UI_Layer ["📱 Android Client Application (Java & AndroidX)"]
-        Activities["UI 界面层<br/>MainActivity / Settings / Picker / Log"]
-        ST["SilentTask<br/>后台安装编排"]
+        MainActivity["MainActivity<br/>(NavigationDock + 四页常驻架构)"]
+        Dashboard["DashboardPage / LogsPage<br/>SettingsPage / AboutPage"]
+        AllowApps["AllowAppsActivity<br/>逐应用授权管理"]
+        ST["SilentTask<br/>后台安装全流程编排"]
         AuthComp["AuthPrompt & AuthForegroundService<br/>短时保活与卡片弹窗"]
         WPS["WirelessPairingService<br/>mDNS 发现 & 通知交互"]
-        Bridge["BrokerBridge / StagedFiles<br/>I/O 与 ContentProvider 适配"]
+        Bridge["BrokerBridge / StagedFiles / SourceFacts<br/>I/O 适配与来源事实记录"]
     end
 
     subgraph Core_Layer ["🦀 installer-core (Rust 纯业务逻辑 / Host 可单测)"]
@@ -202,8 +297,10 @@ flowchart TD
         BrokerIPC["broker-ipc<br/>Unix Abstract / TCP Loopback 帧读写"]
     end
 
+    MainActivity --> Dashboard
+    MainActivity -.-> AllowApps
     WPS -->|"mDNS 配对 / SPAKE2 / ADB TLS"| TokioServer
-    Activities --> ST
+    Dashboard --> ST
     ST --> AuthComp
     ST --> Bridge
     ST --> JNI
@@ -222,7 +319,7 @@ flowchart TD
     classDef rust fill:#efebe9,stroke:#8d6e63,stroke-width:2px,color:#3e2723;
     classDef broker fill:#ede7f6,stroke:#7e57c2,stroke-width:2px,color:#311b92;
     classDef os fill:#e8f5e9,stroke:#43a047,stroke-width:2px,color:#1b5e20;
-    class Activities,ST,AuthComp,WPS,Bridge android;
+    class MainActivity,Dashboard,AllowApps,ST,AuthComp,WPS,Bridge android;
     class JNI,StateMachine,ArchiveEngine,NameNormalizer,MetaParser rust;
     class TokioServer,BrokerCore,BrokerAuth,BrokerExec,BrokerProcess,BrokerIPC broker;
     class SystemPM os;
@@ -236,6 +333,7 @@ sequenceDiagram
     actor Caller as 📂 外部应用 / 文件管理器
     participant Entry as 🚪 SilentInstallActivity
     participant Auth as 🛡️ AuthForegroundService
+    participant Facts as 📋 SourceFacts (事实记录)
     participant Rust as 🦀 installer-core
     participant Broker as ⚡ broker-server (uid 2000)
     participant PM as ⚙️ system_server (pm)
@@ -250,6 +348,7 @@ sequenceDiagram
         Caller->>Auth: 用户点击「允许并记住」
     end
 
+    Entry->>Facts: 采集来源事实 (真实路径/大小/SHA-256 计算)
     Entry->>Rust: 暂存文件并交给 Rust 核心解析
     Rust->>Rust: 解包归档 / 过滤分片 / 剥离 .apk.1 备份后缀
     Rust->>Broker: 建立连接并发送 Hello 帧
@@ -262,10 +361,53 @@ sequenceDiagram
     PM-->>Broker: Session Committed / Success
     Broker-->>Rust: 返回执行结果与原始控制台输出
     
+    opt 开启「安装成功后删除安装包」
+        Entry->>Facts: 执行五级阶梯式安全清理 (严格核验大小与哈希)
+    end
+
     Rust->>Entry: 生成结构化记录并持久化至 install-log.jsonl
     Entry->>UI: 移除指示器，更新结果通知 (带「一键打开」与中文说明)
     Entry->>Entry: 零窗口立即 finish() / 回传 RESULT_OK
 ```
+
+---
+
+## 🧹 五级阶梯安装包自动清理机制
+
+在现代 Android 存储机制（Scoped Storage / SAF / FileProvider）限制下，应用直接通过 `File.delete()` 或 `ContentResolver.delete()` 往往无权删除第三方传递的安装包。为此，本项目构建了一套**基于特权代理（Shell uid 2000）的五级阶梯删除机制**：
+
+```mermaid
+flowchart TD
+    Start["🗑️ 触发删除原始安装包"] --> S1{"1. 应用侧删除<br/>(DocumentsContract / ContentResolver)"}
+    S1 -- 成功 --> Done["✅ 成功删除并记入审计日志"]
+    S1 -- 无权限/失败 --> S2{"2. Shell 路径直接删除<br/>(按已解析绝对路径 rm)"}
+    S2 -- 成功 --> Done
+    S2 -- 失败 --> S3{"3. Shell Content Query<br/>(反查 MediaStore _data 路径后 rm)"}
+    S3 -- 成功 --> Done
+    S3 -- 失败 --> S4{"4. Shell Content Delete<br/>(通过特权执行 content delete)"}
+    S4 -- 成功 --> Done
+    S4 -- 失败 --> S5{"5. 全盘 SHA-256 指纹寻回<br/>(/storage 下名称+大小+哈希匹配再删)"}
+    S5 -- 成功 --> Done
+    S5 -- 全部失败 --> Fail["⚠️ 放弃删除并如实记录受限原因<br/>(严防误删同名文件)"]
+
+    classDef step fill:#e3f2fd,stroke:#1565c0,stroke-width:1.5px,color:#0d47a1;
+    classDef ok fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
+    classDef warn fill:#fff3e0,stroke:#e65100,stroke-width:1.5px,color:#bf360c;
+    class Start,S1,S2,S3,S4,S5 step;
+    class Done ok;
+    class Fail warn;
+```
+
+### 关键技术保障
+
+1. **暂存期采集来源事实 (`SourceFacts.java`)**：
+   在拥有临时读取权限的暂存期，提取 SAF 文档 ID（`primary:Download/x.apk`）、反查 `/proc/self/fd` 物理路径、规整 `/mnt/user/...` 视图、通过 `fstat` 获取精准物理大小，并在流式复制的同时计算完整 SHA-256 哈希值。
+2. **删除前强制内容指纹核验**：
+   在执行任何底层删除操作前，必须严格比对文件体积；有哈希时比对 SHA-256 内容指纹。**核验不通过坚决放弃删除，宁可留存也绝不误删同名文件**。
+3. **参数化执行规避注入风险**：
+   特权 Shell 命令统一通过 `sh -c script sh <位置参数>` 传递，路径和文件名完全不参与脚本字符串拼接，杜绝任何命令注入漏洞。
+4. **精细化审计说明**：
+   若因系统保护导致无法删除，日志明确输出具体受限原因（如「自 Android 11 起受系统保护目录」），杜绝模糊报错。
 
 ---
 
@@ -317,7 +459,7 @@ sequenceDiagram
   `app_process --nice-name=xxx` 只会修改进程的 cmdline，Linux 内核中的 `comm` 依然会被 Android 运行时强制覆盖为 `main`（Java 主线程名）。若依据 `comm` 过滤，真机命中率永远为 0。因此必须解析 `/proc/pid/cmdline` 并对首参数做前缀锚定匹配（同时避开执行清理自身的 `sh -c`）。
 - **Shell 内建 `read` 取代外部进程 fork（26 秒 ➔ 0.13 秒）**：
   启动命令是在无线调试 Shell 中异步下发的，投递后等待超时设定为 6 秒（`DETACHED_READ_TIMEOUT`），超时后 adbd 会强杀整个进程组。
-  - **严重缺陷**：若使用 `$(tr -d '\000' < "$p/cmdline")` 遍历 `/proc`，在有 882 个进程的真机上会反复 fork 外部进程，耗时高达 **26.1 秒**，整条命令 28.6 秒才返回，必定触发超时被 adbd 强制清理，导致服务永远拉不起来！
+  - **严重缺陷**：若使用 `$(tr -d ' ' < "$p/cmdline")` 遍历 `/proc`，在有 882 个进程的真机上会反复 fork 外部进程，耗时高达 **26.1 秒**，整条命令 28.6 秒才返回，必定触发超时被 adbd 强制清理，导致服务永远拉不起来！
   - **优化方案**：改用 Shell 内建的 `read` 命令直接读取 `/proc/pid/cmdline`，真机扫描时间直接骤降至 **0.13 秒**，整条启动命令 3.4 秒即可平稳返回！
 - **握手全量验证判据**：
   端点端口是根据令牌派生的，若上个版本遗留了陈旧实例占住端口，纯端口探测会恒为真（导致假激活）。现全部统一为 `BrokerClient.handshake` 完整握手鉴权，杜绝假成功。
@@ -389,7 +531,7 @@ sequenceDiagram
   - Android SDK Platform 36 / Build-Tools 36
   - Android NDK `27.2.12479018`
 - **Java / Gradle**：JDK 17+，Gradle 8.14（仓库内置 `gradlew`）
-- **Python 环境**：Python 3 + Pillow（用于图标及测试数据生成）
+- **Python 环境**：Python 3 + Pillow + materialyoucolor（用于图标、色板及测试数据生成）
 
 ### 一键构建指令
 
@@ -411,15 +553,15 @@ bash scripts/build.sh
 # 1. 运行全 workspace 单元测试 (含协议/鉴权/会话/IPC 测试)
 cargo test --workspace
 
-# 2. 交叉编译 4 个 ABI 的 Native 动态库
-cargo ndk -t arm64-v8a -t armeabi-v7a -t x86 -t x86_64 \
-    -o android/app/src/main/jniLibs build --release -p installer-android-ffi
+# 2. 交叉编译 4 个 ABI 的 Native 动态库 (严格 16KB 页对齐)
+cargo ndk -t arm64-v8a -t armeabi-v7a -t x86 -t x86_64     -o android/app/src/main/jniLibs build --release -p installer-android-ffi
 
 # 3. 编译打包 Android APK
 cd android && ./gradlew assembleDebug
 
-# 4. 可选：资源生成脚本
+# 4. 可选：资源与色板生成脚本
 python3 scripts/gen_icons.py        # 重新生成各分辨率图标
+python3 scripts/gen_palette.py      # 按 prism 规则重新生成 M3 色板
 python3 scripts/gen_axml_fixture.py # 重新生成测试样本
 ```
 
@@ -440,13 +582,31 @@ python3 scripts/gen_axml_fixture.py # 重新生成测试样本
 
 ```
 android-privilege-broker/
-├── .github/workflows/          # GitHub Actions 云编译与 Release 自动发布工作流
-├── android/                    # Android 模块 (Gradle、Java 桥接、Manifest、资源)
+├── .github/workflows/          # GitHub Actions 云编译 (Node 24) 与 Release 发布工作流
+├── android/                    # Android 原生模块 (Gradle、Java、Manifest、资源)
 │   ├── app/
 │   │   ├── signing/            # 固定的可复现签名密钥 (release.keystore)
 │   │   └── src/main/
-│   │       ├── java/           # Android UI、前台服务、悬浮窗、协议客户端
-│   │       └── res/            # 多语言字符串、布局、矢量资源
+│   │       ├── java/.../privbroker/
+│   │       │   ├── MainActivity.java       # 主壳层：4 页常驻挂载与 NavigationDock 调度
+│   │       │   ├── DashboardPage.java      # 仪表盘：Hero 状态卡、内存看板、14天 Sparkline
+│   │       │   ├── LogsPage.java           # 记录页：分段筛选、结构化元数据展开与导出
+│   │       │   ├── SettingsPage.java       # 设置页：主题外观、安装策略与鉴权总控
+│   │       │   ├── AboutPage.java          # 关于页：版本信息、证书指纹与开源许可清单
+│   │       │   ├── AllowAppsActivity.java  # 逐应用授权独立管理界面 (搜索/过滤/弹簧开关)
+│   │       │   ├── PairingActivity.java    # 无线配对与服务激活专属向导页
+│   │       │   ├── AppPickerActivity.java  # 已安装应用选择器 (安全卸载入口)
+│   │       │   ├── SilentInstallActivity.java # 零感静默安装分发入口 (0ms 零窗口)
+│   │       │   ├── NavigationDock.java     # 灵动胶囊导航底栏 (镜头放大与过冲回弹)
+│   │       │   ├── PageSwitcher.java       # 双模页面切换容器 (位移滑动 / 交叉淡入)
+│   │       │   ├── Prism.java              # 动态配色系统与 Theme Attribute 解析工具
+│   │       │   ├── PrismSwitch.java        # 弹性物理弹簧动效开关控件
+│   │       │   ├── SegmentedControl.java   # iOS 风格分段平滑滑块选择器
+│   │       │   ├── SquircleDrawable.java   # 超椭圆连续曲率圆角背景绘制
+│   │       │   ├── Sparkline.java          # 贝塞尔平滑迷你面积走势图
+│   │       │   ├── SourceFacts.java        # 来源事实采集与五级阶梯删除执行器
+│   │       │   └── ...                     # SilentTask / Notifier / BrokerBridge 等核心
+│   │       └── res/                        # 多语言字符串、矢量图标、M3 色板与主题属性
 ├── crates/                     # Rust 核心 Workspace (12 个独立 Crate)
 │   ├── core/                   # installer-core: 业务状态机、命令规划、分片解包
 │   ├── android-ffi/            # JNI cdylib 桥接层 (libinstaller_core.so)
@@ -461,9 +621,14 @@ android-privilege-broker/
 │   ├── broker-server/          # 独立特权后台进程主入口 (独立二进制/app_process)
 │   └── broker-wireless/        # 无线调试协议栈 (mDNS / SPAKE2 / TLS 1.3 / ADB TLS)
 ├── icons/                      # 原始图标矢量素材与源图像
-├── scripts/                    # 一键构建脚本 (build.sh) 与资源生成脚本
+├── scripts/                    # 一键构建脚本 (build.sh) 与色板/图标生成脚本
+│   ├── build.sh                # 跨架构一键编译与 APK 打包脚本
+│   ├── gen_palette.py          # M3 HCT 算法离线色板生成工具
+│   ├── gen_icons.py            # 全套分辨率 mipmap 图标生成工具
+│   └── gen_axml_fixture.py     # 测试 AXML 二进制样本生成工具
 ├── AGENTS.md                   # 仓库协作、编码与提交脱敏规范
 ├── CHANGELOG.md                # 完整版本演进历史记录
+├── NOTICE                      # 第三方开源组件与设计参考法定归属说明
 └── LICENSE                     # GNU GPL-3.0 开源许可协议
 ```
 
@@ -472,11 +637,13 @@ android-privilege-broker/
 ## 📜 开源许可与免责声明
 
 - 本项目采用 **GNU General Public License v3.0（GPL-3.0-only）** 协议开源，完整协议文本请查阅 [LICENSE](LICENSE)。
+- 本项目关于界面结构、色板设计与动效时长的开源参考致谢见 [NOTICE](NOTICE)。
 - 仓库内附带的全部图标设计、图形资源与测试用例同样遵循 GPL-3.0 协议。
 - **免责声明**：本项目通过 Android 官方无线调试规范获取 `shell(uid 2000)` 权限以执行常规的包管理操作，不提供 Root 越权能力。请确保安装来源合法可靠，开发者不对因安装第三方未知来源应用所导致的任何软硬件异常或数据丢失承担责任。
 
 ---
 
 <div align="center">
-  <b>Android Privilege Broker</b> • 由开源社区共同维护构建
+  <b>Android Privilege Broker</b> • 由开源社区共同维护构建<br/>
+  <sub>Copyright © 2025-2026 LianXia233. All rights reserved.</sub>
 </div>
