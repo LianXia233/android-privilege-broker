@@ -2,7 +2,9 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#F8FAFD">
+  <meta name="color-scheme" content="light">
   <title>Android Privilege Broker - 高性能 Android 静默安装与生命周期套件</title>
   <meta name="description" content="基于 Rust 核心与自主 ADB 特权代理的高性能 Android 静默安装与特权管理套件。零感交互、免电脑无线自启、Android 10~16 深度适配、16KB 内存页对齐、FlClash 灵动设计。">
   <link rel="icon" type="image/png" href="assets/logo.png">
@@ -809,6 +811,27 @@
       gap: 32px;
       align-items: center;
     }
+    .arch-title { text-align: left; }
+    .arch-lead { text-align: left; margin-bottom: 24px; }
+    .arch-points {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-size: 14.5px;
+      color: var(--text-body);
+      line-height: 1.72;
+    }
+    .arch-points li { position: relative; padding-left: 20px; }
+    .arch-points li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--success);
+      font-weight: 700;
+    }
+    .arch-points strong { color: var(--text-title); margin-right: 6px; }
     .code-box {
       background: #0F172A;
       color: #E2E8F0;
@@ -819,7 +842,24 @@
       line-height: 1.6;
       box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12);
       position: relative;
+      overflow: hidden;
+    }
+    .code-scroll {
       overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      margin: 0 -4px;
+      padding: 0 4px 2px;
+    }
+    .code-scroll-hint {
+      display: none;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed rgba(148, 163, 184, 0.35);
+      font-size: 11px;
+      color: #94A3B8;
+      font-family: var(--font-stack);
+      letter-spacing: 0.02em;
     }
     .code-box-header {
       display: flex;
@@ -969,22 +1009,169 @@
       font-size: 13px;
     }
 
-    @media (max-width: 992px) {
+    /* ==========================================================================
+       12. Responsive Layout & Typography (mobile-first override layer)
+       ========================================================================== */
+
+    /* --- 12.1 Fluid type scale: one rule set, every viewport --- */
+    .hero-title      { font-size: clamp(30px, 7vw, 54px); line-height: 1.24; letter-spacing: -0.02em; }
+    .section-title   { font-size: clamp(24px, 4.2vw, 36px); line-height: 1.3; }
+    .section-desc    { font-size: clamp(14px, 3.6vw, 17px); line-height: 1.72; }
+    .hero-subtitle   { font-size: clamp(15px, 3.9vw, 19px); line-height: 1.7; }
+    .bento-title     { font-size: clamp(17px, 4.4vw, 20px); line-height: 1.4; }
+    .cta-title       { font-size: clamp(24px, 5vw, 40px); }
+
+    /* Chinese text needs looser leading than Latin to stay readable */
+    .bento-desc, .step-desc, .ladder-detail, .callout-text p,
+    .faq-answer, .format-tip, .cta-desc { line-height: 1.72; }
+
+    /* Never let a long token push the page sideways */
+    h1, h2, h3, h4, h5, p, li, td, .ladder-name { overflow-wrap: break-word; }
+
+    /* Sticky bar must not swallow the heading when jumping to an anchor */
+    section[id] { scroll-margin-top: 78px; }
+
+    /* Inline hard-coded sizes live in markup; neutralise them on small screens */
+    #architecture .section-title { font-size: clamp(22px, 3.6vw, 32px) !important; }
+
+    /* --- 12.2 Tablet --- */
+    @media (max-width: 1024px) {
       .bento-grid { grid-template-columns: 1fr 1fr; }
       .bento-card.span-2 { grid-column: span 2; }
       .steps-grid { grid-template-columns: 1fr 1fr; }
-      .arch-grid { grid-template-columns: 1fr; }
+      .arch-grid { grid-template-columns: 1fr; gap: 28px; }
+      .hero { padding: 56px 0 70px; }
+      .features-section, .quickstart-section, .cleanup-section,
+      .formats-section, .arch-section, .faq-section { padding: 76px 0; }
     }
+
+    /* --- 12.3 Large phone / small tablet --- */
     @media (max-width: 768px) {
+      .container { padding: 0 20px; }
       .nav-links { display: none; }
-      .hero-title { font-size: 38px; }
-      .hero-subtitle { font-size: 16px; }
-      .bento-grid { grid-template-columns: 1fr; }
+      .nav-inner { height: 64px; }
+      .hero { padding: 36px 0 46px; }
+      .hero-badge-pill { font-size: 12px; padding: 5px 12px; line-height: 1.45; }
+      .hero-pills { margin-bottom: 36px; }
+      .section-header { margin-bottom: 36px; }
+      .section-tag { font-size: 12px; padding: 4px 12px; margin-bottom: 14px; }
+      .bento-grid { grid-template-columns: 1fr; gap: 14px; }
       .bento-card.span-2 { grid-column: span 1; }
-      .steps-grid { grid-template-columns: 1fr; }
-      .format-pills-wrap { grid-template-columns: 1fr 1fr; }
-      .footer-top { flex-direction: column; gap: 30px; }
+      .bento-card { padding: 24px 20px; }
+      .bento-icon-wrapper { width: 42px; height: 42px; font-size: 19px; margin-bottom: 16px; }
+      .bento-badge { margin-bottom: 10px; }
+      .steps-grid { grid-template-columns: 1fr; gap: 12px; }
+      .step-card { padding: 20px 18px; }
+      .step-number { width: 32px; height: 32px; font-size: 14px; margin-bottom: 14px; }
+      .callout-box { padding: 18px; gap: 14px; }
+      .ladder-step { flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px 18px; }
+      .ladder-left { align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+      .ladder-name { font-size: 15px; line-height: 1.45; }
+      .ladder-guard { align-self: flex-start; }
+      .format-pills-wrap { grid-template-columns: 1fr 1fr; gap: 12px; }
+      .format-card { padding: 14px 12px; }
+      .arch-section .section-desc { margin-bottom: 20px !important; }
+      .code-box { padding: 16px; font-size: 11px; border-radius: var(--radius-md); }
+      .code-scroll-hint { display: block; }
+      .code-box-header { flex-direction: column; gap: 4px; font-size: 11px; }
+      .faq-question { font-size: 15px; padding: 16px 18px; gap: 12px; }
+      .faq-answer { padding: 0 18px 16px 18px; font-size: 14px; }
+      .cta-card { padding: 36px 22px; }
+      .footer-top { flex-direction: column; gap: 26px; }
+      .footer-bottom { flex-direction: column; gap: 8px; align-items: flex-start; text-align: left; }
+      .mock-grid-2 { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .features-section, .quickstart-section, .cleanup-section,
+      .formats-section, .arch-section, .faq-section { padding: 56px 0; }
+    }
+
+    /* --- 12.4 Phone (the layout most of these pages are read on) --- */
+    @media (max-width: 620px) {
+      .container { padding: 0 16px; }
+
+      /* Compact bar: icon-only repo link, short primary action */
+      .brand { font-size: 14.5px; gap: 9px; min-width: 0; }
+      .brand img { width: 30px; height: 30px; border-radius: 8px; }
+      .brand span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .version-tag { display: none; }
+      .nav-actions { gap: 8px; flex-shrink: 0; }
+      .nav-actions .btn { font-size: 13px; padding: 10px 14px; }
+      .nav-actions .btn-secondary { width: 40px; height: 40px; padding: 0; border-radius: 12px; }
+      .nav-actions .btn-secondary span { display: none; }
+      .nav-actions .btn-primary { padding: 10px 13px; gap: 6px; }
+
+      /* Hero: stacked, thumb-sized calls to action */
+      .hero-badge-pill { font-size: 11.5px; padding: 5px 10px; max-width: 100%; }
+      .hero-title { font-size: clamp(24px, 7.2vw, 32px); line-height: 1.34; }
+      .hero-subtitle { font-size: 14.5px; line-height: 1.75; margin-bottom: 26px; padding: 0 2px; }
+      .hero-buttons { flex-direction: column; gap: 10px; margin-bottom: 24px; }
+      .hero-buttons .btn { width: 100%; max-width: 340px; padding: 14px 18px; font-size: 14.5px; }
+      .hero-pills { gap: 7px; margin-bottom: 34px; }
+      .hero-pill-item { font-size: 11.5px; padding: 5px 10px; }
+
+      /* Device mock-up: breathe the frame, not the content */
+      .mockup-frame { padding: 6px; border-radius: 20px; }
+      .mockup-header-bar { padding: 9px 12px; font-size: 11px; border-radius: 14px 14px 0 0; }
+      .mockup-title-bar { font-size: 11px; }
+      .mockup-dot { width: 8px; height: 8px; }
+      .mockup-body { padding: 14px; min-height: 0; border-radius: 0 0 14px 14px; }
+      .mock-dash-hero { position: relative; padding: 16px; padding-right: 62px; }
+      .mock-status-pill { font-size: 10px; padding: 3px 8px; margin-bottom: 6px; white-space: nowrap; }
+      .mock-dash-title { font-size: 19px; }
+      .mock-dash-sub { font-size: 11.5px; line-height: 1.55; }
+      .mock-btn-circle { position: absolute; top: 14px; right: 14px; width: 46px; height: 46px; font-size: 10.5px; }
+      .mock-card { padding: 13px; border-radius: 12px; }
+      .mock-card-title { font-size: 11.5px; gap: 6px; }
+      .mock-card-val { font-size: 16px; }
+      .mock-segmented { flex-direction: column; gap: 4px; border-radius: 16px; padding: 5px; }
+      .mock-seg-item { border-radius: 12px; padding: 8px 10px; font-size: 12px; }
+      #screen-logs .mock-seg-item { padding: 6px 8px !important; font-size: 11px !important; }
+      #screen-logs .mock-segmented, .mockup-body > div[style*="display: flex"][style*="gap: 8px"] { flex-wrap: wrap; }
+      .mock-dock-host { margin-top: 14px; }
+      .mock-dock { width: 100%; justify-content: space-between; gap: 2px; padding: 5px 6px; }
+      .mock-dock-item { flex: 1; justify-content: center; gap: 4px; padding: 8px 4px; font-size: 10.5px; }
+      .mock-dock-item span { white-space: nowrap; }
+      .mock-dock-item svg { width: 15px; height: 15px; }
+
+      /* Cards & lists */
+      .section-header { margin-bottom: 30px; }
+      .section-desc { font-size: 13.5px; }
+      .bento-title { font-size: 17px; margin-bottom: 8px; }
+      .bento-desc { font-size: 13.5px; }
+      .step-title { font-size: 16px; }
+      .step-desc { font-size: 13.5px; }
+      .ladder-detail { font-size: 12.5px; }
+      .format-ext { font-size: 16px; }
+      .format-name { font-size: 13px; }
+      .format-tip { font-size: 11.5px; }
+      .faq-question { font-size: 14.5px; line-height: 1.5; }
+      .cta-card { padding: 32px 18px; border-radius: var(--radius-lg); }
+      .cta-desc { font-size: 14px; }
+      .cta-btn-white { width: 100%; max-width: 320px; padding: 14px 16px; font-size: 14px; }
+      .footer { padding: 40px 0 28px; }
+    }
+
+    /* --- 12.5 Small phone --- */
+    @media (max-width: 400px) {
+      .container { padding: 0 14px; }
+      .brand { font-size: 13px; gap: 7px; }
+      .brand img { width: 26px; height: 26px; }
+      .nav-actions .btn { font-size: 12px; padding: 9px 11px; }
+      .nav-actions .btn-secondary { width: 38px; height: 38px; }
+      .hero-title { font-size: 25px; }
+      .section-title { font-size: 21px; }
       .mock-grid-2 { grid-template-columns: 1fr; }
+      .mock-dock-item { font-size: 9.5px; gap: 3px; }
+      .mock-dock-item svg { width: 13px; height: 13px; }
+      .code-box { font-size: 10px; padding: 13px; }
+    }
+
+    /* --- 12.6 Respect reduced-motion preferences --- */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
+      }
+      html { scroll-behavior: auto; }
     }
 
     @keyframes fadeIn {
@@ -1443,14 +1630,14 @@
       <div class="arch-grid">
         <div>
           <span class="section-tag">🏗️ 系统架构</span>
-          <h2 class="section-title" style="text-align: left; font-size: 32px;">三层解耦与 4 字节大端长度前缀协议</h2>
-          <p class="section-desc" style="text-align: left; margin-bottom: 24px;">
+          <h2 class="section-title arch-title">三层解耦与 4 字节大端长度前缀协议</h2>
+          <p class="section-desc arch-lead">
             客户端与特权执行端严格分离。业务层在 Rust <code>installer-core</code> 实现 host 端全量单测；特权代理 <code>broker-server</code> 基于 Tokio 运行时在 Shell (uid 2000) 独立运行。
           </p>
-          <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; font-size: 14.5px; color: var(--text-body);">
-            <li style="display: flex; gap: 8px;"><strong>✓ 16KB 页对齐：</strong> 严格遵循 Google 最新规范，四 ABI 原生动态库全面对齐 16KB 内存页。</li>
-            <li style="display: flex; gap: 8px;"><strong>✓ SPAKE2 握手：</strong> Edwards25519 曲线强鉴权，6 位动态码即时派生会话密钥。</li>
-            <li style="display: flex; gap: 8px;"><strong>✓ 帧安全阈值：</strong> 单帧上限 1MB（MAX_FRAME_BYTES），防止恶意流式报文打爆服务。</li>
+          <ul class="arch-points">
+            <li><strong>16KB 页对齐</strong>严格遵循 Google 最新规范，四 ABI 原生动态库全面对齐 16KB 内存页。</li>
+            <li><strong>SPAKE2 握手</strong>Edwards25519 曲线强鉴权，6 位动态码即时派生会话密钥。</li>
+            <li><strong>帧安全阈值</strong>单帧上限 1MB（MAX_FRAME_BYTES），防止恶意流式报文打爆服务。</li>
           </ul>
         </div>
 
@@ -1459,7 +1646,8 @@
             <span>Wire Format (v2 协议二进制帧规范)</span>
             <span>TCP / Abstract Socket</span>
           </div>
-<pre>+-----------------------------------+---------------------------------------+
+          <div class="code-scroll-hint">← 横向滑动查看完整帧结构 →</div>
+          <div class="code-scroll"><pre>+-----------------------------------+---------------------------------------+
 |  Length Prefix (4 Bytes, Big-End) |         Payload (UTF-8 JSON)          |
 |           u32 (0 .. 1MB)          |            Envelope JSON              |
 +-----------------------------------+---------------------------------------+
@@ -1477,7 +1665,7 @@
     "argv": ["pm", "install-create", "-r"],
     "stdin": { "type": "PATH", "path": "/data/local/tmp/..." }
   }
-}</pre>
+}</pre></div>
         </div>
       </div>
     </div>
