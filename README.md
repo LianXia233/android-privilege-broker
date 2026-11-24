@@ -1,14 +1,11 @@
-<div align="center">
-
-<img src="icons/app_icon_source.png" width="128" height="128" alt="PrivilegeBroker Logo" style="border-radius: 26px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);" />
-
-# Android Privilege Broker
-
 <p align="center">
-  <b>⚡ 基于 Rust 核心与自主 ADB 特权代理的高性能 Android 静默安装与生命周期套件 ⚡</b>
+  <img src="icons/app_icon_source.png" width="128" height="128" alt="PrivilegeBroker Logo" style="border-radius: 26px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);" />
 </p>
 
+<h1 align="center">Android Privilege Broker</h1>
+
 <p align="center">
+  <b>⚡ 基于 Rust 核心与自主 ADB 特权代理的高性能 Android 静默安装与生命周期套件 ⚡</b><br/>
   <i>零感交互 · 免电脑无线自启 · 16KB 内存页对齐 · 跨应用弹性授权 · FlClash 灵动设计 · 原子审计日志</i>
 </p>
 
@@ -41,8 +38,6 @@
 
 ---
 
-</div>
-
 ## 📌 项目基本概览
 
 | 维度 | 规格 / 说明 |
@@ -60,19 +55,17 @@
 
 ## ✨ 核心亮点
 
-```
-  ⚡ 真正的零感静默          📡 免电脑自主配对          🛡️ 跨应用弹性授权
-  不弹界面 · 1x1 隐形窗口    mDNS + TLS 1.3 + SPAKE2   shortService 前台保活
-  适配国产 ROM 过滤窗口      通知栏一键输入配对自启    无权限退化为交互横幅
-──────────────────────────────────────────────────────────────────────────
-  🎨 FlClash 灵动美学        📊 实时性能与内存看板      🧹 五级安全自动清理
-  M3 四层表面 · Squircle 卡片 PSS + Java 堆 3 秒刷新    应用侧 ➔ Shell ➔ 哈希校验
-  悬浮 Dock · AMOLED 纯黑   14 天 Sparkline 走势图    绝不误删同名文件
-──────────────────────────────────────────────────────────────────────────
-  📦 全格式与恶意后缀还原    🔒 安全隔离与全量审计      🦀 模块化 Rust 特权后台
-  APKS / XAPK / 分片归档    Shell uid 2000 隔离       12 个 Workspace Crate
-  自动剥离 .apk.1 备份后缀   原子 JSONL 本地结构化日志  Tokio 异步引擎 + 端点自愈
-```
+| ⚡ 真正的零感静默 | 📡 免电脑自主配对 | 🛡️ 跨应用弹性授权 |
+| :--- | :--- | :--- |
+| **不弹界面 · 1x1 隐形窗口适配**<br/>杜绝国产 ROM 灰色蒙层遮罩，真正实现 0ms 零弹窗静默安装 | **mDNS 自动发现 + TLS 1.3 握手**<br/>无需电脑或数据线，通知栏一键输入配对码完成自主激活 | **shortService 短时前台保活**<br/>高优先级卡片决策；未授权悬浮窗时自动降级为可交互通知横幅 |
+
+| 🎨 FlClash 灵动美学 | 📊 实时性能与内存看板 | 🧹 五级安全自动清理 |
+| :--- | :--- | :--- |
+| **M3 四层表面 · Squircle 卡片**<br/>悬浮胶囊 Dock · 弹性动效 · AMOLED 纯黑夜间模式，兼具美感与极低功耗 | **应用 PSS + Java 堆 3 秒刷新**<br/>14 天 Sparkline 走势图，配套 1GB 满格可视化缓存清理卡片 | **应用侧 ➔ Shell 路径 ➔ 媒体库 ➔ 哈希寻回**<br/>严格比对文件体积与 SHA-256 指纹，确保彻底清理且绝不误删 |
+
+| 📦 全格式与恶意后缀还原 | 🔒 安全隔离与全量审计 | 🦀 模块化 Rust 特权后台 |
+| :--- | :--- | :--- |
+| **APKS / XAPK / 分片通用归档**<br/>链路前端自动剥离 `.apk.1` 等社交软件备份后缀，防拦截还原真实安装 | **Shell uid 2000 权限严格隔离**<br/>本地原子 JSONL 结构化日志，展开呈现完整全景元数据与诊断详情 | **12 个 Workspace Crate 模块化解耦**<br/>Tokio 异步引擎、动态 Nonce 时间窗口鉴权与端点故障自愈重拉 |
 
 ### 功能清单 (Feature Matrix)
 
@@ -100,57 +93,37 @@
 
 ## 🎨 界面设计与开源致谢
 
-本项目自 `v2.2.0` 起全面重构前端视觉体验，界面、配色方案与交互动效深度参考了著名开源代理客户端 [FlClash](https://github.com/chen08209/FlClash) 及其核心设计子模块 [prism_ui](https://github.com/chen08209/prism_ui)（均为 GPL-3.0）。
+本项目自 `v2.2.0` 起全面重构前端视觉体验，界面、配色方案与交互动效深度参考了优秀开源代理客户端 [FlClash](https://github.com/chen08209/FlClash) 及其核心设计子模块 [prism_ui](https://github.com/chen08209/prism_ui) （均为 GPL-3.0 协议）。
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        FlClash / Prism 原生重构设计体系                │
-├────────────────────────────────────────────────────────────────────────┤
-│ 🌈 M3 动态色板   基于 Google material-color-utilities 离线生成色板     │
-│ 📐 超椭圆圆角     SquircleDrawable 连续曲率采样，告别突兀圆角          │
-│ 🛸 灵动胶囊 Dock  悬浮 / 停靠双形态，选中项 16% 镜头放大与 260ms 过冲回弹  │
-│ 🌌 AMOLED 纯黑   专为 OLED 屏幕打造的深邃纯黑（Pure Black）夜间色板   │
-│ 💫 丝滑切页动效   300ms easeOut 整页滑动 与 220ms easeInOut 交叉淡入   │
-└────────────────────────────────────────────────────────────────────────┘
-```
+| 设计维度 | 技术规范与原生重构实现 |
+| :--- | :--- |
+| **🌈 M3 动态色板** | 基于 Google 官方 `material-color-utilities` 离线算法（通过 `scripts/gen_palette.py`）计算饱和强调色，输出亮暗两套精美色板 |
+| **📐 连续曲率圆角** | 自研 `SquircleDrawable` 基于超椭圆公式离散采样，带来符合现代人机工学的连续平滑圆角卡片视觉 |
+| **🛸 灵动胶囊 Dock** | 悬浮与停靠双形态自由切换，选中项提供 16% 镜头放大感与 260ms 物理过冲回弹动画 |
+| **🌌 AMOLED 纯黑** | 专为 OLED / AMOLED 屏幕打造的深邃纯黑（Pure Black）表面色板，极致纯粹且大幅降低屏幕功耗 |
+| **💫 灵动切页动效** | 支持 300ms easeOut 整页位移滑动与 220ms easeInOut 原地交叉淡入双模平滑切换 |
 
 > [!NOTE]
 > **设计与代码实现说明**：
 > - 本项目**未链接亦未分发任何 FlClash / prism_ui 的 Dart 或 Flutter 代码**，而是提炼其设计令牌（Design Tokens，包括色板生成规则、四级表面深度、字号阶梯、弹性按压阻尼与转场时长），以 Android 原生 View、自定义 Drawable 及属性动画体系从零重写。
-> - 配色算法源自 Google 官方的 [material-color-utilities](https://github.com/material-foundation/material-color-utilities)（Apache-2.0），开发期通过其 Python 端口 [materialyoucolor](https://pypi.org/project/materialyoucolor/)（MIT）离线生成静态色板（参见 `scripts/gen_palette.py`），色值嵌入源码分发。完整致谢与许可归属详见 [NOTICE](NOTICE)。
+> - 配色算法源自 Google 官方的 [material-color-utilities](https://github.com/material-foundation/material-color-utilities) （Apache-2.0），开发期通过其 Python 端口 [materialyoucolor](https://pypi.org/project/materialyoucolor/) （MIT）离线生成静态色板（参见 `scripts/gen_palette.py`），色值随源码分发。完整致谢与许可归属详见 [NOTICE](NOTICE)。
 
 ---
 
 ## 📱 四大核心页面与独立交互架构
 
-应用采用现代化 **Single-Activity + 常驻多页挂载 + 悬浮胶囊 Dock** 架构。各功能页面常驻内存，切换无闪烁、无状态丢失，极致轻快流畅：
+应用采用现代化 **Single-Activity + 常驻多页挂载 + 悬浮胶囊 Dock** 架构。各核心功能页面常驻内存，切换无闪烁、无状态丢失，极致轻快流畅：
 
-```mermaid
-flowchart TD
-    Main["📱 MainActivity<br/>(Prism Edge-to-Edge 沉浸 / UiPrefs 偏好持久化)"]
-    Dock["🛸 NavigationDock<br/>(悬浮胶囊 / 底部停靠 · 250ms 过冲回弹 · 镜头放大 16%)"]
-    Switcher["🔀 PageSwitcher<br/>(整页滑动 300ms / 交叉淡入 220ms)"]
-
-    Main --> Dock
-    Main --> Switcher
-
-    Switcher --> Page1["📊 仪表盘 (DashboardPage)<br/>• Hero 状态指示胶囊与主操作<br/>• 分段安装模式 (智能/全部/基础)<br/>• 实时内存看板 (PSS + Java 堆)<br/>• 14 天 Sparkline 迷你走势图<br/>• 快捷安装/卸载与最近任务"]
-    Switcher --> Page2["📜 审计记录 (LogsPage)<br/>• 安装 / 卸载 / 激活分段筛选<br/>• 展开追加结构化全景元数据<br/>• 原始控制台输出与耗时记录<br/>• 一键复制、导出与日志清空"]
-    Switcher --> Page3["⚙️ 通用设置 (SettingsPage)<br/>• 外观 (浅色/暗色/AMOLED纯黑)<br/>• 动效 (滑动/淡入 · 浮动/停靠)<br/>• 安装行为 (确认弹窗/自动清理)<br/>• 跨应用鉴权总控与自愈维护"]
-    Switcher --> Page4["ℹ️ 关于本软 (AboutPage)<br/>• 软件版本与构建序列号<br/>• 证书 SHA-256 指纹公示<br/>• 官方源码仓库与 Issue 直达<br/>• 开源许可与第三方设计致谢"]
-
-    Page3 -.->|"跳转"| Sub1["🛡️ 逐应用授权 (AllowAppsActivity)<br/>即时搜索 · 用户/系统分类 · 弹簧开关"]
-    Main -.->|"配对引导"| Sub2["📡 无线配对 (PairingActivity)<br/>mDNS 嗅探 · 配对码输入 · 激活服务"]
-    Main -.->|"快捷卸载"| Sub3["🗑️ 应用选择器 (AppPickerActivity)<br/>系统/用户应用枚举 · 保留数据卸载"]
-    Silent["⚡ 零感静默中枢 (SilentInstallActivity)<br/>0ms finish() 零窗口 · 1x1 隐形浮窗"] -.->|"后台调度"| Main
-
-    classDef host fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
-    classDef page fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1.5px,color:#4a148c;
-    classDef sub fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20;
-    class Main,Dock,Switcher host;
-    class Page1,Page2,Page3,Page4 page;
-    class Sub1,Sub2,Sub3,Silent sub;
-```
+| 页面组件 | 核心定位 | 关键能力与交互细节 |
+| :--- | :--- | :--- |
+| **📊 仪表盘 (`DashboardPage`)** | 状态总览与日常控制 | 状态胶囊、一键激活、安装模式分段滑块、内存监控（PSS/Java 堆）、14 天走势图 |
+| **📜 审计记录 (`LogsPage`)** | 全量记录与审计导出 | 安装/卸载/激活分段筛选、结构化全景元数据展开、控制台原始日志、一键导出 |
+| **⚙️ 通用设置 (`SettingsPage`)** | 个性化与行为策略 | 浅色/深色/纯黑 AMOLED、滑动/淡入切页、确认弹窗、安装后自动清理、鉴权总控 |
+| **ℹ️ 关于本软 (`AboutPage`)** | 版本溯源与合规公示 | 版本号、构建序列、SHA-256 签名证书指纹、开源代码仓库直达与完整开源许可 |
+| **🛡️ 逐应用授权 (`AllowAppsActivity`)** | 跨应用授权管理 | 独立全屏界面、即时模糊搜索、全部/用户/系统应用分类、PrismSwitch 弹性弹簧开关 |
+| **📡 无线配对 (`PairingActivity`)** | 无线调试专属引导 | 步骤指引、mDNS 服务自动嗅探、配对端口监听与配对码即时提交 |
+| **🗑️ 应用选择器 (`AppPickerActivity`)** | 安全静默卸载入口 | 已安装应用完整枚举、系统核心应用二次确认警示、保留数据卸载支持 |
+| **⚡ 零感静默中枢 (`SilentInstallActivity`)** | 外部调用零感入口 | 0ms 立即 finish() 零窗口执行、1x1 隐形浮窗避让 MIUI 结果忽略窗口 |
 
 ### 1. 仪表盘 (DashboardPage)
 - **Hero 状态横幅**：顶部大圆角 Hero 卡片集成状态胶囊（未激活 / 检测中 / 已就绪）、24sp 醒目标题与 84dp 强交互主操作按钮（一键激活服务或开始配对）；
@@ -270,7 +243,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    subgraph UI_Layer ["📱 Android Client Application (Java & AndroidX)"]
+    subgraph UI_Layer ["📱 Android 客户端交互层 (Java / AndroidX)"]
         MainActivity["MainActivity<br/>(NavigationDock + 四页常驻架构)"]
         Dashboard["DashboardPage / LogsPage<br/>SettingsPage / AboutPage"]
         AllowApps["AllowAppsActivity<br/>逐应用授权管理"]
@@ -308,7 +281,7 @@ flowchart TD
     StateMachine --> ArchiveEngine
     StateMachine --> NameNormalizer
     StateMachine --> MetaParser
-    StateMachine -.->|"长度前缀帧协议 (Length-Prefixed JSON)<br/>Hello ➔ Challenge ➔ Proof ➔ Ack"| BrokerIPC
+    StateMachine -.->|"长度前缀帧协议: Hello ➔ Challenge ➔ Proof ➔ Ack"| BrokerIPC
     BrokerIPC --> BrokerCore
     BrokerCore --> BrokerAuth
     BrokerCore --> BrokerExec
@@ -377,25 +350,14 @@ sequenceDiagram
 在现代 Android 存储机制（Scoped Storage / SAF / FileProvider）限制下，应用直接通过 `File.delete()` 或 `ContentResolver.delete()` 往往无权删除第三方传递的安装包。为此，本项目构建了一套**基于特权代理（Shell uid 2000）的五级阶梯删除机制**：
 
 ```mermaid
-flowchart TD
-    Start["🗑️ 触发删除原始安装包"] --> S1{"1. 应用侧删除<br/>(DocumentsContract / ContentResolver)"}
-    S1 -- 成功 --> Done["✅ 成功删除并记入审计日志"]
-    S1 -- 无权限/失败 --> S2{"2. Shell 路径直接删除<br/>(按已解析绝对路径 rm)"}
-    S2 -- 成功 --> Done
-    S2 -- 失败 --> S3{"3. Shell Content Query<br/>(反查 MediaStore _data 路径后 rm)"}
-    S3 -- 成功 --> Done
-    S3 -- 失败 --> S4{"4. Shell Content Delete<br/>(通过特权执行 content delete)"}
-    S4 -- 成功 --> Done
-    S4 -- 失败 --> S5{"5. 全盘 SHA-256 指纹寻回<br/>(/storage 下名称+大小+哈希匹配再删)"}
-    S5 -- 成功 --> Done
-    S5 -- 全部失败 --> Fail["⚠️ 放弃删除并如实记录受限原因<br/>(严防误删同名文件)"]
+flowchart LR
+    S1["1. 应用侧删除<br/>(Documents / Content)"] --> S2["2. Shell 路径删除<br/>(按已解析物理路径 rm)"]
+    S2 --> S3["3. Shell 媒体库查删<br/>(content query 取 _data)"]
+    S3 --> S4["4. Shell URI 删除<br/>(content delete 按 URI)"]
+    S4 --> S5["5. 全盘指纹寻回<br/>(/storage 下哈希核验删除)"]
 
     classDef step fill:#e3f2fd,stroke:#1565c0,stroke-width:1.5px,color:#0d47a1;
-    classDef ok fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;
-    classDef warn fill:#fff3e0,stroke:#e65100,stroke-width:1.5px,color:#bf360c;
-    class Start,S1,S2,S3,S4,S5 step;
-    class Done ok;
-    class Fail warn;
+    class S1,S2,S3,S4,S5 step;
 ```
 
 ### 关键技术保障
@@ -643,7 +605,7 @@ android-privilege-broker/
 
 ---
 
-<div align="center">
+<p align="center">
   <b>Android Privilege Broker</b> • 由开源社区共同维护构建<br/>
   <sub>Copyright © 2025-2026 LianXia233. All rights reserved.</sub>
-</div>
+</p>
