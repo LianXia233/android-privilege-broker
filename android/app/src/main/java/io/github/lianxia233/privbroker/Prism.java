@@ -382,6 +382,7 @@ final class Prism {
      * 闪退）。叠加式 applyStyle 与窗口主题使用同一个 Theme 实例，稳定生效。</p>
      */
     static void applyTheme(android.app.Activity a) {
+        markApplied(a);
         a.getTheme().applyStyle(seedStyle(a), true);
         boolean dark = effectiveDark(a);
         if (dark) {
@@ -423,5 +424,21 @@ final class Prism {
                 new android.content.res.Configuration(base.getResources().getConfiguration());
         cfg.fontScale = scale;
         return base.createConfigurationContext(cfg);
+    }
+    /** 已应用到每个 Activity 的主题代际。 */
+    private static final java.util.WeakHashMap<android.app.Activity, Integer> APPLIED =
+            new java.util.WeakHashMap<>();
+
+    static void markApplied(android.app.Activity a) {
+        APPLIED.put(a, UiPrefs.themeGeneration(a));
+    }
+
+    /** 主题代际变化后，回到该页时自动重建。 */
+    static void ensureTheme(android.app.Activity a) {
+        Integer applied = APPLIED.get(a);
+        int gen = UiPrefs.themeGeneration(a);
+        if (applied == null || applied != gen) {
+            a.recreate();
+        }
     }
 }

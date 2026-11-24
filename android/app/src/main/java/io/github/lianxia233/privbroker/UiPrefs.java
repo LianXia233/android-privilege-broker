@@ -110,4 +110,14 @@ final class UiPrefs {
     static void setGlass(Context c, String glass) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("glass", glass).apply();
     }
+
+    /** 主题代际：任何影响配色的设置变更都 +1，各页 onResume 据此重建。 */
+    static int themeGeneration(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("theme_gen", 0);
+    }
+
+    static void bumpTheme(Context c) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putInt("theme_gen", themeGeneration(c) + 1).apply();
+    }
 }

@@ -109,7 +109,7 @@ public final class ThemeActivity extends Activity {
         }, i -> {
             String next = i == 1 ? "light" : i == 2 ? "dark" : "system";
             UiPrefs.setThemeMode(this, next);
-            recreate();
+            { UiPrefs.bumpTheme(this); recreate(); };
         }));
 
         // 纯黑
@@ -118,7 +118,7 @@ public final class ThemeActivity extends Activity {
                 getString(R.string.theme_standard),
                 getString(R.string.theme_pure_black)}, UiPrefs.pureBlack(this) ? 1 : 0, i -> {
             UiPrefs.setPureBlack(this, i == 1);
-            recreate();
+            { UiPrefs.bumpTheme(this); recreate(); };
         }));
 
         // 主题色彩
@@ -136,7 +136,7 @@ public final class ThemeActivity extends Activity {
                         getString(R.string.color_style_mono)}, (d, i) -> {
                     UiPrefs.setColorStyle(this,
                             i == 1 ? "soft" : i == 2 ? "mono" : "vivid");
-                    recreate();
+                    { UiPrefs.bumpTheme(this); recreate(); };
                 }).show()));
 
         // 底栏
@@ -145,7 +145,7 @@ public final class ThemeActivity extends Activity {
                 getString(R.string.dock_floating),
                 getString(R.string.dock_docked)}, UiPrefs.dockMode(this), i -> {
             UiPrefs.setDockMode(this, i);
-            recreate();
+            { UiPrefs.bumpTheme(this); recreate(); };
         }));
 
         // 选项卡动画
@@ -154,7 +154,7 @@ public final class ThemeActivity extends Activity {
                 getString(R.string.anim_slide),
                 getString(R.string.anim_fade)}, UiPrefs.tabAnimation(this), i -> {
             UiPrefs.setTabAnimation(this, i);
-            recreate();
+            { UiPrefs.bumpTheme(this); recreate(); };
         }));
 
         // 液态玻璃
@@ -169,7 +169,7 @@ public final class ThemeActivity extends Activity {
             default -> 0;
         }, i -> {
             UiPrefs.setGlass(this, i == 1 ? "standard" : i == 2 ? "ultra" : "none");
-            recreate();
+            { UiPrefs.bumpTheme(this); recreate(); };
         }));
 
         // 字体
@@ -183,7 +183,7 @@ public final class ThemeActivity extends Activity {
                         getString(R.string.font_condensed)}, (d, i) -> {
                     UiPrefs.setFont(this, i == 1 ? "serif" : i == 2 ? "mono"
                             : i == 3 ? "condensed" : "sans");
-                    recreate();
+                    { UiPrefs.bumpTheme(this); recreate(); };
                 }).show()));
 
         // 文本缩放
@@ -297,7 +297,7 @@ public final class ThemeActivity extends Activity {
             dot.setContentDescription(SEED_LABELS[i]);
             Prism.press(dot, () -> {
                 UiPrefs.setSeed(this, seed);
-                recreate();
+                { UiPrefs.bumpTheme(this); recreate(); };
             });
             card.addView(dot, lp);
         }
@@ -366,7 +366,7 @@ public final class ThemeActivity extends Activity {
             public void onStopTrackingTouch(SeekBar seekBar) {
                 UiPrefs.setTextScale(ThemeActivity.this,
                         0.85f + seekBar.getProgress() * 0.05f);
-                recreate();
+                { UiPrefs.bumpTheme(ThemeActivity.this); recreate(); };
             }
         });
         card.addView(bar);
@@ -376,7 +376,7 @@ public final class ThemeActivity extends Activity {
             } else {
                 UiPrefs.setTextScale(this, 0.85f + bar.getProgress() * 0.05f);
             }
-            recreate();
+            { UiPrefs.bumpTheme(this); recreate(); };
         });
         return card;
     }

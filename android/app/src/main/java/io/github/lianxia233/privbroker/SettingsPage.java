@@ -98,7 +98,7 @@ final class SettingsPage {
         segTheme.setListener(index -> {
             String mode = index == 1 ? "light" : index == 2 ? "dark" : "system";
             UiPrefs.setThemeMode(a, mode);
-            Prism.applyThemeMode(a, mode);
+            UiPrefs.bumpTheme(a); a.recreate();
         });
         segAnim.setSelection(UiPrefs.tabAnimation(a), false);
         segAnim.setListener(index -> UiPrefs.setTabAnimation(a, index));

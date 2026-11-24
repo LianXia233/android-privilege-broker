@@ -24,6 +24,7 @@ public final class LogActivity extends Activity {
 
     @Override
     protected void onResume() {
+        Prism.ensureTheme(this);
         super.onResume();
         if (page != null) {
             page.onResume();

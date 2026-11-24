@@ -81,6 +81,7 @@ public final class MainActivity extends Activity implements NavigationDock.Liste
 
     @Override
     protected void onResume() {
+        Prism.ensureTheme(this);
         super.onResume();
         Keeper.ensure(this);
         if (dashboard != null) {

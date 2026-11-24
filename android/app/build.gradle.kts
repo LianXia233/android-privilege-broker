@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.lianxia233.privbroker"
         minSdk = 29
         targetSdk = 36
-        versionCode = 30
-        versionName = "2.2.4"
+        versionCode = 31
+        versionName = "2.2.5"
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
         }
