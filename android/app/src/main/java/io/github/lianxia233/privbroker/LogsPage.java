@@ -191,6 +191,33 @@ final class LogsPage {
         return raw.substring(0, head) + "\n…\n" + raw.substring(raw.length() - tail);
     }
 
+    /** 展开态追加的结构化字段：保证任何一条记录展开后都有新增内容。 */
+    private String structured(JSONObject e) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("记录 ID   ").append(e.optString("id", "-")).append('\n');
+        sb.append("操作      ").append(e.optString("op", "install")).append('\n');
+        sb.append("来源      ").append(e.optString("source", "-")).append('\n');
+        String pkg = e.optString("package", "");
+        if (!pkg.isEmpty() && !"null".equals(pkg)) {
+            sb.append("包名      ").append(pkg).append('\n');
+        }
+        String caller = e.optString("caller", "");
+        if (!caller.isEmpty() && !"null".equals(caller)) {
+            sb.append("调用方    ").append(caller).append('\n');
+        }
+        String time = e.optString("time", "");
+        if (!time.isEmpty()) {
+            sb.append("时间      ").append(time).append('\n');
+        }
+        long duration = e.optLong("durationMs", 0);
+        if (duration > 0) {
+            sb.append("耗时      ").append(duration).append(" ms\n");
+        }
+        sb.append("结果      ").append(e.optBoolean("ok") ? "成功" : "失败（"
+                + e.optString("code", "-") + "）");
+        return sb.toString();
+    }
+
     private final class LogAdapter extends BaseAdapter {
         @Override
         public int getCount() {
@@ -256,24 +283,29 @@ final class LogsPage {
             String full = fullDetail(e);
             String key = e.optString("id", String.valueOf(position));
             boolean open = expanded.contains(key);
-            if (full.isEmpty()) {
-                detail.setVisibility(View.GONE);
-                toggle.setVisibility(View.GONE);
-            } else {
-                detail.setVisibility(View.VISIBLE);
-                toggle.setVisibility(View.VISIBLE);
-                if (open) {
-                    detail.setText(full);
-                    detail.setMaxLines(Integer.MAX_VALUE);
-                    detail.setEllipsize(null);
-                    toggle.setText(a.getString(R.string.log_collapse) + "  ·  "
-                            + a.getString(R.string.log_detail_full_hint));
+            // 展开时始终追加结构化字段：短记录（成功的安装通常只有一两行）
+            // 仅去掉省略号是看不出变化的，用户会以为「点了没用」。
+            String structured = structured(e);
+            if (!open) {
+                if (full.isEmpty()) {
+                    detail.setVisibility(View.GONE);
+                    toggle.setVisibility(View.GONE);
                 } else {
+                    detail.setVisibility(View.VISIBLE);
                     detail.setText(clipDetail(full));
-                    detail.setMaxLines(3);
+                    detail.setMaxLines(2);
                     detail.setEllipsize(TextUtils.TruncateAt.END);
                     toggle.setText(R.string.log_expand);
+                    toggle.setVisibility(View.VISIBLE);
                 }
+            } else {
+                detail.setVisibility(View.VISIBLE);
+                detail.setText(full.isEmpty() ? structured : full + "\n\n" + structured);
+                detail.setMaxLines(Integer.MAX_VALUE);
+                detail.setEllipsize(null);
+                toggle.setText(a.getString(R.string.log_collapse) + "  ·  "
+                        + a.getString(R.string.log_detail_full_hint));
+                toggle.setVisibility(View.VISIBLE);
             }
 
             badge.setText(a.getString(ok ? R.string.log_success : R.string.log_fail));
