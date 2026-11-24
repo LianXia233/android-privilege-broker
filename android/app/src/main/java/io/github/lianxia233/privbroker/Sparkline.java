@@ -24,6 +24,17 @@ public final class Sparkline extends View {
 
     Sparkline(Context c) {
         super(c);
+        init();
+    }
+
+    /** 必须走 {@code super(c, attrs)}，否则 XML 上的 android:id 不会被解析。 */
+    public Sparkline(Context c, AttributeSet attrs) {
+        super(c, attrs);
+        init();
+    }
+
+    private void init() {
+        Context c = getContext();
         int primary = c.getColor(R.color.pb_primary);
         stroke.setStyle(Paint.Style.STROKE);
         stroke.setStrokeWidth(Prism.dp(c, 2));
@@ -31,10 +42,6 @@ public final class Sparkline extends View {
         stroke.setStrokeJoin(Paint.Join.ROUND);
         stroke.setColor(primary);
         fillPaint.setStyle(Paint.Style.FILL);
-    }
-
-    public Sparkline(Context c, AttributeSet attrs) {
-        this(c);
     }
 
     void setData(float[] values) {

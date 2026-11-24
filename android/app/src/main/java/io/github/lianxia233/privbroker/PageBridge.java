@@ -40,6 +40,17 @@ final class PageBridge {
     static JSONObject dispatch(String method, String args) {
         try {
             return new JSONObject(RustCore.dispatch(method, args));
+        } catch (NoClassDefFoundError | UnsatisfiedLinkError e) {
+            // 本地调试包只跑 Gradle、不带 Rust .so：RustCore 的静态初始化会失败，
+            // 这里收敛成明确错误，避免界面把「安装包缺原生库」误报成代理异常。
+            try {
+                return new JSONObject().put("ok", false)
+                        .put("error", new JSONObject()
+                                .put("kind", "CORE_MISSING")
+                                .put("message", "安装包缺少 libinstaller_core.so，原生核心未加载"));
+            } catch (Throwable ignored) {
+                return new JSONObject();
+            }
         } catch (Throwable t) {
             try {
                 return new JSONObject().put("ok", false)

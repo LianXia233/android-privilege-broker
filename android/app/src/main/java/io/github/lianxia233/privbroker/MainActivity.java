@@ -58,10 +58,10 @@ public final class MainActivity extends Activity implements NavigationDock.Liste
                 getString(R.string.tab_settings),
                 getString(R.string.tab_about),
         }, new int[]{
-                R.drawable.ic_action_broker,
-                R.drawable.ic_action_logs,
-                R.drawable.ic_action_settings,
-                R.drawable.ic_action_info,
+                R.drawable.ic_tab_dashboard,
+                R.drawable.ic_tab_logs,
+                R.drawable.ic_tab_settings,
+                R.drawable.ic_tab_about,
         });
         dock.setListener(this);
         applyDockMode();
@@ -87,6 +87,14 @@ public final class MainActivity extends Activity implements NavigationDock.Liste
         applyDockMode();
         if (pages != null) {
             pages.setMode(UiPrefs.tabAnimation(this));
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (dashboard != null) {
+            dashboard.onPause();
         }
     }
 

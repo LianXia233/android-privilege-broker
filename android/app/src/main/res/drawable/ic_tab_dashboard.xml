@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 仪表盘：FlClash Dashboard 的四枚圆角方块 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M5.2,3 h3.1 a2.2,2.2 0 0 1 2.2,2.2 v3.1 a2.2,2.2 0 0 1 -2.2,2.2 h-3.1 a2.2,2.2 0 0 1 -2.2,-2.2 v-3.1 a2.2,2.2 0 0 1 2.2,-2.2 z
+            M15.7,3 h3.1 a2.2,2.2 0 0 1 2.2,2.2 v3.1 a2.2,2.2 0 0 1 -2.2,2.2 h-3.1 a2.2,2.2 0 0 1 -2.2,-2.2 v-3.1 a2.2,2.2 0 0 1 2.2,-2.2 z
+            M5.2,13.5 h3.1 a2.2,2.2 0 0 1 2.2,2.2 v3.1 a2.2,2.2 0 0 1 -2.2,2.2 h-3.1 a2.2,2.2 0 0 1 -2.2,-2.2 v-3.1 a2.2,2.2 0 0 1 2.2,-2.2 z
+            M15.7,13.5 h3.1 a2.2,2.2 0 0 1 2.2,2.2 v3.1 a2.2,2.2 0 0 1 -2.2,2.2 h-3.1 a2.2,2.2 0 0 1 -2.2,-2.2 v-3.1 a2.2,2.2 0 0 1 2.2,-2.2 z" />
+</vector>

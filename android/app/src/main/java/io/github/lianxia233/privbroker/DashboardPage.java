@@ -55,6 +55,10 @@ final class DashboardPage {
     private TextView tvBrokerState;
     private TextView tvHandshake;
     private TextView tvCacheSize;
+    private TextView tvMemApp;
+    private TextView tvMemHeap;
+    private TextView tvMemHeapPercent;
+    private ProgressBar memBar;
     private View dotBroker;
     private View dotHandshake;
     private ProgressBar cacheBar;
@@ -68,10 +72,22 @@ final class DashboardPage {
 
     private Runnable openLogs;
     private boolean binding;
+    private boolean ticking;
     private String state = "UNAVAILABLE";
     private JSONObject config;
     private String pendingPlan;
     private String installLabel = "安装包";
+
+    private final Runnable tick = new Runnable() {
+        @Override
+        public void run() {
+            if (!ticking || a.isFinishing() || a.isDestroyed()) {
+                return;
+            }
+            bindMemory();
+            main.postDelayed(this, 3000);
+        }
+    };
 
     DashboardPage(Activity a, View root) {
         this.a = a;
@@ -97,6 +113,10 @@ final class DashboardPage {
         tvBrokerState = root.findViewById(R.id.tvBrokerState);
         tvHandshake = root.findViewById(R.id.tvHandshake);
         tvCacheSize = root.findViewById(R.id.tvCacheSize);
+        tvMemApp = root.findViewById(R.id.tvMemApp);
+        tvMemHeap = root.findViewById(R.id.tvMemHeap);
+        tvMemHeapPercent = root.findViewById(R.id.tvMemHeapPercent);
+        memBar = root.findViewById(R.id.memBar);
         dotBroker = root.findViewById(R.id.dotBroker);
         dotHandshake = root.findViewById(R.id.dotHandshake);
         cacheBar = root.findViewById(R.id.cacheBar);
@@ -122,6 +142,13 @@ final class DashboardPage {
                 openLogs.run();
             }
         });
+        Prism.press(root.findViewById(R.id.btnCleanCache), () -> new Thread(() -> {
+            try {
+                BrokerBridge.call("cleanupStaged", "{}");
+            } catch (Throwable ignored) {
+            }
+            main.post(this::refresh);
+        }, "dash-clean").start());
 
         segMode.setSegments(
                 a.getString(R.string.mode_silent),
@@ -188,6 +215,25 @@ final class DashboardPage {
 
     void onResume() {
         refresh();
+        startTicking();
+    }
+
+    void onPause() {
+        stopTicking();
+    }
+
+    /** 内存每 3 秒刷新一次：与 FlClash 内存卡的实时观感一致。 */
+    private void startTicking() {
+        if (ticking) {
+            return;
+        }
+        ticking = true;
+        main.postDelayed(tick, 3000);
+    }
+
+    private void stopTicking() {
+        ticking = false;
+        main.removeCallbacks(tick);
     }
 
     // ------------------------------------------------------------ 数据刷新
@@ -221,10 +267,20 @@ final class DashboardPage {
         }, "dash-cache");
         cache.setDaemon(true);
         cache.start();
+        bindMemory();
     }
 
     private void bindStatus(JSONObject r) {
         if (!r.optBoolean("ok")) {
+            JSONObject err = r.optJSONObject("error");
+            if (err != null && "CORE_MISSING".equals(err.optString("kind"))) {
+                // 本地调试包不带 Rust .so；特权代理本身可能仍在正常运行。
+                state = "UNKNOWN";
+                chip("需要处理", false);
+                tvTitle.setText(R.string.core_missing_title);
+                tvHint.setText(R.string.core_missing_hint);
+                return;
+            }
             state = "UNKNOWN";
             chip("需要处理", false);
             tvTitle.setText(R.string.status_unknown_title);
@@ -330,9 +386,32 @@ final class DashboardPage {
 
     private void bindCache(long size) {
         tvCacheSize.setText(human(size));
-        // 20 MB 视作「缓存偏多」的满格，仅用于给用户一个量级感
-        int percent = (int) Math.min(100, size * 100L / (20L * 1024 * 1024));
+        // 1 GB 视作满格：缓存卡不是容量告警，只是给一个量级感
+        int percent = (int) Math.min(100, size * 100L / (1024L * 1024 * 1024));
         cacheBar.setProgress(percent);
+    }
+
+    /**
+     * 应用内存：PSS（真实的进程占用）+ Java 堆（虚拟机视角的堆使用量）。
+     * 前者回答「这个软件占了多少内存」，后者回答「堆还剩多少」。
+     */
+    private void bindMemory() {
+        android.os.Debug.MemoryInfo info = new android.os.Debug.MemoryInfo();
+        android.os.Debug.getMemoryInfo(info);
+        long pss = Math.max(0, info.getTotalPss()) * 1024L;
+
+        Runtime rt = Runtime.getRuntime();
+        long heapUsed = rt.totalMemory() - rt.freeMemory();
+        long heapMax = rt.maxMemory();
+        int percent = (int) Math.min(100, heapUsed * 100L / Math.max(1L, heapMax));
+
+        // 半栏宽度放不下「8.7 MB / 256.0 MB」，统一取整到 MB，保持单行
+        long usedMb = Math.round(heapUsed / 1048576.0);
+        long maxMb = Math.round(heapMax / 1048576.0);
+        tvMemApp.setText(human(pss));
+        tvMemHeap.setText(usedMb + " / " + maxMb + " MB");
+        tvMemHeapPercent.setText(percent + "%");
+        memBar.setProgress(percent);
     }
 
     private void chip(String text, boolean ok) {

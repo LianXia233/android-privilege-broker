@@ -25,11 +25,21 @@ public final class PageSwitcher extends FrameLayout {
 
     PageSwitcher(Context c) {
         super(c);
-        setClipChildren(true);
+        init();
     }
 
+    /**
+     * XML 构造器必须调用 {@code super(c, attrs)}：只调 {@code this(c)} 的话
+     * View 不会解析 AttributeSet，{@code android:id} 等属性会全部丢失，
+     * 运行时 findViewById 找不到控件（2.2.0 闪退的根因）。
+     */
     public PageSwitcher(Context c, AttributeSet attrs) {
-        this(c);
+        super(c, attrs);
+        init();
+    }
+
+    private void init() {
+        setClipChildren(true);
     }
 
     void setMode(int mode) {

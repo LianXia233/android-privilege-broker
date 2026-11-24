@@ -237,14 +237,44 @@ final class Prism {
         int originalTop = v.getPaddingTop();
         int originalRight = v.getPaddingRight();
         int originalBottom = v.getPaddingBottom();
+        int extra = dp(v.getContext(), topExtraDp(v.getContext()));
         v.setOnApplyWindowInsetsListener((view, insets) -> {
             android.graphics.Insets bars = insets.getInsets(
                     WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-            view.setPadding(originalLeft, originalTop + bars.top,
+            view.setPadding(originalLeft, originalTop + bars.top + extra,
                     originalRight, originalBottom);
             return insets;
         });
         v.requestApplyInsets();
+    }
+
+    /**
+     * 状态栏之外再多留的一点呼吸空间。
+     *
+     * <p>不针对任何 ROM 做特判：系统在状态栏第二行画什么（网速、运营商）
+     * 属于系统自己的事，应用只按上报的 inset 排版。</p>
+     */
+    static int topExtraDp(Context c) {
+        return 8;
+    }
+
+    /** 颜色混合：把 over 以 alpha 叠在 base 上，返回不透明结果。 */
+    static int blend(int base, int over, float alpha) {
+        float a = Math.max(0f, Math.min(1f, alpha));
+        int r = Math.round(Color.red(base) * (1 - a) + Color.red(over) * a);
+        int g = Math.round(Color.green(base) * (1 - a) + Color.green(over) * a);
+        int b = Math.round(Color.blue(base) * (1 - a) + Color.blue(over) * a);
+        return Color.rgb(r, g, b);
+    }
+
+    /**
+     * 导航 Dock 选中胶囊的颜色，等价于 prism_ui 的
+     * {@code alphaBlend(onSurface 8%, SurfaceLevel.floating.next)}：
+     * 亮色是浮层上一档的中性灰，暗色是 inset 再叠 8% 前景。
+     */
+    static int lensColor(Context c) {
+        int base = isNight(c) ? c.getColor(R.color.pb_inset) : c.getColor(R.color.pb_block);
+        return blend(base, c.getColor(R.color.pb_on_surface), 0.08f);
     }
 
     /** 给悬浮 Dock 加底部安全区内边距。 */

@@ -23,8 +23,8 @@ public final class SegmentedControl extends FrameLayout {
         void onChanged(int index);
     }
 
-    private final View pill;
-    private final LinearLayout row;
+    private View pill;
+    private LinearLayout row;
     private TextView[] labels = new TextView[0];
     private int selected = 0;
     private int count = 1;
@@ -39,6 +39,17 @@ public final class SegmentedControl extends FrameLayout {
 
     SegmentedControl(Context c) {
         super(c);
+        init();
+    }
+
+    /** 必须走 {@code super(c, attrs)}，否则 XML 上的 android:id 不会被解析。 */
+    public SegmentedControl(Context c, AttributeSet attrs) {
+        super(c, attrs);
+        init();
+    }
+
+    private void init() {
+        Context c = getContext();
         int inset = Prism.dp(c, INSET);
         setPadding(inset, inset, inset, inset);
         SquircleDrawable bg = new SquircleDrawable(Prism.dp(c, HEIGHT / 2f),
@@ -53,10 +64,6 @@ public final class SegmentedControl extends FrameLayout {
         row = new LinearLayout(c);
         row.setOrientation(LinearLayout.HORIZONTAL);
         addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-    }
-
-    public SegmentedControl(Context c, AttributeSet attrs) {
-        this(c);
     }
 
     void setSegments(String... segments) {
@@ -141,12 +148,21 @@ public final class SegmentedControl extends FrameLayout {
     }
 
     private void applyPill() {
-        pill.setX(pillLeft);
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) pill.getLayoutParams();
-        lp.width = Math.round(pillWidth);
-        lp.height = LayoutParams.MATCH_PARENT;
-        lp.gravity = Gravity.START;
-        pill.setLayoutParams(lp);
+        int usable = getWidth() - getPaddingLeft() - getPaddingRight();
+        if (usable <= 0 || count <= 0) {
+            return;
+        }
+        int pw = usable / count;
+        int x = Math.round(pillLeft);
+        int y = getPaddingTop();
+        int right = Math.round(pillLeft + pillWidth);
+        int bottom = getHeight() - getPaddingBottom();
+        if (right <= x) {
+            return;
+        }
+        // 直接在 onLayout 之后摆放，避免在 onSizeChanged 里改 LayoutParams
+        // 触发二次 layout 被吞掉、胶囊宽度停在 0 的问题。
+        pill.layout(x, y, right, bottom);
     }
 
     private void applyLabelColors(float t) {
@@ -167,6 +183,15 @@ public final class SegmentedControl extends FrameLayout {
         int h = Prism.dp(getContext(), HEIGHT);
         super.onMeasure(widthMeasureSpec,
                 MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY));
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        super.onLayout(changed, l, t, r, b);
+        if (changed || pillWidth <= 0) {
+            layoutPill();
+        }
+        applyPill();
     }
 
     @Override

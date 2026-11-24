@@ -38,13 +38,19 @@ public final class PrismSwitch extends View {
 
     PrismSwitch(Context c) {
         super(c);
+        init();
+    }
+
+    /** 必须走 {@code super(c, attrs)}，否则 XML 上的 android:id 不会被解析。 */
+    public PrismSwitch(Context c, AttributeSet attrs) {
+        super(c, attrs);
+        init();
+    }
+
+    private void init() {
         setClickable(true);
         setFocusable(true);
         setContentDescription("开关");
-    }
-
-    public PrismSwitch(Context c, AttributeSet attrs) {
-        this(c);
     }
 
     void setChecked(boolean value) {

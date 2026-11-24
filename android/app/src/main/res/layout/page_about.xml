@@ -120,5 +120,13 @@
             android:elevation="1dp"
             android:orientation="vertical"
             android:padding="6dp" />
+
+        <TextView
+            style="@style/PbText.Caption2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:gravity="center"
+            android:text="@string/about_copyright" />
     </LinearLayout>
 </ScrollView>
