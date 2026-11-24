@@ -22,6 +22,7 @@
 | `android/app/signing/` | 可复现构建签名配置文件引用位置 (`release.keystore`) |
 | `.github/workflows/` | GitHub Actions 云编译、测试与自动化 Release 发布工作流 |
 | `scripts/` | 本地一键构建脚本 (`build.sh`) 与图标/测试样本生成脚本 |
+| `docs/` | GitHub Pages 静态展示站点（纯白现代化设计、移动端高保真交互模拟） |
 | `CHANGELOG.md` | 版本全量演进历史与更新日志 |
 | `README.md` | 项目主文档与开发者快速接入指南 |
 
