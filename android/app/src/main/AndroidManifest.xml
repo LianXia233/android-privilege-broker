@@ -89,6 +89,12 @@
             android:exported="false"
             android:label="@string/about_title" />
 
+        <!-- 逐应用授权管理：卡片列表 + 搜索 + 分段筛选 -->
+        <activity
+            android:name=".AllowAppsActivity"
+            android:exported="false"
+            android:label="@string/setting_manage_auth" />
+
         <!-- 卸载应用选择器：读取应用列表，按系统 / 用户应用筛选 -->
         <activity
             android:name=".AppPickerActivity"

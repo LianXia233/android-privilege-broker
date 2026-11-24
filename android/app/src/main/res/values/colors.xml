@@ -1,27 +1,90 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  由 tools/gen_palette.py 生成，请勿手改。
+  规则与 FlClash / prism_ui seededColorScheme 一致：种子 0xFF007AFF、vivid 风格。
+  亮色板
+-->
 <resources>
-    <!-- 品牌色：与启动图标的蓝紫渐变一致 -->
-    <color name="brand_primary">#2C6BFF</color>
-    <color name="brand_accent">#6C4BF6</color>
-    <color name="brand_deep">#1B3FD8</color>
-    <color name="on_brand">#FFFFFF</color>
+    <color name="pb_primary">#007AFF</color>
+    <color name="pb_on_primary">#FFFFFF</color>
+    <color name="pb_primary_container">#D8E2FF</color>
+    <color name="pb_on_primary_container">#0E448E</color>
+    <color name="pb_primary_fixed">#D8E2FF</color>
+    <color name="pb_primary_fixed_dim">#ADC6FF</color>
+    <color name="pb_on_primary_fixed">#001A41</color>
+    <color name="pb_on_primary_fixed_variant">#004493</color>
+    <color name="pb_secondary">#405E96</color>
+    <color name="pb_on_secondary">#FFFFFF</color>
+    <color name="pb_secondary_container">#D8E2FF</color>
+    <color name="pb_on_secondary_container">#001A41</color>
+    <color name="pb_secondary_fixed">#D8E2FF</color>
+    <color name="pb_secondary_fixed_dim">#ADC6FF</color>
+    <color name="pb_on_secondary_fixed">#001A41</color>
+    <color name="pb_on_secondary_fixed_variant">#26467D</color>
+    <color name="pb_tertiary">#952DAD</color>
+    <color name="pb_on_tertiary">#FFFFFF</color>
+    <color name="pb_tertiary_container">#FED6FF</color>
+    <color name="pb_on_tertiary_container">#350041</color>
+    <color name="pb_tertiary_fixed">#FED6FF</color>
+    <color name="pb_tertiary_fixed_dim">#F5ADFF</color>
+    <color name="pb_on_tertiary_fixed">#350041</color>
+    <color name="pb_on_tertiary_fixed_variant">#790393</color>
+    <color name="pb_error">#BA1A1A</color>
+    <color name="pb_on_error">#FFFFFF</color>
+    <color name="pb_error_container">#FFDAD6</color>
+    <color name="pb_on_error_container">#410002</color>
+    <color name="pb_success">#006E1C</color>
+    <color name="pb_on_success">#FFFFFF</color>
+    <color name="pb_success_container">#D5E8CE</color>
+    <color name="pb_on_success_container">#005313</color>
+    <color name="pb_warning">#8B5000</color>
+    <color name="pb_on_warning">#FFFFFF</color>
+    <color name="pb_warning_container">#FFDCBE</color>
+    <color name="pb_on_warning_container">#693C00</color>
+    <color name="pb_surface">#FCF8F9</color>
+    <color name="pb_surface_bright">#FCF8F9</color>
+    <color name="pb_surface_dim">#DBD9DC</color>
+    <color name="pb_surface_container_lowest">#FFFFFF</color>
+    <color name="pb_surface_container_low">#F5F3F6</color>
+    <color name="pb_surface_container">#EFEDF0</color>
+    <color name="pb_surface_container_high">#EAE7EA</color>
+    <color name="pb_surface_container_highest">#E4E2E4</color>
+    <color name="pb_on_surface">#181C23</color>
+    <color name="pb_on_surface_variant">#414755</color>
+    <color name="pb_outline">#717786</color>
+    <color name="pb_outline_variant">#C7C6CA</color>
+    <color name="pb_inverse_surface">#2D3039</color>
+    <color name="pb_on_inverse_surface">#EEF0FC</color>
+    <color name="pb_inverse_primary">#ADC6FF</color>
+    <color name="pb_shadow">#000000</color>
+    <color name="pb_scrim">#000000</color>
+    <color name="pb_page">#EFEDF0</color>
+    <color name="pb_card">#FCF8F9</color>
+    <color name="pb_block">#EFEDF0</color>
+    <color name="pb_inset">#E4E2E4</color>
+    <color name="pb_floating">#FCF8F9</color>
+    <color name="pb_nav_indicator">#EFEDF0</color>
+    <color name="pb_destructive">#FF383C</color>
 
-    <color name="window_bg">#F3F6FF</color>
-    <color name="card_bg">#FFFFFF</color>
-    <color name="card_soft">#F7F9FF</color>
-    <color name="input_bg">#F9FBFF</color>
-    <color name="chip_bg">#EDF2FF</color>
-    <color name="log_bg">#F5F8FF</color>
-
-    <color name="text_primary">#111A33</color>
-    <color name="text_secondary">#5C6885</color>
-    <color name="text_muted">#8A96AF</color>
-    <color name="divider">#E3E9F7</color>
-    <color name="ripple_soft">#332C6BFF</color>
-
-    <color name="success">#0FA97B</color>
-    <color name="danger">#E5484D</color>
-    <color name="warning">#D98A21</color>
-    <color name="badge_ok_bg">#E2F7EF</color>
-    <color name="badge_warn_bg">#FFF1DC</color>
+    <!-- 旧语义别名：让尚未重写的页面立即使用新配色 -->
+    <color name="window_bg">@color/pb_page</color>
+    <color name="card_bg">@color/pb_card</color>
+    <color name="card_soft">@color/pb_block</color>
+    <color name="input_bg">@color/pb_inset</color>
+    <color name="chip_bg">@color/pb_block</color>
+    <color name="log_bg">@color/pb_page</color>
+    <color name="text_primary">@color/pb_on_surface</color>
+    <color name="text_secondary">@color/pb_on_surface_variant</color>
+    <color name="text_muted">@color/pb_outline</color>
+    <color name="divider">@color/pb_outline_variant</color>
+    <color name="brand_primary">@color/pb_primary</color>
+    <color name="brand_accent">@color/pb_tertiary</color>
+    <color name="brand_deep">@color/pb_primary_container</color>
+    <color name="on_brand">@color/pb_on_primary</color>
+    <color name="success">@color/pb_success</color>
+    <color name="danger">@color/pb_error</color>
+    <color name="warning">@color/pb_warning</color>
+    <color name="badge_ok_bg">@color/pb_success_container</color>
+    <color name="badge_warn_bg">@color/pb_warning_container</color>
+    <color name="ripple_soft">#007AFF33</color>
 </resources>

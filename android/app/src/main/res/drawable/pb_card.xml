@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FlClash 仪表盘卡片底：32dp 连续圆角，填充 card 层级 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/pb_card" />
+    <corners android:radius="30dp" />
+</shape>

@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/LianXia233/android-privilege-broker/releases/latest"><img src="https://img.shields.io/badge/Release-v2.1.18-blue.svg?style=flat-square&logo=android" alt="Release Version" /></a>
+  <a href="https://github.com/LianXia233/android-privilege-broker/releases/latest"><img src="https://img.shields.io/badge/Release-v2.2.0-blue.svg?style=flat-square&logo=android" alt="Release Version" /></a>
   <a href="https://github.com/LianXia233/android-privilege-broker/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/LianXia233/android-privilege-broker/build.yml?branch=main&style=flat-square&logo=github&label=Build" alt="CI Status" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-orange.svg?style=flat-square" alt="License" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-2021%20(12%20Crates)-DEA584.svg?style=flat-square&logo=rust&logoColor=white" alt="Rust" /></a>
@@ -46,7 +46,7 @@
 | **架构组成** | 纯业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate）；无线链路在 `broker-wireless` |
 | **产物交付** | 全 ABI 支持（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、**16KB 内存页对齐**、v1+v2 签名 |
 | **开源许可** | **GNU General Public License v3.0（GPL-3.0-only）**，详见 [LICENSE](LICENSE) |
-| **当前版本** | **2.1.18**（versionCode 25）；完整演进历史参见 [CHANGELOG.md](CHANGELOG.md) |
+| **当前版本** | **2.2.0**（versionCode 26）；完整演进历史参见 [CHANGELOG.md](CHANGELOG.md) |
 
 ---
 
@@ -77,8 +77,9 @@
 | **F-09** | **优雅失败降级** | 安装失败时默认仅发送一条低打扰通知，仅在用户点击时才交接给系统安装器 | `SilentTask.java`, `Notifier.java` |
 | **F-10** | **本地化中文展示** | 通知、日志、错误堆栈精准显示 APK 内部 Label 中文名与易读错误原因 | `AppNames.java`, `apk_meta.rs`, `logbook.rs` |
 | **F-11** | **双模写入与安全中转** | stdin 流式写入失败自动兜底为路径写入；中转落盘规避 FUSE 域 SELinux 拦截 | `install.rs`, `BrokerBridge.java`, `StagedFiles.java` |
-| **F-12** | **安装后自动清理** | 支持安装成功后删除原始安装包；权限不足时特权代理以 shell 身份执行安全删除 | `SilentTask.java`, `BrokerBridge.java` |
+| **F-12** | **安装后自动清理** | 安装成功后可删除原始安装包：暂存阶段采集路径 / 大小 / SHA-256，删除时按「应用侧 → shell 路径 → content query → content delete → 内容指纹」五级阶梯执行，每级先校验再删，绝不误删同名文件 | `SourceFacts.java`, `SilentTask.java`, `BrokerBridge.java` |
 | **F-13** | **关于与合规信息** | 提供完整构建版本、证书指纹、源码仓库直达与 GPL-3.0 许可说明 | `AboutActivity.java` |
+| **F-14** | **FlClash 风格界面** | 复刻 FlClash（prism_ui）设计系统：同源 M3 色板、四级 tonal 表面、squircle 卡片、悬浮胶囊 Dock、滑动 / 淡入切页、弹性按压与弹簧开关 | `Prism.java`, `NavigationDock.java`, `PageSwitcher.java`, `PrismSwitch.java`, `scripts/gen_palette.py` |
 
 ---
 

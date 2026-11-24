@@ -1,81 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 逐应用授权行：名称 / 包名 / 系统徽章 / 开关 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
+    android:layout_marginBottom="8dp"
+    android:background="@drawable/pb_card"
     android:gravity="center_vertical"
-    android:background="@drawable/bg_chip"
-    android:paddingStart="12dp"
-    android:paddingEnd="8dp"
-    android:paddingTop="9dp"
-    android:paddingBottom="9dp"
-    android:layout_marginBottom="6dp">
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginEnd="10dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
         <TextView
             android:id="@+id/itemAppName"
+            style="@style/PbText.Subheadline"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:singleLine="true"
             android:ellipsize="end"
-            android:textColor="@color/text_primary" />
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1" />
 
         <TextView
             android:id="@+id/itemAppPkg"
+            style="@style/PbText.Caption2"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:singleLine="true"
+            android:layout_marginTop="1dp"
             android:ellipsize="middle"
-            android:textColor="@color/text_muted"
-            android:layout_marginTop="2dp" />
+            android:maxLines="1" />
     </LinearLayout>
 
-    <!-- 已授权标记：只有被勾选的应用才显示 -->
-    <TextView
-        android:id="@+id/itemAppAllowed"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/auth_tag_allowed"
-        android:textSize="10sp"
-        android:textStyle="bold"
-        android:textColor="@color/success"
-        android:background="@drawable/bg_tag_allowed"
-        android:paddingStart="7dp"
-        android:paddingEnd="7dp"
-        android:paddingTop="3dp"
-        android:paddingBottom="3dp"
-        android:layout_marginEnd="6dp"
-        android:visibility="gone" />
-
-    <!-- 系统 / 用户应用徽章，配色区分 -->
     <TextView
         android:id="@+id/itemAppTag"
+        style="@style/PbText.Caption2"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textSize="10sp"
-        android:textStyle="bold"
-        android:textColor="@color/text_secondary"
-        android:background="@drawable/bg_tag_user"
-        android:paddingStart="7dp"
-        android:paddingEnd="7dp"
-        android:paddingTop="3dp"
-        android:paddingBottom="3dp"
-        android:layout_marginEnd="6dp" />
+        android:layout_height="22dp"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/pb_chip_idle"
+        android:gravity="center"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp" />
 
-    <Switch
+    <io.github.lianxia233.privbroker.PrismSwitch
         android:id="@+id/itemAppSwitch"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:minWidth="0dp"
-        android:minHeight="0dp"
-        android:focusable="false"
-        android:clickable="false" />
+        android:layout_height="44dp" />
 </LinearLayout>

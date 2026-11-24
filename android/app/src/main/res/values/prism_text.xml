@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FlClash / prism_ui 字体层级（iOS Dynamic Type 默认字号，dp 按 1pt=1dp） -->
+<resources>
+    <style name="PbText" parent="android:Widget.TextView">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="PbText.Display" parent="PbText">
+        <item name="android:textSize">40sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">-0.02</item>
+    </style>
+
+    <style name="PbText.LargeTitle" parent="PbText">
+        <item name="android:textSize">34sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">-0.02</item>
+    </style>
+
+    <style name="PbText.Title1" parent="PbText">
+        <item name="android:textSize">28sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">-0.02</item>
+    </style>
+
+    <style name="PbText.PageTitle" parent="PbText">
+        <item name="android:textSize">24sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">-0.01</item>
+    </style>
+
+    <style name="PbText.Title2" parent="PbText">
+        <item name="android:textSize">22sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="PbText.Title3" parent="PbText">
+        <item name="android:textSize">20sp</item>
+    </style>
+
+    <style name="PbText.Headline" parent="PbText">
+        <item name="android:textSize">17sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="PbText.Body" parent="PbText">
+        <item name="android:textSize">17sp</item>
+    </style>
+
+    <style name="PbText.Callout" parent="PbText">
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <style name="PbText.Subheadline" parent="PbText">
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="PbText.Footnote" parent="PbText">
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="PbText.Caption" parent="PbText">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+
+    <style name="PbText.Caption2" parent="PbText">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+
+    <!-- 卡片标题：13sp 强调 + 次要色（DashboardText.cardTitle） -->
+    <style name="PbText.CardTitle" parent="PbText.Caption">
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <!-- 大数字：34sp 强调、负字距、等宽数字 -->
+    <style name="PbText.Figure" parent="PbText.LargeTitle">
+        <item name="android:textSize">28sp</item>
+    </style>
+
+    <!-- 分组小节标题 -->
+    <style name="PbText.Section" parent="PbText.Caption">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.06</item>
+        <item name="android:textColor">@color/text_muted</item>
+    </style>
+
+    <style name="PbText.Mono" parent="PbText.Footnote">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+</resources>

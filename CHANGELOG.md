@@ -4,7 +4,7 @@
 
 <div align="center">
 
-[![Latest Version](https://img.shields.io/badge/Release-v2.1.18-blue.svg?style=flat-square&logo=android)](https://github.com/LianXia233/android-privilege-broker/releases/latest)
+[![Latest Version](https://img.shields.io/badge/Release-v2.2.0-blue.svg?style=flat-square&logo=android)](https://github.com/LianXia233/android-privilege-broker/releases/latest)
 [![License](https://img.shields.io/badge/License-GPL--3.0-orange.svg?style=flat-square)](LICENSE)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/LianXia233/android-privilege-broker/build.yml?branch=main&style=flat-square&logo=github&label=Build)](https://github.com/LianXia233/android-privilege-broker/actions)
 
@@ -16,9 +16,48 @@
 
 | 分支 / 主版本 | 包含版本 | 演进重点与关键里程碑 |
 | :--- | :--- | :--- |
-| **v2.1.x 系列**<br/>*(当前维护)* | [v2.1.18](#v2118) · [v2.1.17](#v2117) · [v2.1.16](#v2116) · [v2.1.15](#v2115) · [v2.1.14](#v2114) · [v2.1.13](#v2113) · [v2.1.12](#v2112)<br/>[v2.1.11](#v2111) · [v2.1.10](#v2110) · [v2.1.9](#v219) · [v2.1.8](#v218) · [v2.1.7](#v217) · [v2.1.6](#v216)<br/>[v2.1.5](#v215) · [v2.1.4](#v214) · [v2.1.3](#v213) · [v2.1.2](#v212) · [v2.1.1](#v211) · [v2.1.0](#v210) | **高可用与真机调优**：修复失败降级与指示器开关；ash read 优化规避 6 秒超时；幻影进程监控关闭；端点自愈重拉与挑战响应握手鉴权 |
+| **v2.2.x 系列**<br/>*(当前维护)* | [v2.2.0](#v220) | **界面复刻 FlClash**：M3 tonal 四层表面 / squircle 卡片 / 悬浮 Dock / 滑动·淡入切页；**删除安装包修复**：五级删除阶梯 + 大小与 SHA-256 校验，经软件自带的无线调试授权（shell uid 2000）落地 |
+| **v2.1.x 系列** | [v2.1.18](#v2118) · [v2.1.17](#v2117) · [v2.1.16](#v2116) · [v2.1.15](#v2115) · [v2.1.14](#v2114) · [v2.1.13](#v2113) · [v2.1.12](#v2112)<br/>[v2.1.11](#v2111) · [v2.1.10](#v2110) · [v2.1.9](#v219) · [v2.1.8](#v218) · [v2.1.7](#v217) · [v2.1.6](#v216)<br/>[v2.1.5](#v215) · [v2.1.4](#v214) · [v2.1.3](#v213) · [v2.1.2](#v212) · [v2.1.1](#v211) · [v2.1.0](#v210) | **高可用与真机调优**：修复失败降级与指示器开关；ash read 优化规避 6 秒超时；幻影进程监控关闭；端点自愈重拉与挑战响应握手鉴权 |
 | **v2.0.x 系列** | [v2.0.0](#v200) | **重构自研特权架构**：全新包名 `io.github.lianxia233.privbroker`，全面转向自主 Broker（Shell uid 2000 唯一后端），引入 12 个 Rust Crate 组成的 Tokio 特权服务与免电脑无线配对 |
 | **v1.0.x 系列**<br/>*(历史版本)* | [v1.0.4](#v104) · [v1.0.3](#v103) · [v1.0.2](#v102) · [v1.0.1](#v101) · [v1.0.0](#v100) | **早期架构探索**：零窗口静默技术落地、MIUI 结果忽略窗口避让、多格式分片解包与本地日志系统构建 |
+
+---
+
+## v2.2.0
+
+### 界面：复刻 FlClash（prism_ui）设计系统
+
+- **主题**：按 FlClash `seededColorScheme` 的规则（种子 `#007AFF`、`ColorStyle.vivid`）离线生成明暗两套 M3 色板，落在 `values/colors.xml` 与 `values-night/colors.xml`；生成脚本见 `scripts/gen_palette.py`（构建期工具，不随 APK 分发）。
+  - 主色走 prism 的饱和强调色规则（亮色 `#007AFF`，暗色上抬到 `#2F83FF`），而不是 M3 默认的 tone 40/80；
+  - 表面按 `SurfaceLevel` 四级（page / card / block / inset）+ `surfaceContainer*` 全套输出，暗色使用自定义容器 tone（15 / 21 / 27），与 FlClash 的卡片层级一致。
+- **字体与形状**：iOS Dynamic Type 字号阶梯（display 40 / pageTitle 24 / headline 17 / subheadline 15 / caption 12 …），连续圆角（squircle）卡片与胶囊按钮；`SquircleDrawable` 用超椭圆公式采样，观感接近 iOS 的连续圆角。
+- **脚手架**：单 Activity + 四页常驻（仪表盘 / 记录 / 设置 / 关于），底部**悬浮胶囊 Dock**（62dp、左右 21dp、图标 28dp、标签 10sp、选中胶囊回弹），可在设置里切换「悬浮 / 停靠」两种形态。
+  - 切页动画复刻 FlClash 两档：滑动（300ms easeOut，整页位移动画）与淡入（220ms easeInOut，原地交叉淡入），页面状态不丢失；
+  - 系统栏边缘到边缘，明暗模式各自使用正确的图标对比色。
+- **仪表盘**：状态 hero 卡（状态胶囊 + 24sp 标题 + 84dp 圆形主操作）、安装/卸载统计与 14 天迷你面积图、安装模式三选一分段控件、两个设置开关、服务状态与缓存卡、安装/卸载操作卡、最近安装列表。
+- **记录页**：按安装 / 卸载 / 激活分段筛选；点击整条展开完整详情、长按复制、导出与清空。
+- **设置页**：外观（主题 / 页面动画 / 导航栏）、安装行为、授权（调用方鉴权 / 白名单增删 / 逐应用授权）、维护，全部卡片分组。
+- **逐应用授权**改为独立页面（搜索 + 全部 / 用户 / 系统筛选 + 弹簧开关）。
+- **交互组件**：`PrismSwitch`（轨道 52×32、拇指 24，按压拉伸到 40×22，300ms 过冲）、`ElasticPress` 弹性按压、`SegmentedControl`（250ms 滑块）、`NavigationDock` 选中回弹、`Sparkline` 迷你面积图。
+
+### 修复：开启「成功后删除安装包」后仍删不掉、提示无权限
+
+- **根因**：`deleteSource` 只认 `_data` 列与 `file://` 路径。SAF、MediaStore、QQ / 微信这类第三方 FileProvider 给出的 `content://` 不暴露 `_data`，调用方又只授予读权限，`ContentResolver.delete` 必然被拒，于是永远走不到 shell 删除那一步。
+- **暂存阶段采集来源事实**（此时读授权仍有效）：SAF 文档 ID 解码（`primary:Download/x.apk` / `1A2B:...`）、下载管理器 `raw:` 解码、`/proc/self/fd` 反查真实路径并归一化 `/mnt/user|runtime|pass_through|installer|media_rw` 视图、`_data` 兜底、`fstat` 大小；开启开关时在复制字节的同时计算 SHA-256。
+- **删除改为五级阶梯**，全部经软件自带的无线调试授权（特权代理以 shell uid 2000 运行）：
+  1. 应用侧 `DocumentsContract.deleteDocument` / `ContentResolver.delete`（自家 StagedProvider 与有写权限的 SAF 来源）；
+  2. shell 按已知路径 `rm`；
+  3. shell 用 `content query` 取 `_data` 后再 `rm`（MediaStore 系来源本应用没有列级权限、shell 有）；
+  4. shell 用 `content delete` 按 URI 删除；
+  5. 按「名称 + 大小 + SHA-256」在 `/storage` 下找回同一个文件再删（覆盖不透明 FileProvider URI）。
+- **删除前一律核对**：先比大小，有哈希时再比内容；核对不过就放弃，宁可删不掉也不误删同名文件。所有命令走 `sh -c script sh <位置参数>`，路径与文件名不参与命令拼接。
+- **失败原因写进日志**：例如「该目录自 Android 11 起受系统保护」「文件内容与安装包不一致，已放弃删除（避免误删）」，不再是笼统的「权限受限」。
+- 应用内「选择安装包并安装」同样先采集来源事实，Rust 侧 `deleteSourceAfter` 与外部静默链路共用同一个执行点。
+
+### 工程
+
+- 新增 `scripts/gen_palette.py`：按 prism 规则重新生成色板（需要 `materialyoucolor`，仅开发期使用）。
+- 版本号升至 `2.2.0`（versionCode 26）；`Cargo.toml`、`Cargo.lock`、`build.gradle.kts`、README 徽章同步。
 
 ---
 

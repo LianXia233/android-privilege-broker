@@ -381,61 +381,318 @@ public final class BrokerBridge {
     /**
      * 删除安装包（「安装成功后删除安装包」开关的唯一执行点）。
      *
-     * 顺序：
-     *  1. DocumentsContract.deleteDocument —— 只在调用方给了写权限时才成功，
-     *     而「打开方式 / 分享」进来的 URI 通常只有读权限；
-     *  2. ContentResolver.delete —— 同上，多数情况被 SecurityException 拒绝；
-     *  3. 解析真实路径并用 shell 身份 rm —— 这一步才是开关真正生效的原因。
-     *     走 argv 数组（不经 shell 拼接），路径不可能被注入成命令。
+     * <p>调用方给的 content:// 多数来自 SAF、MediaStore 或第三方 FileProvider：
+     * 它们不暴露 {@code _data} 列，读授权也只授给本应用（并且只有读）。直接用
+     * {@code ContentResolver.delete} 必然被拒 —— 这正是过去「删除失败、无权限」
+     * 的根因。真正能删掉这些文件的是软件自带的 ADB 授权：特权代理以 shell
+     * (uid 2000) 身份运行，只要能定位到同一个文件，就能 {@code rm}。</p>
      *
-     * 返回值始终带 {@code path}，方便日志里看清「删的是哪个文件」。
+     * <p>阶梯顺序（每级失败继续下一级，最终如实返回原因）：</p>
+     * <ol>
+     *   <li>应用侧：{@code DocumentsContract.deleteDocument} /
+     *       {@code ContentResolver.delete}，对自家 StagedProvider 与给了写权限
+     *       的 SAF 来源直接生效；</li>
+     *   <li>shell 按已采集的路径删除：先核对大小，有 SHA-256 时再核对内容哈希，
+     *       核对不过就放弃 —— 宁可删不掉，也不能误删同名文件；</li>
+     *   <li>shell 用 {@code content query} 取 {@code _data} 再删：MediaStore 系
+     *       来源本应用没有列级权限，shell 有；</li>
+     *   <li>shell 用 {@code content delete} 按 URI 删除：MediaProvider 允许 shell
+     *       删除媒体记录；</li>
+     *   <li>按内容指纹（名称 + 大小 + SHA-256）在 {@code /storage} 下找回同一个
+     *       文件再删：覆盖 QQ / 微信那类只给不透明 FileProvider URI 的安装包。</li>
+     * </ol>
+     *
+     * <p>所有命令都走 argv 数组 + 位置参数（{@code sh -c script sh <args>}），
+     * 路径与文件名不参与命令拼接，不存在注入面。</p>
+     *
+     * @return {@code deleted}（是否删掉）、{@code path}（核销的文件）、
+     *         {@code via}（生效的阶梯）、{@code reason}（失败原因，中文）
      */
     private static JSONObject deleteSource(JSONObject a) throws Exception {
-        Uri uri = Uri.parse(a.getString("uri"));
+        String uriStr = a.optString("uri", "").trim();
+        JSONObject facts = factsOf(uriStr, a);
+        String path = clean(facts.optString("path", ""));
+        String name = clean(facts.optString("name", ""));
+        long size = facts.optLong("size", -1L);
+        String sha = clean(facts.optString("sha256", "")).toLowerCase(Locale.ROOT);
+
         boolean deleted = false;
+        String via = "";
+        String reason = "";
+
+        // 1) 应用侧
+        if (!uriStr.isEmpty()) {
+            Uri uri = Uri.parse(uriStr);
+            try {
+                deleted = DocumentsContract.deleteDocument(resolver(), uri);
+            } catch (Throwable ignored) {
+            }
+            if (!deleted) {
+                try {
+                    deleted = resolver().delete(uri, null, null) > 0;
+                } catch (Throwable ignored) {
+                }
+            }
+            if (deleted) {
+                via = "app";
+            }
+        }
+
+        // 2) shell 按已知路径删除
+        if (!deleted && !path.isEmpty()) {
+            int code = shellRm(path, size, sha);
+            if (code == 0) {
+                deleted = true;
+                via = "shell-path";
+            } else {
+                reason = reasonOf(code);
+                if (code == 15 && (path.contains("/Android/data/")
+                        || path.contains("/Android/obb/"))) {
+                    reason += "；该目录自 Android 11 起受系统保护，shell 也无法越过";
+                }
+            }
+        }
+
+        // 3) shell 取 _data 后删除
+        if (!deleted && !uriStr.isEmpty()) {
+            String queried = shellQueryDataPath(uriStr);
+            if (queried != null && !queried.isEmpty() && !queried.equals(path)) {
+                int code = shellRm(queried, size, sha);
+                if (code == 0) {
+                    deleted = true;
+                    via = "shell-data";
+                    path = queried;
+                } else if (reason.isEmpty()) {
+                    reason = reasonOf(code);
+                }
+            }
+        }
+
+        // 4) shell 按 URI 删除（MediaProvider 系）
+        if (!deleted && uriStr.startsWith("content://")) {
+            int code = shellContentDelete(uriStr);
+            if (code == 0) {
+                deleted = true;
+                via = "shell-content";
+            } else if (reason.isEmpty()) {
+                reason = reasonOf(code);
+            }
+        }
+
+        // 5) 内容指纹定位
+        if (!deleted && size > 0 && !name.isEmpty() && !sha.isEmpty()) {
+            String found = shellFindAndDelete(name, size, sha);
+            if (found != null) {
+                deleted = true;
+                via = "shell-find";
+                path = found;
+            } else if (reason.isEmpty()) {
+                reason = "按名称与内容指纹未找到可删除的文件";
+            }
+        }
+
+        if (!deleted && reason.isEmpty()) {
+            reason = "没有可用于删除的路径或内容指纹";
+        }
+        if (deleted) {
+            reason = "";
+            Log.i(TAG, "deleteSource ok via=" + via + " path=" + path);
+        } else {
+            Log.w(TAG, "deleteSource failed uri=" + uriStr + " path=" + path
+                    + " reason=" + reason);
+        }
+        return new JSONObject()
+                .put("deleted", deleted)
+                .put("path", path == null ? "" : path)
+                .put("via", via)
+                .put("reason", reason);
+    }
+
+    private static String clean(String s) {
+        if (s == null || "null".equals(s)) {
+            return "";
+        }
+        return s.trim();
+    }
+
+    /** 合并现场传入 / 暂存阶段持久化 / 运行期现场解析三处事实，缺失才补齐。 */
+    private static JSONObject factsOf(String uriStr, JSONObject input) {
+        JSONObject out = new JSONObject();
         try {
-            deleted = DocumentsContract.deleteDocument(resolver(), uri);
+            if (!uriStr.isEmpty()) {
+                JSONObject stored = SourceFacts.get(App.context(), uriStr);
+                mergeFacts(out, stored, false);
+            }
+            mergeFacts(out, input, false);
+            String path = clean(out.optString("path", ""));
+            if (path.isEmpty() && !uriStr.isEmpty()) {
+                JSONObject live = SourceFacts.resolveNow(App.context(), Uri.parse(uriStr));
+                mergeFacts(out, live, true);
+            }
         } catch (Throwable ignored) {
         }
-        if (!deleted) {
+        return out;
+    }
+
+    private static void mergeFacts(JSONObject dst, JSONObject src, boolean keepExisting) {
+        if (src == null) {
+            return;
+        }
+        java.util.Iterator<String> keys = src.keys();
+        while (keys.hasNext()) {
+            String k = keys.next();
             try {
-                deleted = resolver().delete(uri, null, null) > 0;
+                Object v = src.opt(k);
+                if (v == null || v == JSONObject.NULL) {
+                    continue;
+                }
+                Object old = dst.opt(k);
+                boolean has = old != null && old != JSONObject.NULL
+                        && !(old instanceof String && ((String) old).isEmpty())
+                        && !"null".equals(String.valueOf(old));
+                if (keepExisting && has) {
+                    continue;
+                }
+                dst.put(k, v);
             } catch (Throwable ignored) {
             }
         }
-        String path = deleted ? "" : filePathOf(uri);
-        if (!deleted && path != null && !path.isEmpty()) {
-            deleted = shellDelete(path);
-        }
-        return new JSONObject().put("deleted", deleted).put("path", path == null ? "" : path);
     }
 
-    /** 从 SAF / MediaStore 的 _data 列解析真实路径；拿不到返回 null。 */
-    private static String filePathOf(Uri uri) {
-        if ("file".equals(uri.getScheme())) {
-            return uri.getPath();
-        }
-        try (Cursor c = resolver().query(uri, new String[]{"_data"}, null, null, null)) {
-            if (c != null && c.moveToFirst() && !c.isNull(0)) {
-                return c.getString(0);
-            }
-        } catch (Throwable ignored) {
-        }
-        return null;
-    }
+    /** 删除前核对大小与内容哈希；核对不过绝不删。 */
+    private static final String RM_SCRIPT = """
+            f="$1"; want="$2"; hash="$3"
+            [ -e "$f" ] || exit 11
+            if [ -n "$want" ] && [ "$want" != "-1" ]; then
+              got=$(stat -c %s "$f" 2>/dev/null) || exit 12
+              [ "$got" = "$want" ] || exit 13
+            fi
+            if [ -n "$hash" ]; then
+              if command -v sha256sum >/dev/null 2>&1; then
+                got=$(sha256sum "$f" 2>/dev/null | cut -d' ' -f1)
+              else
+                got=$(toybox sha256sum "$f" 2>/dev/null | cut -d' ' -f1)
+              fi
+              [ "$got" = "$hash" ] || exit 14
+            fi
+            rm -f "$f" || exit 15
+            printf '%s\\n' "$f"
+            exit 0
+            """;
 
-    /** 以 shell 身份 rm -f；只接受绝对路径。 */
-    private static boolean shellDelete(String path) {
+    /** 在 /storage 下按名称 + 大小筛候选，再用 SHA-256 确认是同一个文件才删。 */
+    private static final String FIND_SCRIPT = """
+            name="$1"; want="$2"; hash="$3"
+            [ -n "$name" ] && [ -n "$hash" ] || exit 20
+            command -v sha256sum >/dev/null 2>&1 || exit 21
+            hits=$(find /storage -maxdepth 8 -type f -name "$name" -size "${want}c" 2>/dev/null | head -n 5)
+            [ -n "$hits" ] || exit 22
+            printf '%s\\n' "$hits" | while IFS= read -r f; do
+              got=$(sha256sum "$f" 2>/dev/null | cut -d' ' -f1)
+              if [ "$got" = "$hash" ]; then
+                rm -f "$f" && printf 'DELETED %s\\n' "$f"
+              fi
+            done
+            """;
+
+    private static final String CONTENT_DATA_SCRIPT = """
+            content query --uri "$1" --projection _data 2>/dev/null \\
+              | sed -n 's/.*_data=\\(.*\\)$/\\1/p' | head -n 1
+            """;
+
+    private static final String CONTENT_DELETE_SCRIPT = """
+            out=$(content delete --uri "$1" 2>&1) || exit 31
+            case "$out" in *0\\ rows*) exit 32 ;; esac
+            printf '%s\\n' "$out"
+            """;
+
+    private static int shellRm(String path, long size, String sha) {
         if (path == null || !path.startsWith("/")) {
-            return false;
+            return -1;
         }
         try {
-            JSONArray argv = new JSONArray().put("rm").put("-f").put(path);
-            JSONObject o = exec(new JSONObject().put("argv", argv));
-            return o.optInt("code", -1) == 0;
-        } catch (Throwable ignored) {
-            return false;
+            JSONArray argv = new JSONArray()
+                    .put("sh").put("-c").put(RM_SCRIPT).put("sh")
+                    .put(path)
+                    .put(size > 0 ? String.valueOf(size) : "")
+                    .put(sha == null ? "" : sha);
+            JSONObject r = exec(new JSONObject()
+                    .put("argv", argv)
+                    .put("timeoutMs", 300_000L));
+            return r.optInt("code", -1);
+        } catch (Throwable t) {
+            Log.w(TAG, "shellRm", t);
+            return -1;
         }
+    }
+
+    private static String shellQueryDataPath(String uri) {
+        try {
+            JSONArray argv = new JSONArray()
+                    .put("sh").put("-c").put(CONTENT_DATA_SCRIPT).put("sh").put(uri);
+            JSONObject r = exec(new JSONObject()
+                    .put("argv", argv)
+                    .put("timeoutMs", 30_000L));
+            String out = r.optString("stdout", "").trim();
+            if (out.isEmpty()) {
+                return null;
+            }
+            String first = out.split("\\R")[0].trim();
+            return first.startsWith("/") ? first : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static int shellContentDelete(String uri) {
+        try {
+            JSONArray argv = new JSONArray()
+                    .put("sh").put("-c").put(CONTENT_DELETE_SCRIPT).put("sh").put(uri);
+            JSONObject r = exec(new JSONObject()
+                    .put("argv", argv)
+                    .put("timeoutMs", 30_000L));
+            return r.optInt("code", -1);
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    private static String shellFindAndDelete(String name, long size, String sha) {
+        try {
+            JSONArray argv = new JSONArray()
+                    .put("sh").put("-c").put(FIND_SCRIPT).put("sh")
+                    .put(name).put(String.valueOf(size)).put(sha);
+            JSONObject r = exec(new JSONObject()
+                    .put("argv", argv)
+                    .put("timeoutMs", 300_000L));
+            String out = r.optString("stdout", "");
+            for (String line : out.split("\\R")) {
+                String s = line.trim();
+                if (s.startsWith("DELETED ")) {
+                    return s.substring("DELETED ".length()).trim();
+                }
+            }
+            return null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static String reasonOf(int code) {
+        return switch (code) {
+            case 0 -> "";
+            case 11 -> "文件已不存在";
+            case 12 -> "读取文件大小失败";
+            case 13 -> "文件大小与安装包不一致，已放弃删除（避免误删）";
+            case 14 -> "文件内容与安装包不一致，已放弃删除（避免误删）";
+            case 15 -> "特权代理无权删除该文件";
+            case 20 -> "缺少用于定位的名称或内容指纹";
+            case 21 -> "系统缺少 sha256sum，无法核对内容指纹";
+            case 22 -> "未找到同名同大小的文件";
+            case 31 -> "content delete 执行失败";
+            case 32 -> "content delete 未删除任何记录";
+            default -> "特权代理删除失败 (exit " + code + ")";
+        };
     }
 
     /**
@@ -609,6 +866,20 @@ public final class BrokerBridge {
 
     private static SharedPreferences prefs() {
         return App.context().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    /**
+     * 「成功后删除安装包」是否开启。
+     *
+     * <p>暂存阶段据此决定要不要顺手算 SHA-256：关闭时省掉一次全文件摘要，
+     * 打开时删除链路才能按内容指纹在 {@code /storage} 下精确找回原文件。</p>
+     */
+    static boolean deleteAfterEnabled() {
+        try {
+            return configLoad().optBoolean("deleteApkAfterInstall", false);
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private static JSONObject configLoad() throws Exception {

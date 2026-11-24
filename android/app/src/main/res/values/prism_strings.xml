@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 新界面文案：FlClash 风格导航与仪表盘 -->
+<resources>
+    <string name="tab_dashboard">仪表盘</string>
+    <string name="tab_logs">记录</string>
+    <string name="tab_settings">设置</string>
+    <string name="tab_about">关于</string>
+
+    <string name="dash_status">状态</string>
+    <string name="dash_privileged_proxy">特权代理</string>
+    <string name="dash_install_mode">安装模式</string>
+    <string name="dash_service_status">服务状态</string>
+    <string name="dash_cache">缓存</string>
+    <string name="dash_actions">安装与卸载</string>
+    <string name="dash_recent">最近安装</string>
+    <string name="dash_view_all">查看全部</string>
+    <string name="dash_installs">累计安装</string>
+    <string name="dash_deletes">累计卸载</string>
+    <string name="dash_refresh">刷新</string>
+    <string name="dash_uid">身份</string>
+    <string name="dash_version">版本</string>
+    <string name="dash_auth_method">授权方式</string>
+    <string name="dash_uptime">运行时长</string>
+    <string name="dash_delete_after">成功后删除安装包</string>
+    <string name="dash_delete_after_desc">装完用特权代理以 shell 身份删除原安装包</string>
+    <string name="dash_floating">悬浮指示器</string>
+    <string name="dash_floating_desc">安装时在屏幕左上角显示 40dp 小指示器</string>
+    <string name="dash_cache_desc">暂存与中转文件</string>
+    <string name="dash_recent_empty">还没有安装记录</string>
+    <string name="dash_today">今日</string>
+    <string name="dash_week">近 7 天</string>
+    <string name="dash_calls">调用</string>
+
+    <string name="mode_silent">静默</string>
+    <string name="mode_confirm">确认</string>
+    <string name="mode_system">系统安装器</string>
+
+    <string name="section_appearance">外观</string>
+    <string name="section_install_behavior">安装行为</string>
+    <string name="section_authorization">授权</string>
+    <string name="section_maintenance">维护</string>
+    <string name="setting_theme">主题</string>
+    <string name="theme_system">跟随系统</string>
+    <string name="theme_light">浅色</string>
+    <string name="theme_dark">深色</string>
+    <string name="setting_tab_animation">页面动画</string>
+    <string name="anim_slide">滑动</string>
+    <string name="anim_fade">淡入</string>
+    <string name="setting_dock">导航栏</string>
+    <string name="dock_floating">悬浮</string>
+    <string name="dock_docked">停靠</string>
+    <string name="setting_manage_auth">管理已授权应用</string>
+    <string name="setting_manage_auth_desc">按应用允许或拒绝静默安装调用</string>
+    <string name="setting_whitelist">白名单</string>
+    <string name="setting_add_package">添加包名</string>
+    <string name="setting_revoke_all">撤销全部调用方授权</string>
+    <string name="setting_allow_clear">清空白名单</string>
+    <string name="setting_caller_auth">调用方鉴权</string>
+    <string name="setting_caller_auth_desc">关闭后任何应用都能直接调用静默安装</string>
+
+    <string name="logs_all">全部</string>
+    <string name="logs_install">安装</string>
+    <string name="logs_uninstall">卸载</string>
+    <string name="logs_activate">激活</string>
+
+    <string name="about_repo">开源仓库</string>
+    <string name="about_licenses">开源许可</string>
+    <string name="about_tagline">用无线调试授权实现的静默安装特权代理</string>
+    <string name="about_version_fmt">版本 %1$s</string>
+
+    <string name="recent_line">%1$s · %2$s</string>
+    <string name="about_version_placeholder">版本 —</string>
+    <string name="setting_add">添加</string>
+</resources>

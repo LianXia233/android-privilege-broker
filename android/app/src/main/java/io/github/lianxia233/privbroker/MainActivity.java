@@ -1,109 +1,138 @@
 package io.github.lianxia233.privbroker;
 
-import android.Manifest;
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.content.ActivityNotFoundException;
-import android.content.ClipData;
 import android.content.Intent;
-import android.database.Cursor;
-import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.provider.OpenableColumns;
-import android.provider.Settings;
-import android.util.Log;
-import android.widget.Button;
-import android.widget.CompoundButton;
-import android.widget.Switch;
-import android.widget.TextView;
-import android.widget.Toast;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.FrameLayout;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+/**
+ * 主界面壳层：FlClash 同款「四页 + 悬浮导航 Dock」结构。
+ *
+ * <p>仪表盘 / 记录 / 设置 / 关于四个页面常驻挂载，切换只做位移动画或交叉
+ * 淡入；Dock 的选中胶囊 250ms 回弹。页面偏好（主题、动画、Dock 形态、
+ * 上次停留的页）存在 {@link UiPrefs}，重启后保持。</p>
+ */
+public final class MainActivity extends Activity implements NavigationDock.Listener {
+    private static final int TAB_COUNT = 4;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.function.Consumer;
-
-/** 用户主动点开图标时才出现的主界面；外部安装/卸载意图由 SilentInstallActivity 接管。 */
-public final class MainActivity extends Activity {
-    private static final int REQ_PICK = 1001;
-    private static final int REQ_NOTIF = 1002;
-
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
-
-    private TextView tvStatusTitle;
-    private TextView tvStatusHint;
-    private TextView tvStatusBadge;
-    private Button btnPermission;
-    private Switch swConfirm;
-    private Switch swDeleteAfter;
-    private Switch swDowngrade;
-
-    private JSONArray cachedAllowList = new JSONArray();
-    private String pendingPlan;
-    private String lastPackage;
-    private String installLabel = "安装包";
-    private String currentState = "UNAVAILABLE";
-    private boolean syncingPrefs;
+    private PageSwitcher pages;
+    private NavigationDock dock;
+    private View dockHost;
+    private DashboardPage dashboard;
+    private LogsPage logs;
+    private SettingsPage settings;
+    private int index;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Prism.edgeToEdge(this);
         setContentView(R.layout.activity_main);
 
-        tvStatusTitle = findViewById(R.id.tvStatusTitle);
-        tvStatusHint = findViewById(R.id.tvStatusHint);
-        tvStatusBadge = findViewById(R.id.tvStatusBadge);
-        btnPermission = findViewById(R.id.btnPermission);
-        swConfirm = findViewById(R.id.swConfirm);
-        swDeleteAfter = findViewById(R.id.swDeleteAfter);
-        swDowngrade = findViewById(R.id.swDowngrade);
+        pages = findViewById(R.id.pages);
+        dock = findViewById(R.id.dock);
+        dockHost = findViewById(R.id.dockHost);
 
-        BrokerBridge.setProgressListener((stage, index, total) ->
-                ui(() -> log("进度 " + index + "/" + total + " · " + stage)));
-        findViewById(R.id.btnCheck).setOnClickListener(v -> refreshStatus());
-        btnPermission.setOnClickListener(v -> onPermissionAction());
-        findViewById(R.id.btnInstall).setOnClickListener(v -> pickFile());
-        // 卸载改为读取应用列表选择：可搜索、可按系统 / 用户应用筛选，
-        // 不再要求用户手输包名。
-        findViewById(R.id.btnUninstall).setOnClickListener(v ->
-                startActivity(new Intent(this, AppPickerActivity.class)));
-        findViewById(R.id.btnSettings).setOnClickListener(v ->
-                startActivity(new Intent(this, SettingsActivity.class)));
-        findViewById(R.id.btnLogs).setOnClickListener(v ->
-                startActivity(new Intent(this, LogActivity.class)));
-        findViewById(R.id.btnLaunch).setOnClickListener(v -> launchLast());
-        findViewById(R.id.btnAbout).setOnClickListener(v ->
-                startActivity(new Intent(this, AboutActivity.class)));
+        LayoutInflater inflater = getLayoutInflater();
+        View dash = inflater.inflate(R.layout.page_dashboard, pages, false);
+        View logPage = inflater.inflate(R.layout.page_logs, pages, false);
+        View settingsPage = inflater.inflate(R.layout.page_settings, pages, false);
+        View aboutPage = inflater.inflate(R.layout.page_about, pages, false);
+        pages.addPage(dash);
+        pages.addPage(logPage);
+        pages.addPage(settingsPage);
+        pages.addPage(aboutPage);
 
-        CompoundButton.OnCheckedChangeListener persist = (b, checked) -> {
-            if (!syncingPrefs) {
-                savePrefs();
-            }
-        };
-        swConfirm.setOnCheckedChangeListener(persist);
-        swDeleteAfter.setOnCheckedChangeListener(persist);
+        dashboard = new DashboardPage(this, dash);
+        dashboard.setOnOpenLogs(() -> select(1, true));
+        logs = new LogsPage(this, logPage);
+        settings = new SettingsPage(this, settingsPage);
+        new AboutPage(this, aboutPage);
 
-        if (Build.VERSION.SDK_INT >= 33
-                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIF);
-        }
-        Notifier.ensureChannels(this);
-        refreshStatus();
+        dock.setItems(new String[]{
+                getString(R.string.tab_dashboard),
+                getString(R.string.tab_logs),
+                getString(R.string.tab_settings),
+                getString(R.string.tab_about),
+        }, new int[]{
+                R.drawable.ic_action_broker,
+                R.drawable.ic_action_logs,
+                R.drawable.ic_action_settings,
+                R.drawable.ic_action_info,
+        });
+        dock.setListener(this);
+        applyDockMode();
+        pages.setMode(UiPrefs.tabAnimation(this));
+        Prism.padBottomForNavBar(dockHost);
+
+        int start = Math.max(0, Math.min(UiPrefs.lastTab(this), TAB_COUNT - 1));
+        select(start, false);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        refreshStatus();
+        if (dashboard != null) {
+            dashboard.onResume();
+        }
+        if (logs != null) {
+            logs.onResume();
+        }
+        if (settings != null) {
+            settings.onResume();
+        }
+        applyDockMode();
+        if (pages != null) {
+            pages.setMode(UiPrefs.tabAnimation(this));
+        }
+    }
+
+    @Override
+    public void onSelected(int selected) {
+        select(selected, true);
+    }
+
+    private void select(int next, boolean animate) {
+        if (next < 0 || next >= TAB_COUNT) {
+            return;
+        }
+        index = next;
+        pages.show(next, animate);
+        dock.setSelected(next);
+        UiPrefs.setLastTab(this, next);
+        if (next == 1) {
+            logs.reload();
+        } else if (next == 2) {
+            settings.onResume();
+        } else if (next == 0) {
+            dashboard.onResume();
+        }
+    }
+
+    private void applyDockMode() {
+        int mode = UiPrefs.dockMode(this);
+        dock.setMode(mode);
+        ViewGroupShim.layout(dock, mode, this);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (index != 0) {
+            select(0, true);
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (dashboard != null && dashboard.onActivityResult(requestCode, resultCode, data)) {
+            return;
+        }
     }
 
     @Override
@@ -112,350 +141,20 @@ public final class MainActivity extends Activity {
         setIntent(intent);
     }
 
-    @Override
-    protected void onDestroy() {
-        BrokerBridge.setProgressListener(null);
-        worker.shutdownNow();
-        super.onDestroy();
-    }
-
-    // ------------------------------------------------------------------ 状态
-
-    private void refreshStatus() {
-        runAsync("status", "{}", r -> {
-            if (!r.optBoolean("ok")) {
-                showStatusFailure(r);
+    /** 只在需要时调一次 layoutParams，避免每次 onResume 重置安全区内边距。 */
+    private static final class ViewGroupShim {
+        static void layout(NavigationDock dock, int mode, Activity a) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) dock.getLayoutParams();
+            int side = mode == NavigationDock.FLOATING ? Prism.dp(a, 21) : 0;
+            int bottom = mode == NavigationDock.FLOATING ? Prism.dp(a, 21) : 0;
+            if (lp.leftMargin == side && lp.rightMargin == side && lp.bottomMargin == bottom) {
                 return;
             }
-            JSONObject d = r.optJSONObject("data");
-            if (d == null) {
-                return;
-            }
-            currentState = d.optString("state", "UNAVAILABLE");
-            applyStatusBadge(currentState);
-            JSONObject g = d.optJSONObject("guidance");
-            tvStatusTitle.setText(g == null ? currentState : g.optString("title"));
-            String hint = g == null ? "" : (g.optString("title") + " · " + g.optString("hint"));
-            tvStatusHint.setText(hint);
-            String action = g == null ? "" : g.optString("action");
-            btnPermission.setText(action.isEmpty() ? getString(R.string.btn_request) : action);
-            // 就绪态也保持可点：本按钮是配对/激活页（PairingActivity）的唯一
-            // 常驻入口，重启手机或无线调试被关闭后重新激活正是从该页操作，
-            // 禁用会把「已就绪但需要重新激活」的用户堵死在主界面。
-            btnPermission.setEnabled(true);
-            JSONObject cfg = d.optJSONObject("config");
-            if (cfg != null) {
-                JSONArray al = cfg.optJSONArray("allowList");
-                cachedAllowList = al == null ? new JSONArray() : al;
-                applyConfigToUi(cfg);
-            }
-        });
-    }
-
-    /**
-     * 状态查询失败必须收敛到一个可读终态。
-     *
-     * <p>此前失败分支只往 logcat 写一行就返回，标题、提示与徽章仍停留在布局
-     * 里的初始文案「正在检查…」，界面看起来像永远卡在检查中，用户既不知道
-     * 发生了什么也没有下一步可做。这里把失败落成明确状态：徽章转「需要处理」，
-     * 标题说明无法确认代理状态，提示里带上具体原因，并把激活按钮保持可用。</p>
-     */
-    private void showStatusFailure(JSONObject r) {
-        showError(r);
-        currentState = "UNKNOWN";
-        applyStatusBadge(currentState);
-        tvStatusTitle.setText(getString(R.string.status_unknown_title));
-        tvStatusHint.setText(getString(R.string.status_unknown_hint, errorText(r)));
-        btnPermission.setText(getString(R.string.btn_request));
-        btnPermission.setEnabled(true);
-    }
-
-    private void applyStatusBadge(String state) {
-        boolean ready = "AUTHORIZED".equals(state);
-        tvStatusBadge.setText(getString(ready
-                ? R.string.status_badge_ready : R.string.status_badge_attention));
-        tvStatusBadge.setTextColor(getResources().getColor(
-                ready ? R.color.success : R.color.warning, getTheme()));
-        tvStatusBadge.setBackgroundResource(ready
-                ? R.drawable.bg_badge_ok : R.drawable.bg_badge_warn);
-    }
-
-    private void applyConfigToUi(JSONObject cfg) {
-        syncingPrefs = true;
-        swConfirm.setChecked(cfg.optBoolean("confirmBeforeInstall", false));
-        swDeleteAfter.setChecked(cfg.optBoolean("deleteApkAfterInstall", false));
-        syncingPrefs = false;
-    }
-
-    /** 打开独立的无线调试配对页：教程、发现、输码、结果都在那一页完成。 */
-    private void onPermissionAction() {
-        try {
-            startActivity(new Intent(this, PairingActivity.class));
-        } catch (Throwable t) {
-            Log.w("MainActivity", "open pairing page failed", t);
-            toast(getString(R.string.pairing_open_failed));
-        }
-    }
-
-    // ------------------------------------------------------------------ 安装
-
-    private void pickFile() {
-        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        i.addCategory(Intent.CATEGORY_OPENABLE);
-        i.setType("*/*");
-        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
-                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        startActivityForResult(i, REQ_PICK);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQ_PICK || resultCode != RESULT_OK || data == null) {
-            return;
-        }
-        List<String> uris = new ArrayList<>();
-        ClipData clip = data.getClipData();
-        if (clip != null) {
-            for (int k = 0; k < clip.getItemCount(); k++) {
-                Uri u = clip.getItemAt(k).getUri();
-                uris.add(keepPermission(u));
-            }
-        } else if (data.getData() != null) {
-            uris.add(keepPermission(data.getData()));
-        }
-        if (!uris.isEmpty()) {
-            startInstall(uris);
-        }
-    }
-
-    private String keepPermission(Uri u) {
-        try {
-            getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        } catch (Throwable ignored) {
-        }
-        return u.toString();
-    }
-
-    private void startInstall(List<String> uris) {
-        installLabel = displayName(Uri.parse(uris.get(0)));
-        JSONObject a = new JSONObject();
-        try {
-            a.put("uris", new JSONArray(uris));
-            // 默认静默：仅当用户主动打开「安装前确认」开关时才走确认流程。
-            a.put("options", buildOptions(!swConfirm.isChecked()));
-        } catch (JSONException e) {
-            log("参数构造失败: " + e);
-            return;
-        }
-        log("准备安装，来源数量: " + uris.size());
-        runAsync("prepareInstall", a.toString(), r -> {
-            if (!r.optBoolean("ok")) {
-                showError(r);
-                return;
-            }
-            JSONObject d = r.optJSONObject("data");
-            JSONObject plan = d == null ? null : d.optJSONObject("plan");
-            JSONObject summary = d == null ? null : d.optJSONObject("summary");
-            if (plan == null) {
-                log("错误: 未生成安装计划");
-                return;
-            }
-            pendingPlan = plan.toString();
-            if (summary != null) {
-                String p = summary.optString("package", "");
-                if (!p.isEmpty() && !"null".equals(p)) {
-                    lastPackage = p;
-                }
-                log("计划: " + summary.optString("totalSizeHuman", "?")
-                        + " / " + summary.optInt("parts") + " 个分片");
-                if (summary.optBoolean("requiresConfirmation")) {
-                    confirmInstall(summary);
-                    return;
-                }
-            }
-            commitInstall();
-        });
-    }
-
-    private void confirmInstall(JSONObject summary) {
-        StringBuilder msg = new StringBuilder();
-        String p = summary.optString("package", "");
-        if (!p.isEmpty() && !"null".equals(p)) {
-            msg.append("包名: ").append(p).append('\n');
-        }
-        String v = summary.optString("version", "");
-        if (!v.isEmpty() && !"null".equals(v)) {
-            msg.append("版本: ").append(v).append('\n');
-        }
-        msg.append("大小: ").append(summary.optString("totalSizeHuman", "?")).append('\n');
-        msg.append("分片数: ").append(summary.optInt("parts")).append('\n');
-        JSONArray names = summary.optJSONArray("splitNames");
-        if (names != null) {
-            msg.append("分片: ");
-            for (int i = 0; i < names.length(); i++) {
-                msg.append(names.optString(i)).append(i + 1 < names.length() ? ", " : "");
-            }
-        }
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.dialog_confirm_title)
-                .setMessage(msg.toString())
-                .setNegativeButton(R.string.dialog_cancel, null)
-                .setPositiveButton(R.string.dialog_confirm_btn, (d, w) -> commitInstall())
-                .show();
-    }
-
-    private void commitInstall() {
-        if (pendingPlan == null) {
-            return;
-        }
-        JSONObject a = new JSONObject();
-        try {
-            a.put("plan", new JSONObject(pendingPlan));
-            a.put("options", buildOptions(true));
-            a.put("context", new JSONObject().put("label", installLabel).put("source", "ui"));
-        } catch (JSONException e) {
-            log("提交参数失败: " + e);
-            return;
-        }
-        log("正在执行安装…");
-        runAsync("commitInstall", a.toString(), r -> {
-            if (!r.optBoolean("ok")) {
-                showError(r);
-                Notifier.finish(this, installLabel, false, false, errorText(r), "");
-                return;
-            }
-            JSONObject d = r.optJSONObject("data");
-            JSONObject result = d == null ? null : d.optJSONObject("result");
-            JSONObject outcome = result == null ? null : result.optJSONObject("outcome");
-            boolean ok = outcome != null && outcome.optBoolean("ok");
-            String raw = outcome == null ? "" : outcome.optString("raw", "");
-            log((ok ? "安装成功" : "安装失败: " + (outcome == null ? "?" : outcome.optString("code"))));
-            if (!raw.isEmpty()) {
-                log(raw.trim());
-            }
-            Notifier.finish(this, installLabel, false, ok, raw.trim(), ok ? lastPackage : "");
-            pendingPlan = null;
-        });
-    }
-
-    // ------------------------------------------------------------------ 启动 / 复制
-
-    private void launchLast() {
-        if (lastPackage == null) {
-            toast(getString(R.string.no_launcher_package));
-            return;
-        }
-        JSONObject a = new JSONObject();
-        try {
-            a.put("package", lastPackage);
-        } catch (JSONException e) {
-            return;
-        }
-        runAsync("launch", a.toString(), r -> {
-            if (!r.optBoolean("ok")) {
-                showError(r);
-                return;
-            }
-            JSONObject d = r.optJSONObject("data");
-            JSONObject res = d == null ? null : d.optJSONObject("result");
-            log(res != null && res.optBoolean("ok") ? "已启动应用" : "启动失败");
-        });
-    }
-
-    // ------------------------------------------------------------------ 配置
-
-    private JSONObject buildOptions(boolean skipConfirm) throws JSONException {
-        JSONObject o = new JSONObject();
-        o.put("replace", true);
-        o.put("grantRuntimePermissions", true);
-        o.put("allowDowngrade", swDowngrade.isChecked());
-        o.put("deleteSourceAfter", swDeleteAfter.isChecked());
-        o.put("skipConfirm", skipConfirm);
-        return o;
-    }
-
-    private void savePrefs() {
-        try {
-            JSONObject cfg = new JSONObject();
-            cfg.put("confirmBeforeInstall", swConfirm.isChecked());
-            cfg.put("deleteApkAfterInstall", swDeleteAfter.isChecked());
-            cfg.put("allowList", cachedAllowList);
-            runAsync("setConfig", new JSONObject().put("config", cfg).toString(), r -> {
-                if (!r.optBoolean("ok")) {
-                    showError(r);
-                }
-            });
-        } catch (JSONException ignored) {
-        }
-    }
-
-    // ------------------------------------------------------------------ 工具
-
-    private void runAsync(String method, String args, Consumer<JSONObject> cb) {
-        worker.execute(() -> {
-            String raw;
-            try {
-                raw = RustCore.dispatch(method, args);
-            } catch (Throwable t) {
-                raw = "{\"ok\":false,\"error\":{\"kind\":\"JNI\",\"message\":"
-                        + JSONObject.quote(String.valueOf(t)) + "}}";
-            }
-            JSONObject o;
-            try {
-                o = new JSONObject(raw);
-            } catch (Exception e) {
-                o = new JSONObject();
-            }
-            final JSONObject f = o;
-            ui(() -> cb.accept(f));
-        });
-    }
-
-    private String errorText(JSONObject r) {
-        JSONObject e = r.optJSONObject("error");
-        return e == null ? "未知错误" : e.optString("message", "未知错误");
-    }
-
-    private void showError(JSONObject r) {
-        JSONObject e = r.optJSONObject("error");
-        String kind = e == null ? "?" : e.optString("kind", "?");
-        log("错误 [" + kind + "]: " + errorText(r));
-    }
-
-    private String displayName(Uri u) {
-        try (Cursor c = getContentResolver().query(u, null, null, null, null)) {
-            if (c != null && c.moveToFirst()) {
-                int n = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-                if (n >= 0 && !c.isNull(n)) {
-                    String s = c.getString(n);
-                    if (s != null && !s.isEmpty()) {
-                        return s;
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        String seg = u.getLastPathSegment();
-        return seg == null || seg.isEmpty() ? "安装包" : seg;
-    }
-
-    /**
-     * 主界面不再展示「本次执行日志」——完整的安装记录由独立的安装日志页负责。
-     * 这里的操作提示只写 logcat，便于排查，不占用界面。
-     */
-    private void log(String line) {
-        Log.i("MainActivity", line);
-    }
-
-    private void toast(String s) {
-        Toast.makeText(this, s, Toast.LENGTH_SHORT).show();
-    }
-
-    private void ui(Runnable r) {
-        if (!isFinishing() && !isDestroyed()) {
-            runOnUiThread(r);
+            lp.leftMargin = side;
+            lp.rightMargin = side;
+            lp.bottomMargin = bottom;
+            lp.gravity = Gravity.BOTTOM;
+            dock.setLayoutParams(lp);
         }
     }
 }

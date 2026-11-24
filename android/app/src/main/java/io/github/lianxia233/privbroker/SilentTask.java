@@ -434,8 +434,10 @@ final class SilentTask implements Runnable {
      * 2. 「成功后删除安装包」开启时，再删调用方给的原始文件。
      *
      * 原始 URI 通常只有读权限，ContentResolver.delete 会被拒；因此
-     * {@link BrokerBridge} 的 deleteSource 在失败后会解析真实路径并用
-     * shell 身份 rm —— 这才是用户开关真正生效的关键。
+     * {@link BrokerBridge} 的 deleteSource 会按「应用侧 → shell 路径 →
+     * content query → content delete → 内容指纹」逐级尝试，由软件自带的
+     * 无线调试授权（特权代理以 shell 身份运行）真正把文件删掉，
+     * 并在每一级删除前用大小 / SHA-256 核对，避免误删同名文件。
      */
     private void afterSuccess() {
         try {
@@ -453,39 +455,40 @@ final class SilentTask implements Runnable {
             targets.addAll(uris);
         }
         int deleted = 0;
-        int failed = 0;
+        List<String> failures = new java.util.ArrayList<>();
         for (String u : targets) {
-            boolean ok = false;
             try {
                 String resp = BrokerBridge.call("deleteSource",
                         new JSONObject().put("uri", u).toString());
                 JSONObject o = resp == null ? null : new JSONObject(resp);
-                ok = o != null && o.optBoolean("deleted", false);
-            } catch (Throwable ignored) {
-            }
-            if (ok) {
-                deleted++;
-            } else {
-                failed++;
+                if (o != null && o.optBoolean("deleted", false)) {
+                    deleted++;
+                    continue;
+                }
+                String reason = o == null ? "桥接未返回结果" : o.optString("reason", "");
+                failures.add(reason.isEmpty() ? "原因未知" : reason);
+            } catch (Throwable t) {
+                failures.add(String.valueOf(t));
             }
         }
-        recordDelete(deleted, failed);
+        recordDelete(deleted, failures);
     }
 
     /** 无论删除成败都写一条日志：这是用户可验证的唯一凭据。 */
-    private void recordDelete(int deleted, int failed) {
+    private void recordDelete(int deleted, List<String> failures) {
         try {
+            boolean allOk = failures.isEmpty();
             JSONObject e = new JSONObject()
                     .put("op", "install")
                     .put("label", label)
                     .put("appName", label)
                     .put("source", "silent")
-                    .put("ok", failed == 0)
-                    .put("code", failed == 0 ? "DELETE_OK" : "DELETE_PARTIAL")
-                    .put("detail", failed == 0
+                    .put("ok", allOk)
+                    .put("code", allOk ? "DELETE_OK" : "DELETE_PARTIAL")
+                    .put("detail", allOk
                             ? "安装成功，已删除安装包 " + deleted + " 个"
-                            : "安装成功，已删除 " + deleted + " 个，另有 " + failed
-                                    + " 个无法删除（只读目录或权限受限）");
+                            : "安装成功，已删除 " + deleted + " 个，另有 " + failures.size()
+                                    + " 个未能删除：" + String.join("；", failures));
             if (caller != null && !caller.isEmpty()) {
                 e.put("caller", caller);
             }

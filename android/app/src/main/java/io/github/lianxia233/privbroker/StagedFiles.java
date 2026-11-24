@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -76,19 +77,27 @@ final class StagedFiles {
     static List<String> stage(Context c, List<String> sources) {
         File dir = srcDir(c);
         purgeExpired(dir);
+        // 只有开启「成功后删除安装包」时才值得顺手算内容哈希：大安装包
+        // 多算一次 SHA-256 要多花一两秒，没开删除的用户不该为此买单。
+        boolean wantHash = BrokerBridge.deleteAfterEnabled();
         List<String> out = new ArrayList<>();
         for (String s : sources) {
             File dst = null;
             try {
                 String name = safeName(AppNames.displayName(c, s));
                 dst = new File(dir, UUID.randomUUID().toString().substring(0, 8) + "_" + name);
+                MessageDigest md = wantHash ? MessageDigest.getInstance("SHA-256") : null;
                 try (InputStream in = open(c, Uri.parse(s));
                      OutputStream os = new FileOutputStream(dst)) {
-                    copy(in, os);
+                    copy(in, os, md);
                 }
                 if (dst.length() <= 0) {
                     throw new IllegalStateException("安装包为空");
                 }
+                // 此刻读授权仍然有效：把「这个安装包到底是磁盘上哪个文件」记下来，
+                // 安装成功后的后台线程才有依据让特权代理删除它。
+                SourceFacts.capture(c, Uri.parse(s), dst,
+                        md == null ? null : hex(md.digest()));
                 out.add(stagedUri(c, dst.getName()).toString());
             } catch (Throwable t) {
                 if (dst != null) {
@@ -96,6 +105,11 @@ final class StagedFiles {
                         dst.delete();
                     } catch (Throwable ignored) {
                     }
+                }
+                // 暂存失败也要尽力采集事实：至少还有路径可用于后续删除。
+                try {
+                    SourceFacts.capture(c, Uri.parse(s), null, null);
+                } catch (Throwable ignored) {
                 }
                 out.add(s);
             }
@@ -112,12 +126,30 @@ final class StagedFiles {
     }
 
     static void copy(InputStream in, OutputStream os) throws Exception {
+        copy(in, os, null);
+    }
+
+    /** 复制字节的同时可选地喂给摘要器，避免为了算哈希再读一遍文件。 */
+    static void copy(InputStream in, OutputStream os, MessageDigest md) throws Exception {
         byte[] buf = new byte[64 * 1024];
         int n;
         while ((n = in.read(buf)) > 0) {
+            if (md != null) {
+                md.update(buf, 0, n);
+            }
             os.write(buf, 0, n);
         }
         os.flush();
+    }
+
+    private static String hex(byte[] data) {
+        char[] digits = "0123456789abcdef".toCharArray();
+        StringBuilder sb = new StringBuilder(data.length * 2);
+        for (byte b : data) {
+            int v = b & 0xFF;
+            sb.append(digits[v >>> 4]).append(digits[v & 0x0F]);
+        }
+        return sb.toString();
     }
 
     /** 保留真实扩展名：Rust 侧用 displayName 判定 apk / apks / xapk / apkm。 */

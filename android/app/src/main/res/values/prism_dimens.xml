@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FlClash / prism_ui 的间距与尺寸令牌 -->
+<resources>
+    <dimen name="pb_page_inset">16dp</dimen>
+    <dimen name="pb_card_inset">20dp</dimen>
+    <dimen name="pb_card_radius">32dp</dimen>
+    <dimen name="pb_block_radius">20dp</dimen>
+    <dimen name="pb_row_radius">20dp</dimen>
+    <dimen name="pb_chip_radius">999dp</dimen>
+    <dimen name="pb_card_gap">12dp</dimen>
+    <dimen name="pb_dock_height">62dp</dimen>
+    <dimen name="pb_dock_margin">21dp</dimen>
+    <dimen name="pb_appbar_height">72dp</dimen>
+    <dimen name="pb_row_min_height">56dp</dimen>
+    <dimen name="pb_section_gap">24dp</dimen>
+    <dimen name="pb_page_bottom">140dp</dimen>
+</resources>
