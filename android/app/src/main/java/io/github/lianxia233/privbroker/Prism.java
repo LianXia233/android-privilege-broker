@@ -244,9 +244,7 @@ final class Prism {
         Window w = activity.getWindow();
         w.setStatusBarColor(Color.TRANSPARENT);
         w.setNavigationBarColor(Color.TRANSPARENT);
-        if (Build.VERSION.SDK_INT >= 30) {
-            w.setDecorFitsSystemWindows(false);
-        }
+        w.setDecorFitsSystemWindows(false);
         View decor = w.getDecorView();
         decor.setSystemUiVisibility(decor.getSystemUiVisibility()
                 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -282,19 +280,13 @@ final class Prism {
 
     /** API 29 只有旧接口；30+ 用带类型的 inset。 */
     static int insetTop(WindowInsets insets) {
-        if (Build.VERSION.SDK_INT >= 30) {
-            return insets.getInsets(WindowInsets.Type.systemBars()
-                    | WindowInsets.Type.displayCutout()).top;
-        }
-        return insets.getSystemWindowInsetTop();
+        return insets.getInsets(WindowInsets.Type.systemBars()
+                | WindowInsets.Type.displayCutout()).top;
     }
 
     static int insetBottom(WindowInsets insets) {
-        if (Build.VERSION.SDK_INT >= 30) {
-            return insets.getInsets(WindowInsets.Type.systemBars()
-                    | WindowInsets.Type.displayCutout()).bottom;
-        }
-        return insets.getSystemWindowInsetBottom();
+        return insets.getInsets(WindowInsets.Type.systemBars()
+                | WindowInsets.Type.displayCutout()).bottom;
     }
 
     /**

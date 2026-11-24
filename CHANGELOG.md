@@ -4,7 +4,7 @@
 
 <div align="center">
 
-[![Latest Version](https://img.shields.io/badge/Release-v2.2.5-blue.svg?style=flat-square&logo=android)](https://github.com/LianXia233/android-privilege-broker/releases/latest)
+[![Latest Version](https://img.shields.io/badge/Release-v2.2.2-blue.svg?style=flat-square&logo=android)](https://github.com/LianXia233/android-privilege-broker/releases/latest)
 [![License](https://img.shields.io/badge/License-GPL--3.0-orange.svg?style=flat-square)](LICENSE)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/LianXia233/android-privilege-broker/build.yml?branch=main&style=flat-square&logo=github&label=Build)](https://github.com/LianXia233/android-privilege-broker/actions)
 
@@ -16,48 +16,24 @@
 
 | 分支 / 主版本 | 包含版本 | 演进重点与关键里程碑 |
 | :--- | :--- | :--- |
-| **v2.2.x 系列**<br/>*(当前维护)* | [v2.2.5](#v225) · [v2.2.4](#v224) · [v2.2.3](#v223) · [v2.2.2](#v222) · [v2.2.1](#v221) · [v2.2.0](#v220) | **深色与主题全局生效**：8 种子 × 3 风格与 AMOLED 纯黑色板；**Android 10 兼容**：minSdk 降至 29；**Keeper 特权保活**：独立守护线程与状态监测；**结构化审计日志**：展开追加全量结构化元数据；**删除安装包**：五级删除阶梯 + 大小/SHA-256 校验 |
+| **v2.2.x 系列**<br/>*(当前维护)* | [v2.2.2](#v222) · [v2.2.1](#v221) · [v2.2.0](#v220) | **主题体系与视觉升级**：Theme Attribute 体系与 AMOLED 纯黑色板；**结构化审计日志**：展开追加全量结构化元数据；**界面复刻 FlClash**：M3 四层表面 / squircle 卡片 / 悬浮 Dock / 滑动·淡入切页；**删除安装包修复**：五级删除阶梯 + 大小与 SHA-256 校验，经自带无线调试授权（shell uid 2000）落地 |
 | **v2.1.x 系列** | [v2.1.18](#v2118) · [v2.1.17](#v2117) · [v2.1.16](#v2116) · [v2.1.15](#v2115) · [v2.1.14](#v2114) · [v2.1.13](#v2113) · [v2.1.12](#v2112)<br/>[v2.1.11](#v2111) · [v2.1.10](#v2110) · [v2.1.9](#v219) · [v2.1.8](#v218) · [v2.1.7](#v217) · [v2.1.6](#v216)<br/>[v2.1.5](#v215) · [v2.1.4](#v214) · [v2.1.3](#v213) · [v2.1.2](#v212) · [v2.1.1](#v211) · [v2.1.0](#v210) | **高可用与真机调优**：修复失败降级与指示器开关；ash read 优化规避 6 秒超时；幻影进程监控关闭；端点自愈重拉与挑战响应握手鉴权 |
 | **v2.0.x 系列** | [v2.0.0](#v200) | **重构自研特权架构**：全新包名 `io.github.lianxia233.privbroker`，全面转向自主 Broker（Shell uid 2000 唯一后端），引入 12 个 Rust Crate 组成的 Tokio 特权服务与免电脑无线配对 |
 | **v1.0.x 系列**<br/>*(历史版本)* | [v1.0.4](#v104) · [v1.0.3](#v103) · [v1.0.2](#v102) · [v1.0.1](#v101) · [v1.0.0](#v100) | **早期架构探索**：零窗口静默技术落地、MIUI 结果忽略窗口避让、多格式分片解包与本地日志系统构建 |
 
 ---
 
-## v2.2.5
+## v2.2.6
 
-### 界面与主题
-- **深色模式全局生效**：修复部分非主 Activity（`LogActivity`、`SettingsActivity` 等）未完全应用深色与主题覆盖层的问题，在 Activity 基础生命周期注入全局主题初始化。
-- **仪表盘卡片等高与对齐排版**：优化仪表盘网络、服务与内存卡片的网格布局，确保各设备分辨率下卡片等高规整，告别底部参差不齐。
-- **ThemeActivity 色盘交互优化**：优化 8 种子色与 3 种风格切换响应逻辑，即时持久化到 `UiPrefs` 并刷新界面预览。
+### 系统兼容
+- **minSdk 提升到 30（Android 11）**：移除 API 29 的 WindowInsets 兼容分支，统一使用 `getInsets(Type…)` / `setDecorFitsSystemWindows(false)`；README 的徽章与规格表同步为「minSdk 30（Android 11+）」。
 
-### 核心与兼容
-- **Android 10（API 29）系统全面适配**：完善低版本 Android API 降级分支，确保在 Android 10 上所有界面组件与特权调用稳定运行。
-- **版本号同步升级**：版本升至 `2.2.5`（versionCode 31，build 43）。
-
----
-
-## v2.2.4
-
-### 核心与保活
-- **新增 Keeper 特权守护机制**：引入 `Keeper.java` 独立守护线程与保活机制，周期性探测特权服务运行状态，在被系统休眠或误杀时快速感知并自愈重启。
-- **兼容性门槛下调至 Android 10**：`minSdk` 从 33 调整为 29，支持 Android 10~16 全版本设备。
-
-### 界面与主题
-- **主题覆盖层即时切换**：在 `Prism.java` 中引入运行时主题覆盖层（Theme Overlays）即时重载机制，无需重启进程即可生效。
-- **仪表盘布局精细化调整**：新增 `page_dashboard.xml` 沉浸式呼吸间距与卡片层级，补齐 night 模式适配配置 `pb_night.xml`。
-
----
-
-## v2.2.3
-
-### 界面与主题系统
-- **完成 24 项 Theme Attribute 全量迁移**：全面支持 `PbPalette`（明暗模式）与 8 种设计种子色（默认蓝、翡翠绿、紫罗兰、日落橙、胭脂粉、天空青、深海蓝、经典灰）× 3 种色彩风格（Tonal Spot、Vibrant、Expressive），生成共计 24 套专属主题覆盖层。
-- **全新独立 ThemeActivity 调色台**：
-  - 新增 `MiniScreenView`：提供实时高仿缩略屏幕预览，直观展示不同主题色板在界面各组件的渲染效果；
-  - 支持主题模式切换（跟随系统 / 浅色 / 深色）、AMOLED 纯黑背景开关、主题色盘自由选取、配色风格切换；
-  - 支持底部导航栏样式、页面切换动画、液态玻璃拟物效果、字体与文本无级缩放设置；
-  - 设置页加入「外观与主题」专属配置入口。
-- **矢量绘图与圆角修正**：`SquircleDrawable` 满圆角调整为平滑圆弧，修复 `@attr` 转 `?attr` 引起的个别机型启动资源引用闪退。
+### v2.2.3 – v2.2.5 摘要
+- **主题体系**：24 项配色 theme attribute + `PbPalette`（明暗）/ `PbNight` / `PbPureBlack` 覆盖层；`scripts/gen_seed_styles.py` 生成 8 个种子 × 3 种风格（vivid / soft / mono）的样式；新增主题页（实时预览缩略图、主题模式、纯黑、主题色彩、配色风格、底栏、选项卡动画、液态玻璃、字体、文本缩放）。
+- **深浅全局生效**：主题代际（`themeGeneration`）+ 各页 `onResume` 自重建，任何页面切换后立即套用。
+- **仪表盘**：内存卡（PSS / Java 堆 + 3 秒刷新）、缓存清理入口、同行卡片等高、操作按钮图标+文字居中、顶部统一 32dp 留白、日志展开追加结构化字段。
+- **特权保活**：`Keeper` 经自带 broker（shell uid 2000）幂等执行 deviceidle 白名单 / standby active / `RUN_ANY_IN_BACKGROUND allow` / `set-inactive false`。
+- **修复**：`@attr` 误写导致的启动闪退、自定义 View 构造器未走 `super(c, attrs)` 导致 id 丢失、分段控件选中胶囊不显示、`SquircleDrawable` 满圆角偏方。
 
 ---
 
