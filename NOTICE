@@ -1,0 +1,52 @@
+Privilege Broker
+Copyright (C) 2025-2026 LianXia233
+
+本软件以 GNU General Public License v3.0（GPL-3.0-only）发布，完整条款见 LICENSE。
+
+
+第三方组件与设计参考归属
+
+一、随 APK 分发或直接链接的组件
+
+1. Rust 生态（serde、serde_json、thiserror、jni、Tokio、libc、sha2、hex、rustls、
+   rcgen、rsa、aes-gcm、curve25519-dalek、base64 等）
+   许可：MIT / Apache-2.0 / ISC / BSD-3-Clause（各 crate 以自身声明为准）
+   用途：Rust 核心与特权代理运行时。完整清单可在 Cargo.lock 中核对。
+
+二、设计参考（未链接、未分发其代码）
+
+2. FlClash 及其子模块 prism_ui
+   仓库：https://github.com/chen08209/FlClash
+         https://github.com/chen08209/prism_ui
+   许可：GPL-3.0
+   用途：本版本的界面结构、配色生成规则（seededColorScheme）、表面层级、圆角与
+   字号阶梯、切页与按压动效时长均参考其实现。本项目没有链接或分发其 Dart 代码，
+   而是按相同的设计令牌用 Android 原生 View / 动画重新实现。
+   说明：prism_ui 的 NOTICE 另列出其自身改编自 material_color_utilities
+   （Apache-2.0）、material_new_shapes（MIT）、super_sliver_list（MIT）、
+   navigator_resizable（MIT）与 Flutter 着色器（BSD-3-Clause）的部分；本项目
+   未包含这些文件。
+
+三、仅构建期使用（不随 APK 分发）
+
+3. material-color-utilities
+   仓库：https://github.com/material-foundation/material-color-utilities
+   许可：Apache-2.0
+   用途：M3 动态配色（HCT）算法，scripts/gen_palette.py 据此生成静态色板。
+
+4. materialyoucolor（Python 端口）
+   仓库：https://pypi.org/project/materialyoucolor/
+   许可：MIT（Copyright (c) 2023 Ansh Dadwal）
+   用途：在开发期调用 HCT 算法生成色板。
+
+5. Android SDK / Android Gradle Plugin
+   许可：Apache-2.0
+   用途：应用构建、资源编译与 APK 签名。
+
+
+许可证全文
+
+- GPL-3.0-only：见仓库根目录 LICENSE。
+- Apache-2.0：https://www.apache.org/licenses/LICENSE-2.0
+- MIT：https://opensource.org/licenses/MIT
+- BSD-3-Clause：https://opensource.org/licenses/BSD-3-Clause

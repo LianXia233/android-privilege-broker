@@ -83,6 +83,19 @@
 
 ---
 
+## 🎨 界面设计与开源致谢
+
+本版本的界面、配色与动画参考了 [FlClash](https://github.com/chen08209/FlClash) 及其子模块
+[prism_ui](https://github.com/chen08209/prism_ui)（均为 GPL-3.0）。本项目没有链接或分发其
+Dart 代码，而是按相同的设计令牌（色板生成规则、四级表面、圆角与字号阶梯、切页与按压
+动效时长）用 Android 原生 View / 动画重写；配色算法源自 Google 的
+[material-color-utilities](https://github.com/material-foundation/material-color-utilities)
+（Apache-2.0），开发期通过其 Python 端口
+[materialyoucolor](https://pypi.org/project/materialyoucolor/)（MIT）离线生成静态色板，
+色值随源码分发。完整归属说明见 [NOTICE](NOTICE)。
+
+---
+
 ## 🚀 快速开始（无需电脑）
 
 普通 Android 应用无法自行获取特权，本项目创新性地将 **「无线调试服务发现 + TLS 配对 + ADB 协议握手 + 代理拉起」** 做成了无需电脑的自助闭环。

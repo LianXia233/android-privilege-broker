@@ -57,6 +57,7 @@
 ### 工程
 
 - 新增 `scripts/gen_palette.py`：按 prism 规则重新生成色板（需要 `materialyoucolor`，仅开发期使用）。
+- 关于页开源许可清单补充 FlClash / prism_ui（GPL-3.0，设计参考）、material-color-utilities（Apache-2.0）与 materialyoucolor（MIT，仅构建期）；仓库新增 `NOTICE` 归属说明。
 - 版本号升至 `2.2.0`（versionCode 26）；`Cargo.toml`、`Cargo.lock`、`build.gradle.kts`、README 徽章同步。
 
 ---
