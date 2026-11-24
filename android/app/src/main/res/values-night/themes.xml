@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- 深色主题：配色由 values-night/colors.xml 提供，这里只切系统栏与 Material 基调 -->
-    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+    <style name="AppTheme" parent="PbPalette">
         <item name="android:colorPrimary">@color/brand_primary</item>
         <item name="android:colorAccent">@color/brand_primary</item>
         <item name="android:colorControlActivated">@color/brand_primary</item>

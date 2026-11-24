@@ -69,6 +69,20 @@ final class Prism {
         return c.getColor(res);
     }
 
+    /**
+     * 解析配色主题属性（{@code ?attr/pbPrimary} 等）。
+     *
+     * <p>色板迁移后，自定义 View 与代码里取色一律走这里，主题切换
+     * （主题色 / 纯黑）才能生效；直接读 {@code R.color.pb_*} 会拿到静态值。</p>
+     */
+    static int attrColor(Context c, int attr) {
+        android.util.TypedValue tv = new android.util.TypedValue();
+        if (c.getTheme().resolveAttribute(attr, tv, true)) {
+            return tv.data;
+        }
+        return Color.BLACK;
+    }
+
     static int surfaceColor(Context c, Surface level) {
         return c.getColor(level.colorRes);
     }

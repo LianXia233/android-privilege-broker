@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 默认色板（种子 #007AFF）挂到主题属性上；values-night 覆盖为暗色值 -->
+<resources>
+    <style name="PbPalette" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="pbPrimary">@color/pb_primary</item>
+        <item name="pbOnPrimary">@color/pb_on_primary</item>
+        <item name="pbPrimaryContainer">@color/pb_primary_container</item>
+        <item name="pbOnPrimaryContainer">@color/pb_on_primary_container</item>
+
+        <item name="pbSurfacePage">@color/pb_page</item>
+        <item name="pbSurfaceCard">@color/pb_card</item>
+        <item name="pbSurfaceBlock">@color/pb_block</item>
+        <item name="pbSurfaceInset">@color/pb_inset</item>
+        <item name="pbSurfaceFloating">@color/pb_floating</item>
+
+        <item name="pbTextPrimary">@color/pb_on_surface</item>
+        <item name="pbTextSecondary">@color/pb_on_surface_variant</item>
+        <item name="pbTextMuted">@color/pb_outline</item>
+        <item name="pbDivider">@color/pb_outline_variant</item>
+
+        <item name="pbSuccess">@color/pb_success</item>
+        <item name="pbError">@color/pb_error</item>
+        <item name="pbWarning">@color/pb_warning</item>
+    </style>
+
+    <!-- 纯黑模式：暗色下把页面压到纯黑，卡片/内嵌块按层级微亮 -->
+    <style name="PbPalette.PureBlack">
+        <item name="pbSurfacePage">#000000</item>
+        <item name="pbSurfaceCard">#0B0B0C</item>
+        <item name="pbSurfaceBlock">#151517</item>
+        <item name="pbSurfaceInset">#1F1F22</item>
+        <item name="pbSurfaceFloating">#0B0B0C</item>
+        <item name="pbTextPrimary">#F5F6FF</item>
+        <item name="pbTextSecondary">#C1C6D7</item>
+        <item name="pbTextMuted">#8C93A6</item>
+        <item name="pbDivider">#26262A</item>
+    </style>
+</resources>

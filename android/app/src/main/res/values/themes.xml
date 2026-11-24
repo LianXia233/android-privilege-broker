@@ -4,7 +4,7 @@
       应用主题：FlClash 风格（M3 tonal surfaces + 边缘到边缘）。
       配色由 tools/gen_palette.py 生成，明暗分别落在 values/ 与 values-night/。
     -->
-    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="AppTheme" parent="PbPalette">
         <item name="android:colorPrimary">@color/brand_primary</item>
         <item name="android:colorAccent">@color/brand_primary</item>
         <item name="android:colorControlActivated">@color/brand_primary</item>
