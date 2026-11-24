@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 卡片内嵌块：比卡片高一层的 tonal 底 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="@color/pb_block" />
+    <solid android:color="?attr/pbSurfaceBlock" />
     <corners android:radius="20dp" />
 </shape>

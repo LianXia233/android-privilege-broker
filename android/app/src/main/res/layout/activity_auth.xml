@@ -9,7 +9,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/window_bg"
+    android:background="?attr/pbSurfacePage"
     android:fillViewport="true">
 
     <LinearLayout
@@ -35,7 +35,7 @@
                 android:text="@string/auth_dialog_title"
                 android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
 
             <TextView
                 android:id="@+id/authMessage"
@@ -43,7 +43,7 @@
                 android:layout_height="wrap_content"
                 android:textSize="13sp"
                 android:lineSpacingExtra="3dp"
-                android:textColor="@color/text_secondary"
+                android:textColor="?attr/pbTextSecondary"
                 android:layout_marginTop="12dp" />
 
             <TextView
@@ -53,7 +53,7 @@
                 android:textSize="11sp"
                 android:singleLine="true"
                 android:ellipsize="middle"
-                android:textColor="@color/text_muted"
+                android:textColor="?attr/pbTextMuted"
                 android:layout_marginTop="8dp" />
 
             <CheckBox
@@ -63,7 +63,7 @@
                 android:minHeight="40dp"
                 android:text="@string/auth_remember"
                 android:textSize="13sp"
-                android:textColor="@color/text_primary"
+                android:textColor="?attr/pbTextPrimary"
                 android:layout_marginTop="10dp" />
 
             <LinearLayout
@@ -84,7 +84,7 @@
                     android:minHeight="0dp"
                     android:stateListAnimator="@null"
                     android:background="@drawable/btn_secondary"
-                    android:textColor="@color/text_primary" />
+                    android:textColor="?attr/pbTextPrimary" />
 
                 <Space
                     android:layout_width="10dp"
@@ -103,7 +103,7 @@
                     android:minHeight="0dp"
                     android:stateListAnimator="@null"
                     android:background="@drawable/btn_primary"
-                    android:textColor="@color/on_brand" />
+                    android:textColor="?attr/pbOnPrimary" />
             </LinearLayout>
         </LinearLayout>
 
@@ -113,7 +113,7 @@
             android:layout_marginTop="16dp"
             android:gravity="center"
             android:text="@string/auth_page_hint"
-            android:textColor="@color/text_muted"
+            android:textColor="?attr/pbTextMuted"
             android:textSize="11sp" />
     </LinearLayout>
 </ScrollView>

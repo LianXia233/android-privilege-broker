@@ -17,7 +17,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:fitsSystemWindows="true"
-    android:background="@color/window_bg"
+    android:background="?attr/pbSurfacePage"
     android:paddingStart="14dp"
     android:paddingEnd="14dp"
     android:paddingTop="10dp"
@@ -38,7 +38,7 @@
             android:contentDescription="@string/settings_back"
             android:padding="8dp"
             android:src="@drawable/ic_action_back"
-            android:tint="@color/text_primary" />
+            android:tint="?attr/pbTextPrimary" />
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -52,14 +52,14 @@
                 android:text="@string/settings_title"
                 android:textSize="20sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/settings_subtitle"
                 android:textSize="11sp"
-                android:textColor="@color/text_secondary"
+                android:textColor="?attr/pbTextSecondary"
                 android:layout_marginTop="1dp" />
         </LinearLayout>
     </LinearLayout>
@@ -99,7 +99,7 @@
                     android:text="@string/auth_card_title"
                     android:textSize="14sp"
                     android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
+                    android:textColor="?attr/pbTextPrimary" />
 
                 <TextView
                     android:layout_width="match_parent"
@@ -108,7 +108,7 @@
                     android:textSize="10sp"
                     android:singleLine="true"
                     android:ellipsize="end"
-                    android:textColor="@color/text_muted"
+                    android:textColor="?attr/pbTextMuted"
                     android:layout_marginTop="1dp" />
             </LinearLayout>
 
@@ -118,7 +118,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/advanced_expand"
                 android:textSize="12sp"
-                android:textColor="@color/brand_primary"
+                android:textColor="?attr/pbPrimary"
                 android:layout_marginStart="8dp" />
         </LinearLayout>
 
@@ -128,7 +128,7 @@
             android:layout_height="wrap_content"
             android:text="@string/auth_disabled_warn"
             android:textSize="11sp"
-            android:textColor="@color/danger"
+            android:textColor="?attr/pbError"
             android:visibility="gone"
             android:layout_marginTop="4dp" />
 
@@ -152,7 +152,7 @@
                 android:text="@string/opt_caller_auth"
                 android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary"
+                android:textColor="?attr/pbTextPrimary"
                 android:checked="true" />
 
             <TextView
@@ -160,11 +160,11 @@
                 android:layout_height="wrap_content"
                 android:text="@string/opt_caller_auth_hint"
                 android:textSize="11sp"
-                android:textColor="@color/text_muted"
+                android:textColor="?attr/pbTextMuted"
                 android:layout_marginStart="4dp"
                 android:layout_marginBottom="6dp" />
 
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="?attr/pbDivider" />
 
             <Switch
                 android:id="@+id/swFloating"
@@ -174,7 +174,7 @@
                 android:text="@string/opt_floating"
                 android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary"
+                android:textColor="?attr/pbTextPrimary"
                 android:checked="true" />
 
             <TextView
@@ -182,11 +182,11 @@
                 android:layout_height="wrap_content"
                 android:text="@string/opt_floating_hint"
                 android:textSize="11sp"
-                android:textColor="@color/text_muted"
+                android:textColor="?attr/pbTextMuted"
                 android:layout_marginStart="4dp"
                 android:layout_marginBottom="6dp" />
 
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="?attr/pbDivider" />
 
             <Switch
                 android:id="@+id/swFallback"
@@ -196,7 +196,7 @@
                 android:text="@string/opt_fallback"
                 android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary"
+                android:textColor="?attr/pbTextPrimary"
                 android:checked="true" />
 
             <TextView
@@ -204,11 +204,11 @@
                 android:layout_height="wrap_content"
                 android:text="@string/opt_fallback_hint"
                 android:textSize="11sp"
-                android:textColor="@color/text_muted"
+                android:textColor="?attr/pbTextMuted"
                 android:layout_marginStart="4dp"
                 android:layout_marginBottom="6dp" />
 
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="?attr/pbDivider" />
 
             <Switch
                 android:id="@+id/swAutoOpen"
@@ -218,7 +218,7 @@
                 android:text="@string/opt_auto_open"
                 android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary"
+                android:textColor="?attr/pbTextPrimary"
                 android:checked="false" />
 
             <TextView
@@ -226,11 +226,11 @@
                 android:layout_height="wrap_content"
                 android:text="@string/opt_auto_open_hint"
                 android:textSize="11sp"
-                android:textColor="@color/text_muted"
+                android:textColor="?attr/pbTextMuted"
                 android:layout_marginStart="4dp"
                 android:layout_marginBottom="6dp" />
 
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/divider" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="?attr/pbDivider" />
 
             <Switch
                 android:id="@+id/swConfirm"
@@ -240,7 +240,7 @@
                 android:text="@string/opt_confirm"
                 android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary"
+                android:textColor="?attr/pbTextPrimary"
                 android:checked="false" />
 
             <TextView
@@ -248,7 +248,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/opt_confirm_hint"
                 android:textSize="11sp"
-                android:textColor="@color/text_muted"
+                android:textColor="?attr/pbTextMuted"
                 android:layout_marginStart="4dp"
                 android:layout_marginBottom="2dp" />
         </LinearLayout>
@@ -280,7 +280,7 @@
                 android:text="@string/auth_app_list_title"
                 android:textSize="14sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
 
             <TextView
                 android:id="@+id/tvAllowedCount"
@@ -288,7 +288,7 @@
                 android:layout_height="wrap_content"
                 android:textSize="11sp"
                 android:textStyle="bold"
-                android:textColor="@color/brand_primary" />
+                android:textColor="?attr/pbPrimary" />
         </LinearLayout>
 
         <TextView
@@ -298,7 +298,7 @@
             android:textSize="10sp"
             android:singleLine="true"
             android:ellipsize="end"
-            android:textColor="@color/text_secondary"
+            android:textColor="?attr/pbTextSecondary"
             android:layout_marginTop="1dp" />
 
         <LinearLayout
@@ -319,7 +319,7 @@
                 android:minHeight="0dp"
                 android:stateListAnimator="@null"
                 android:background="@drawable/bg_filter_active"
-                android:textColor="@color/on_brand" />
+                android:textColor="?attr/pbOnPrimary" />
 
             <Space android:layout_width="6dp" android:layout_height="1dp" />
 
@@ -335,7 +335,7 @@
                 android:minHeight="0dp"
                 android:stateListAnimator="@null"
                 android:background="@drawable/btn_secondary"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
 
             <Space android:layout_width="6dp" android:layout_height="1dp" />
 
@@ -351,7 +351,7 @@
                 android:minHeight="0dp"
                 android:stateListAnimator="@null"
                 android:background="@drawable/btn_secondary"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
         </LinearLayout>
 
         <LinearLayout
@@ -367,8 +367,8 @@
                 android:layout_weight="1"
                 android:hint="@string/auth_search_hint"
                 android:textSize="12sp"
-                android:textColor="@color/text_primary"
-                android:textColorHint="@color/text_muted"
+                android:textColor="?attr/pbTextPrimary"
+                android:textColorHint="?attr/pbTextMuted"
                 android:background="@drawable/bg_input"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
@@ -389,7 +389,7 @@
                 android:minHeight="0dp"
                 android:stateListAnimator="@null"
                 android:background="@drawable/btn_secondary"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
         </LinearLayout>
 
         <TextView
@@ -399,7 +399,7 @@
             android:textSize="10sp"
             android:singleLine="true"
             android:ellipsize="end"
-            android:textColor="@color/text_muted"
+            android:textColor="?attr/pbTextMuted"
             android:layout_marginTop="4dp" />
 
         <!-- minHeight 是兜底：即使极小屏幕或字体放大导致上方内容变高，
@@ -428,7 +428,7 @@
                 android:gravity="center"
                 android:text="@string/auth_loading"
                 android:textSize="12sp"
-                android:textColor="@color/text_muted" />
+                android:textColor="?attr/pbTextMuted" />
         </FrameLayout>
     </LinearLayout>
 
@@ -462,7 +462,7 @@
                 android:text="@string/advanced_title"
                 android:textSize="13sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
 
             <TextView
                 android:id="@+id/advancedArrow"
@@ -470,7 +470,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/advanced_expand"
                 android:textSize="12sp"
-                android:textColor="@color/brand_primary" />
+                android:textColor="?attr/pbPrimary" />
         </LinearLayout>
 
         <LinearLayout
@@ -493,8 +493,8 @@
                     android:layout_weight="1"
                     android:hint="@string/allow_hint"
                     android:textSize="13sp"
-                    android:textColor="@color/text_primary"
-                    android:textColorHint="@color/text_muted"
+                    android:textColor="?attr/pbTextPrimary"
+                    android:textColorHint="?attr/pbTextMuted"
                     android:background="@drawable/bg_input"
                     android:paddingStart="12dp"
                     android:paddingEnd="12dp"
@@ -515,7 +515,7 @@
                     android:minHeight="0dp"
                     android:stateListAnimator="@null"
                     android:background="@drawable/btn_primary"
-                    android:textColor="@color/on_brand" />
+                    android:textColor="?attr/pbOnPrimary" />
             </LinearLayout>
 
             <Button
@@ -529,7 +529,7 @@
                 android:minHeight="0dp"
                 android:stateListAnimator="@null"
                 android:background="@drawable/btn_secondary"
-                android:textColor="@color/text_primary"
+                android:textColor="?attr/pbTextPrimary"
                 android:layout_marginTop="8dp" />
 
             <LinearLayout

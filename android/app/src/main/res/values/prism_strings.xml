@@ -78,4 +78,24 @@
     <string name="recent_line">%1$s · %2$s</string>
     <string name="about_version_placeholder">版本 —</string>
     <string name="setting_add">添加</string>
+    <string name="theme_page_title">主题</string>
+    <string name="theme_pure_black_title">纯黑模式</string>
+    <string name="theme_standard">标准</string>
+    <string name="theme_pure_black">纯黑</string>
+    <string name="theme_colors_title">主题色彩</string>
+    <string name="theme_color_style">配色风格</string>
+    <string name="color_style_vivid">鲜明</string>
+    <string name="color_style_soft">柔和</string>
+    <string name="color_style_mono">单色</string>
+    <string name="theme_glass_title">液态玻璃</string>
+    <string name="theme_none">无</string>
+    <string name="theme_ultra">极致</string>
+    <string name="theme_font_title">字体</string>
+    <string name="font_default">默认</string>
+    <string name="font_serif">衬线</string>
+    <string name="font_mono">等宽</string>
+    <string name="font_condensed">窄体</string>
+    <string name="theme_text_scale">文本缩放</string>
+    <string name="theme_follow_system">跟随系统</string>
+    <string name="theme_custom">自定义</string>
 </resources>

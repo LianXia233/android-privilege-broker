@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 纯黑覆盖层：仅夜间使用，applyStyle 叠加在种子色板之上 -->
+<resources>
+    <style name="PbPureBlack">
+        <item name="pbSurfacePage">#000000</item>
+        <item name="pbSurfaceCard">#0B0B0C</item>
+        <item name="pbSurfaceBlock">#151517</item>
+        <item name="pbSurfaceInset">#1F1F22</item>
+        <item name="pbSurfaceFloating">#0B0B0C</item>
+        <item name="pbTextPrimary">#F5F6FF</item>
+        <item name="pbTextSecondary">#C1C6D7</item>
+        <item name="pbTextMuted">#8C93A6</item>
+        <item name="pbDivider">#26262A</item>
+    </style>
+
+    <!-- 字体覆盖层：applyStyle 叠加，不改其它颜色 -->
+    <style name="PbFontSerif">
+        <item name="pbFontFamily">serif</item>
+    </style>
+    <style name="PbFontMono">
+        <item name="pbFontFamily">monospace</item>
+    </style>
+    <style name="PbFontCondensed">
+        <item name="pbFontFamily">sans-serif-condensed</item>
+    </style>
+</resources>

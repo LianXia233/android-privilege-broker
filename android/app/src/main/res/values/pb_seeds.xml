@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  由 scripts/gen_seed_styles.py 生成，请勿手改。规则同 FlClash seededColorScheme：vivid=content、soft=tonalSpot、mono=monochrome。
+-->
+<resources>
+    <style name="PbSeed_blue_vivid" parent="PbPalette">
+        <item name="pbPrimary">#007AFF</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#D8E2FF</item>
+        <item name="pbOnPrimaryContainer">#0E448E</item>
+        <item name="pbSecondaryContainer">#D8E2FF</item>
+        <item name="pbOnSecondaryContainer">#001A41</item>
+        <item name="pbRipple">#007AFF33</item>
+    </style>
+    <style name="PbSeed_blue_soft" parent="PbPalette">
+        <item name="pbPrimary">#445E91</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#D8E2FF</item>
+        <item name="pbOnPrimaryContainer">#2B4678</item>
+        <item name="pbSecondaryContainer">#DBE2F9</item>
+        <item name="pbOnSecondaryContainer">#141B2C</item>
+        <item name="pbRipple">#445E9133</item>
+    </style>
+    <style name="PbSeed_blue_mono" parent="PbPalette">
+        <item name="pbPrimary">#5E5E5E</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#E2E2E2</item>
+        <item name="pbOnPrimaryContainer">#474747</item>
+        <item name="pbSecondaryContainer">#E2E2E2</item>
+        <item name="pbOnSecondaryContainer">#1B1B1B</item>
+        <item name="pbRipple">#5E5E5E33</item>
+    </style>
+    <style name="PbSeed_violet_vivid" parent="PbPalette">
+        <item name="pbPrimary">#8B5CF6</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#E9DDFF</item>
+        <item name="pbOnPrimaryContainer">#50378A</item>
+        <item name="pbSecondaryContainer">#E9DDFF</item>
+        <item name="pbOnSecondaryContainer">#220B4E</item>
+        <item name="pbRipple">#8B5CF633</item>
+    </style>
+    <style name="PbSeed_violet_soft" parent="PbPalette">
+        <item name="pbPrimary">#66558F</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#E9DDFF</item>
+        <item name="pbOnPrimaryContainer">#4D3D75</item>
+        <item name="pbSecondaryContainer">#E8DEF8</item>
+        <item name="pbOnSecondaryContainer">#1E192B</item>
+        <item name="pbRipple">#66558F33</item>
+    </style>
+    <style name="PbSeed_violet_mono" parent="PbPalette">
+        <item name="pbPrimary">#5E5E5E</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#E2E2E2</item>
+        <item name="pbOnPrimaryContainer">#474747</item>
+        <item name="pbSecondaryContainer">#E2E2E2</item>
+        <item name="pbOnSecondaryContainer">#1B1B1B</item>
+        <item name="pbRipple">#5E5E5E33</item>
+    </style>
+    <style name="PbSeed_magenta_vivid" parent="PbPalette">
+        <item name="pbPrimary">#D946EF</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#FFD6FD</item>
+        <item name="pbOnPrimaryContainer">#6B2D72</item>
+        <item name="pbSecondaryContainer">#FFD6FD</item>
+        <item name="pbOnSecondaryContainer">#36003E</item>
+        <item name="pbRipple">#D946EF33</item>
+    </style>
+    <style name="PbSeed_magenta_soft" parent="PbPalette">
+        <item name="pbPrimary">#7C4E7F</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#FFD6FD</item>
+        <item name="pbOnPrimaryContainer">#623766</item>
+        <item name="pbSecondaryContainer">#F5DBF1</item>
+        <item name="pbOnSecondaryContainer">#251626</item>
+        <item name="pbRipple">#7C4E7F33</item>
+    </style>
+    <style name="PbSeed_magenta_mono" parent="PbPalette">
+        <item name="pbPrimary">#5E5E5E</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#E2E2E2</item>
+        <item name="pbOnPrimaryContainer">#474747</item>
+        <item name="pbSecondaryContainer">#E2E2E2</item>
+        <item name="pbOnSecondaryContainer">#1B1B1B</item>
+        <item name="pbRipple">#5E5E5E33</item>
+    </style>
+    <style name="PbSeed_red_vivid" parent="PbPalette">
+        <item name="pbPrimary">#EF4444</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#FFDAD7</item>
+        <item name="pbOnPrimaryContainer">#7E2A28</item>
+        <item name="pbSecondaryContainer">#FFDAD7</item>
+        <item name="pbOnSecondaryContainer">#410004</item>
+        <item name="pbRipple">#EF444433</item>
+    </style>
+    <style name="PbSeed_red_soft" parent="PbPalette">
+        <item name="pbPrimary">#904A46</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#FFDAD7</item>
+        <item name="pbOnPrimaryContainer">#733330</item>
+        <item name="pbSecondaryContainer">#FFDAD7</item>
+        <item name="pbOnSecondaryContainer">#2C1513</item>
+        <item name="pbRipple">#904A4633</item>
+    </style>
+    <style name="PbSeed_red_mono" parent="PbPalette">
+        <item name="pbPrimary">#5E5E5E</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#E2E2E2</item>
+        <item name="pbOnPrimaryContainer">#474747</item>
+        <item name="pbSecondaryContainer">#E2E2E2</item>
+        <item name="pbOnSecondaryContainer">#1B1B1B</item>
+        <item name="pbRipple">#5E5E5E33</item>
+    </style>
+    <style name="PbSeed_orange_vivid" parent="PbPalette">
+        <item name="pbPrimary">#EC6A06</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#FFDBCA</item>
+        <item name="pbOnPrimaryContainer">#783200</item>
+        <item name="pbSecondaryContainer">#FFDBCA</item>
+        <item name="pbOnSecondaryContainer">#341100</item>
+        <item name="pbRipple">#EC6A0633</item>
+    </style>
+    <style name="PbSeed_orange_soft" parent="PbPalette">
+        <item name="pbPrimary">#8D4E2A</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#FFDBCA</item>
+        <item name="pbOnPrimaryContainer">#703715</item>
+        <item name="pbSecondaryContainer">#FFDBCA</item>
+        <item name="pbOnSecondaryContainer">#2B160A</item>
+        <item name="pbRipple">#8D4E2A33</item>
+    </style>
+    <style name="PbSeed_orange_mono" parent="PbPalette">
+        <item name="pbPrimary">#5E5E5E</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#E2E2E2</item>
+        <item name="pbOnPrimaryContainer">#474747</item>
+        <item name="pbSecondaryContainer">#E2E2E2</item>
+        <item name="pbOnSecondaryContainer">#1B1B1B</item>
+        <item name="pbRipple">#5E5E5E33</item>
+    </style>
+    <style name="PbSeed_yellow_vivid" parent="PbPalette">
+        <item name="pbPrimary">#B68A00</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#FFDF9A</item>
+        <item name="pbOnPrimaryContainer">#5A4300</item>
+        <item name="pbSecondaryContainer">#FFDF9A</item>
+        <item name="pbOnSecondaryContainer">#251A00</item>
+        <item name="pbRipple">#B68A0033</item>
+    </style>
+    <style name="PbSeed_yellow_soft" parent="PbPalette">
+        <item name="pbPrimary">#765A0B</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#FFDF9A</item>
+        <item name="pbOnPrimaryContainer">#5A4300</item>
+        <item name="pbSecondaryContainer">#F4E0BB</item>
+        <item name="pbOnSecondaryContainer">#241A04</item>
+        <item name="pbRipple">#765A0B33</item>
+    </style>
+    <style name="PbSeed_yellow_mono" parent="PbPalette">
+        <item name="pbPrimary">#5E5E5E</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#E2E2E2</item>
+        <item name="pbOnPrimaryContainer">#474747</item>
+        <item name="pbSecondaryContainer">#E2E2E2</item>
+        <item name="pbOnSecondaryContainer">#1B1B1B</item>
+        <item name="pbRipple">#5E5E5E33</item>
+    </style>
+    <style name="PbSeed_green_vivid" parent="PbPalette">
+        <item name="pbPrimary">#00A74B</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#A1F6AC</item>
+        <item name="pbOnPrimaryContainer">#005321</item>
+        <item name="pbSecondaryContainer">#B2F2B7</item>
+        <item name="pbOnSecondaryContainer">#002109</item>
+        <item name="pbRipple">#00A74B33</item>
+    </style>
+    <style name="PbSeed_green_soft" parent="PbPalette">
+        <item name="pbPrimary">#35693F</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#B6F1BB</item>
+        <item name="pbOnPrimaryContainer">#1B5129</item>
+        <item name="pbSecondaryContainer">#D4E8D1</item>
+        <item name="pbOnSecondaryContainer">#0F1F11</item>
+        <item name="pbRipple">#35693F33</item>
+    </style>
+    <style name="PbSeed_green_mono" parent="PbPalette">
+        <item name="pbPrimary">#5E5E5E</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#E2E2E2</item>
+        <item name="pbOnPrimaryContainer">#474747</item>
+        <item name="pbSecondaryContainer">#E2E2E2</item>
+        <item name="pbOnSecondaryContainer">#1B1B1B</item>
+        <item name="pbRipple">#5E5E5E33</item>
+    </style>
+    <style name="PbSeed_gray_vivid" parent="PbPalette">
+        <item name="pbPrimary">#6B7280</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#DCE2F3</item>
+        <item name="pbOnPrimaryContainer">#404754</item>
+        <item name="pbSecondaryContainer">#E1E2E9</item>
+        <item name="pbOnSecondaryContainer">#191C21</item>
+        <item name="pbRipple">#6B728033</item>
+    </style>
+    <style name="PbSeed_gray_soft" parent="PbPalette">
+        <item name="pbPrimary">#3D5F90</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#D5E3FF</item>
+        <item name="pbOnPrimaryContainer">#234777</item>
+        <item name="pbSecondaryContainer">#D9E3F8</item>
+        <item name="pbOnSecondaryContainer">#121C2B</item>
+        <item name="pbRipple">#3D5F9033</item>
+    </style>
+    <style name="PbSeed_gray_mono" parent="PbPalette">
+        <item name="pbPrimary">#5E5E5E</item>
+        <item name="pbOnPrimary">#FFFFFF</item>
+        <item name="pbPrimaryContainer">#E2E2E2</item>
+        <item name="pbOnPrimaryContainer">#474747</item>
+        <item name="pbSecondaryContainer">#E2E2E2</item>
+        <item name="pbOnSecondaryContainer">#1B1B1B</item>
+        <item name="pbRipple">#5E5E5E33</item>
+    </style>
+</resources>

@@ -1,5 +1,6 @@
 package io.github.lianxia233.privbroker;
 
+import android.content.Context;
 import android.app.Activity;
 import android.os.Bundle;
 import android.widget.CheckBox;
@@ -27,6 +28,11 @@ import java.util.List;
  *  - 带 URI 进入（兼容旧路径）：授权后直接交给后台任务。
  */
 public final class CallerAuthActivity extends Activity {
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Prism.wrap(base));
+    }
     private List<String> uris = new ArrayList<>();
     /** 调用方给的原始 URI，仅用于「安装成功后删除安装包」。 */
     private List<String> sources = new ArrayList<>();
@@ -40,6 +46,7 @@ public final class CallerAuthActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Prism.applyTheme(this);
         setContentView(R.layout.activity_auth);
         readExtras(getIntent());
 

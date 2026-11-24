@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:fitsSystemWindows="true"
-    android:background="@color/window_bg"
+    android:background="?attr/pbSurfacePage"
     android:padding="16dp">
 
     <LinearLayout
@@ -35,14 +35,14 @@
                 android:text="@string/logs_title"
                 android:textSize="21sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/logs_subtitle"
                 android:textSize="12sp"
-                android:textColor="@color/text_secondary"
+                android:textColor="?attr/pbTextSecondary"
                 android:layout_marginTop="3dp" />
         </LinearLayout>
     </LinearLayout>
@@ -65,9 +65,9 @@
             android:minHeight="0dp"
             android:stateListAnimator="@null"
             android:background="@drawable/btn_secondary"
-            android:textColor="@color/text_primary"
+            android:textColor="?attr/pbTextPrimary"
             android:drawableStart="@drawable/ic_action_trash"
-            android:drawableTint="@color/brand_primary"
+            android:drawableTint="?attr/pbPrimary"
             android:drawablePadding="6dp"
             android:paddingStart="12dp"
             android:paddingEnd="12dp" />
@@ -89,7 +89,7 @@
             android:minHeight="0dp"
             android:stateListAnimator="@null"
             android:background="@drawable/btn_primary"
-            android:textColor="@color/on_brand"
+            android:textColor="?attr/pbOnPrimary"
             android:drawableStart="@drawable/ic_action_share"
             android:drawableTint="#FFFFFF"
             android:drawablePadding="6dp"
@@ -122,6 +122,6 @@
             android:text="@string/logs_empty"
             android:textSize="14sp"
             android:lineSpacingExtra="4dp"
-            android:textColor="@color/text_muted" />
+            android:textColor="?attr/pbTextMuted" />
     </FrameLayout>
 </LinearLayout>

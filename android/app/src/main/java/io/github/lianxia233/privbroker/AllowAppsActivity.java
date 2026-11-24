@@ -1,5 +1,6 @@
 package io.github.lianxia233.privbroker;
 
+import android.content.Context;
 import android.app.Activity;
 import android.os.Bundle;
 import android.text.Editable;
@@ -29,6 +30,11 @@ import java.util.Set;
  * 只是换成了 FlClash 的卡片行与分段筛选。已授权应用固定置顶。</p>
  */
 public final class AllowAppsActivity extends Activity {
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Prism.wrap(base));
+    }
     private final List<AppList.Row> allApps = new ArrayList<>();
     private final List<AppList.Row> shownApps = new ArrayList<>();
     private final Set<String> allowed = new HashSet<>();
@@ -43,6 +49,7 @@ public final class AllowAppsActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Prism.applyTheme(this);
         Prism.edgeToEdge(this);
         setContentView(R.layout.activity_allow_apps);
 
@@ -189,8 +196,8 @@ public final class AllowAppsActivity extends Activity {
             TextView tag = v.findViewById(R.id.itemAppTag);
             tag.setText(getString(row.system
                     ? R.string.auth_tag_system : R.string.auth_tag_user));
-            tag.setTextColor(getColor(row.system
-                    ? R.color.pb_warning : R.color.pb_primary));
+            tag.setTextColor(Prism.color(AllowAppsActivity.this, row.system
+                    ? R.attr.pbWarning : R.attr.pbPrimary));
 
             PrismSwitch sw = v.findViewById(R.id.itemAppSwitch);
             sw.setOnCheckedChangeListener(null);

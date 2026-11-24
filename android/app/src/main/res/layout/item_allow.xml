@@ -19,7 +19,7 @@
         android:textSize="13sp"
         android:singleLine="true"
         android:ellipsize="middle"
-        android:textColor="@color/text_primary" />
+        android:textColor="?attr/pbTextPrimary" />
 
     <TextView
         android:id="@+id/itemAllowRemove"
@@ -28,6 +28,6 @@
         android:text="@string/allow_remove"
         android:textSize="12sp"
         android:textStyle="bold"
-        android:textColor="@color/danger"
+        android:textColor="?attr/pbError"
         android:padding="8dp" />
 </LinearLayout>

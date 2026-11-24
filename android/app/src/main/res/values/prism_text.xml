@@ -3,7 +3,7 @@
 <resources>
     <style name="PbText" parent="android:Widget.TextView">
         <item name="android:fontFamily">sans-serif</item>
-        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textColor">?attr/pbTextPrimary</item>
         <item name="android:includeFontPadding">false</item>
         <item name="android:letterSpacing">0</item>
     </style>
@@ -64,12 +64,12 @@
 
     <style name="PbText.Caption" parent="PbText">
         <item name="android:textSize">12sp</item>
-        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textColor">?attr/pbTextSecondary</item>
     </style>
 
     <style name="PbText.Caption2" parent="PbText">
         <item name="android:textSize">11sp</item>
-        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textColor">?attr/pbTextSecondary</item>
     </style>
 
     <!-- 卡片标题：13sp 强调 + 次要色（DashboardText.cardTitle） -->
@@ -87,7 +87,7 @@
         <item name="android:textSize">12sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:letterSpacing">0.06</item>
-        <item name="android:textColor">@color/text_muted</item>
+        <item name="android:textColor">?attr/pbTextMuted</item>
     </style>
 
     <style name="PbText.Mono" parent="PbText.Footnote">

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 主 CTA：激活服务。比普通主按钮更醒目的三段渐变。 -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="@color/ripple_soft">
+    android:color="?attr/pbRipple">
     <item>
         <shape android:shape="rectangle">
             <gradient
-                android:startColor="@color/brand_primary"
-                android:centerColor="@color/brand_deep"
-                android:endColor="@color/brand_accent"
+                android:startColor="?attr/pbPrimary"
+                android:centerColor="?attr/pbPrimaryContainer"
+                android:endColor="?attr/pbPrimary"
                 android:angle="0" />
             <corners android:radius="16dp" />
         </shape>

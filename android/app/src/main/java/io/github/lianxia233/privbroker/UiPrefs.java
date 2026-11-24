@@ -60,4 +60,54 @@ final class UiPrefs {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit().putInt(KEY_LAST_TAB, index).apply();
     }
+
+    // ---- 主题页偏好：种子色 / 配色风格 / 纯黑 / 字体 / 字号 / 液态玻璃
+    static String seed(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("seed", "blue");
+    }
+
+    static void setSeed(Context c, String seed) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("seed", seed).apply();
+    }
+
+    static String colorStyle(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("color_style", "vivid");
+    }
+
+    static void setColorStyle(Context c, String style) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("color_style", style).apply();
+    }
+
+    static boolean pureBlack(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("pure_black", false);
+    }
+
+    static void setPureBlack(Context c, boolean value) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("pure_black", value).apply();
+    }
+
+    static String font(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("font", "sans");
+    }
+
+    static void setFont(Context c, String font) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("font", font).apply();
+    }
+
+    /** 0 表示跟随系统；否则为固定倍率（0.85 ~ 1.30）。 */
+    static float textScale(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getFloat("text_scale", 0f);
+    }
+
+    static void setTextScale(Context c, float scale) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putFloat("text_scale", scale).apply();
+    }
+
+    static String glass(Context c) {
+        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("glass", "none");
+    }
+
+    static void setGlass(Context c, String glass) {
+        c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("glass", glass).apply();
+    }
 }

@@ -1,5 +1,6 @@
 package io.github.lianxia233.privbroker;
 
+import android.content.Context;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.os.Bundle;
@@ -32,6 +33,11 @@ import java.util.concurrent.Executors;
  * 另保留「输入包名」入口，兼容列表里查不到（未安装/多用户）的场景。
  */
 public final class AppPickerActivity extends Activity {
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Prism.wrap(base));
+    }
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final List<AppList.Row> allApps = new ArrayList<>();
     private final List<AppList.Row> shownApps = new ArrayList<>();
@@ -48,6 +54,7 @@ public final class AppPickerActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Prism.applyTheme(this);
         setContentView(R.layout.activity_app_picker);
 
         etSearch = findViewById(R.id.etSearch);
@@ -118,8 +125,8 @@ public final class AppPickerActivity extends Activity {
     private void styleFilter(Button b, boolean active) {
         b.setBackgroundResource(active
                 ? R.drawable.bg_filter_active : R.drawable.btn_secondary);
-        b.setTextColor(getResources().getColor(active
-                ? R.color.on_brand : R.color.text_primary, getTheme()));
+        b.setTextColor(Prism.color(this, active
+                ? R.attr.pbOnPrimary : R.attr.pbTextPrimary));
     }
 
     private void filter(String query) {
@@ -154,7 +161,7 @@ public final class AppPickerActivity extends Activity {
         final Switch keep = new Switch(this);
         keep.setText(R.string.dialog_keep_data);
         keep.setTextSize(13);
-        keep.setTextColor(getResources().getColor(R.color.text_primary, getTheme()));
+        keep.setTextColor(Prism.attrColor(this, R.attr.pbTextPrimary));
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(48, 16, 48, 8);
@@ -180,14 +187,14 @@ public final class AppPickerActivity extends Activity {
         final EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT);
         input.setHint(R.string.dialog_uninstall_hint);
-        input.setTextColor(getResources().getColor(R.color.text_primary, getTheme()));
-        input.setHintTextColor(getResources().getColor(R.color.text_muted, getTheme()));
+        input.setTextColor(Prism.attrColor(this, R.attr.pbTextPrimary));
+        input.setHintTextColor(Prism.attrColor(this, R.attr.pbTextMuted));
         input.setBackgroundResource(R.drawable.bg_input);
         input.setPadding(24, 16, 24, 16);
         final Switch keep = new Switch(this);
         keep.setText(R.string.dialog_keep_data);
         keep.setTextSize(13);
-        keep.setTextColor(getResources().getColor(R.color.text_primary, getTheme()));
+        keep.setTextColor(Prism.attrColor(this, R.attr.pbTextPrimary));
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(48, 24, 48, 8);
@@ -249,8 +256,8 @@ public final class AppPickerActivity extends Activity {
                     ? R.string.picker_tag_system : R.string.picker_tag_user));
             tag.setBackgroundResource(row.system
                     ? R.drawable.bg_tag_system : R.drawable.bg_tag_user);
-            tag.setTextColor(getResources().getColor(row.system
-                    ? R.color.warning : R.color.brand_primary, getTheme()));
+            tag.setTextColor(Prism.color(AppPickerActivity.this, row.system
+                    ? R.attr.pbWarning : R.attr.pbPrimary));
 
             v.setOnClickListener(x -> confirm(row));
             return v;

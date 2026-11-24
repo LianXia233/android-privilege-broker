@@ -35,7 +35,7 @@ public final class Sparkline extends View {
 
     private void init() {
         Context c = getContext();
-        int primary = c.getColor(R.color.pb_primary);
+        int primary = Prism.color(c, R.attr.pbPrimary);
         stroke.setStyle(Paint.Style.STROKE);
         stroke.setStrokeWidth(Prism.dp(c, 2));
         stroke.setStrokeCap(Paint.Cap.ROUND);
@@ -51,7 +51,7 @@ public final class Sparkline extends View {
     }
 
     private void rebuildShader() {
-        int primary = getContext().getColor(R.color.pb_primary);
+        int primary = Prism.color(getContext(), R.attr.pbPrimary);
         fillPaint.setShader(new LinearGradient(0, 0, 0, getHeight(),
                 Prism.alpha(primary, 0.28f), Prism.alpha(primary, 0f),
                 Shader.TileMode.CLAMP));

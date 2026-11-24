@@ -53,12 +53,12 @@ public final class SegmentedControl extends FrameLayout {
         int inset = Prism.dp(c, INSET);
         setPadding(inset, inset, inset, inset);
         SquircleDrawable bg = new SquircleDrawable(Prism.dp(c, HEIGHT / 2f),
-                c.getColor(R.color.pb_block));
+                Prism.color(c, R.attr.pbSurfaceBlock));
         setBackground(bg);
 
         pill = new View(c);
         pill.setBackground(new SquircleDrawable(Prism.dp(c, HEIGHT / 2f),
-                c.getColor(R.color.pb_primary)));
+                Prism.color(c, R.attr.pbPrimary)));
         addView(pill, new LayoutParams(0, LayoutParams.MATCH_PARENT));
 
         row = new LinearLayout(c);
@@ -76,7 +76,7 @@ public final class SegmentedControl extends FrameLayout {
             tv.setText(segments[i]);
             tv.setGravity(Gravity.CENTER);
             tv.setSingleLine(true);
-            Prism.text(tv, 15f, false, R.color.pb_on_surface_variant);
+            Prism.text(tv, 15f, false, R.attr.pbTextSecondary);
             tv.setBackground(Prism.ripple(getContext(), HEIGHT / 2f));
             tv.setOnClickListener(v -> {
                 if (selected != index) {
@@ -166,15 +166,15 @@ public final class SegmentedControl extends FrameLayout {
     }
 
     private void applyLabelColors(float t) {
-        int on = getContext().getColor(R.color.pb_on_primary);
-        int off = getContext().getColor(R.color.pb_on_surface_variant);
+        int on = Prism.color(getContext(), R.attr.pbOnPrimary);
+        int off = Prism.color(getContext(), R.attr.pbTextSecondary);
         for (int i = 0; i < labels.length; i++) {
             boolean active = i == selected;
             int color = active ? on : off;
             labels[i].setTextColor(color);
             labels[i].setAlpha(1f);
             Prism.text(labels[i], 15f, active, active
-                    ? R.color.pb_on_primary : R.color.pb_on_surface_variant);
+                    ? R.attr.pbOnPrimary : R.attr.pbTextSecondary);
         }
     }
 

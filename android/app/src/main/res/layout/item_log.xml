@@ -70,7 +70,7 @@
         android:ellipsize="end"
         android:maxLines="3"
         android:padding="10dp"
-        android:textColor="@color/text_secondary"
+        android:textColor="?attr/pbTextSecondary"
         android:visibility="gone" />
 
     <TextView
@@ -80,6 +80,6 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:text="@string/log_expand"
-        android:textColor="@color/brand_primary"
+        android:textColor="?attr/pbPrimary"
         android:visibility="gone" />
 </LinearLayout>

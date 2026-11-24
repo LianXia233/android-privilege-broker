@@ -146,8 +146,8 @@ public final class PrismSwitch extends View {
         float top = (getHeight() - trackH) / 2f;
         trackRect.set(left, top, left + trackW, top + trackH);
 
-        int offTrack = c.getColor(R.color.pb_inset);
-        int onTrack = c.getColor(R.color.pb_primary);
+        int offTrack = Prism.color(c, R.attr.pbSurfaceInset);
+        int onTrack = Prism.color(c, R.attr.pbPrimary);
         paint.setColor(blend(offTrack, onTrack, progress));
         canvas.drawRoundRect(trackRect, trackH / 2f, trackH / 2f, paint);
 
@@ -167,8 +167,8 @@ public final class PrismSwitch extends View {
         float cy = top + trackH / 2f;
         thumbRect.set(cx - thumbW / 2f, cy - thumbH / 2f, cx + thumbW / 2f, cy + thumbH / 2f);
 
-        int offThumb = c.getColor(R.color.pb_outline);
-        int onThumb = c.getColor(R.color.pb_on_primary);
+        int offThumb = Prism.color(c, R.attr.pbTextMuted);
+        int onThumb = Prism.color(c, R.attr.pbOnPrimary);
         int thumbColor = blend(offThumb, onThumb, p);
         thumbColor = blend(thumbColor, Color.WHITE, press);
         paint.setColor(thumbColor);

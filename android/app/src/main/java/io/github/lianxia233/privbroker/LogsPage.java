@@ -309,7 +309,7 @@ final class LogsPage {
             }
 
             badge.setText(a.getString(ok ? R.string.log_success : R.string.log_fail));
-            badge.setTextColor(a.getColor(ok ? R.color.pb_success : R.color.pb_error));
+            badge.setTextColor(Prism.color(a, ok ? R.attr.pbSuccess : R.attr.pbError));
             badge.setBackgroundResource(ok ? R.drawable.pb_chip_ok : R.drawable.pb_chip_warn);
             dot.setBackgroundResource(ok ? R.drawable.pb_dot_ok : R.drawable.pb_dot_fail);
             return v;

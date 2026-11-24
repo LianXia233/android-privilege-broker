@@ -1,5 +1,6 @@
 package io.github.lianxia233.privbroker;
 
+import android.content.Context;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
@@ -16,6 +17,11 @@ import android.widget.FrameLayout;
  * 上次停留的页）存在 {@link UiPrefs}，重启后保持。</p>
  */
 public final class MainActivity extends Activity implements NavigationDock.Listener {
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Prism.wrap(base));
+    }
     private static final int TAB_COUNT = 4;
 
     private PageSwitcher pages;
@@ -29,6 +35,7 @@ public final class MainActivity extends Activity implements NavigationDock.Liste
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Prism.applyTheme(this);
         Prism.edgeToEdge(this);
         setContentView(R.layout.activity_main);
 

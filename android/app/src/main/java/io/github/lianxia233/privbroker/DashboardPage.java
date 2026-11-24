@@ -416,8 +416,8 @@ final class DashboardPage {
 
     private void chip(String text, boolean ok) {
         tvChip.setText(text);
-        tvChip.setTextColor(a.getColor(ok
-                ? R.color.pb_on_success_container : R.color.pb_on_warning_container));
+        tvChip.setTextColor(Prism.color(a, ok
+                ? R.attr.pbOnSuccessContainer : R.attr.pbOnWarningContainer));
         tvChip.setBackgroundResource(ok ? R.drawable.pb_chip_ok : R.drawable.pb_chip_warn);
     }
 
@@ -430,7 +430,7 @@ final class DashboardPage {
         if (entries.isEmpty()) {
             TextView empty = new TextView(a);
             empty.setText(R.string.dash_recent_empty);
-            Prism.text(empty, 13f, false, R.color.text_muted);
+            Prism.text(empty, 13f, false, R.attr.pbTextMuted);
             empty.setPadding(0, Prism.dp(a, 8), 0, Prism.dp(a, 4));
             recentList.addView(empty);
             return;
@@ -456,14 +456,14 @@ final class DashboardPage {
             String name = e.optString("appName", e.optString("label", "安装包"));
             TextView title = new TextView(a);
             title.setText(name);
-            Prism.text(title, 15f, true, R.color.text_primary);
+            Prism.text(title, 15f, true, R.attr.pbTextPrimary);
             title.setMaxLines(1);
             title.setEllipsize(android.text.TextUtils.TruncateAt.END);
             column.addView(title);
 
             TextView meta = new TextView(a);
             meta.setText(e.optString("time", "") + "  ·  " + e.optString("source", ""));
-            Prism.text(meta, 12f, false, R.color.text_secondary);
+            Prism.text(meta, 12f, false, R.attr.pbTextSecondary);
             meta.setMaxLines(1);
             column.addView(meta);
             row.addView(column, clp);
@@ -471,7 +471,7 @@ final class DashboardPage {
             TextView chip = new TextView(a);
             chip.setText(e.optBoolean("ok") ? "成功" : "失败");
             Prism.text(chip, 11f, true,
-                    e.optBoolean("ok") ? R.color.pb_success : R.color.pb_error);
+                    e.optBoolean("ok") ? R.attr.pbSuccess : R.attr.pbError);
             chip.setPadding(Prism.dp(a, 8), Prism.dp(a, 2), Prism.dp(a, 8), Prism.dp(a, 2));
             chip.setBackgroundResource(R.drawable.pb_chip_idle);
             row.addView(chip);

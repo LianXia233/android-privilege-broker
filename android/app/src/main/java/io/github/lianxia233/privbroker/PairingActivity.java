@@ -1,5 +1,6 @@
 package io.github.lianxia233.privbroker;
 
+import android.content.Context;
 import android.Manifest;
 import android.app.Activity;
 import android.app.NotificationChannel;
@@ -44,6 +45,11 @@ import java.util.concurrent.Executors;
  * loopback 一起作为候选交给 native 层逐个尝试。真机上 adbd 常绑在 WLAN IP。
  */
 public final class PairingActivity extends Activity {
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Prism.wrap(base));
+    }
 
     private static final String TAG = "PairingActivity";
 
@@ -97,6 +103,7 @@ public final class PairingActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Prism.applyTheme(this);
         setContentView(R.layout.activity_pairing);
 
         tvServiceBadge = findViewById(R.id.tvServiceBadge);
@@ -699,13 +706,13 @@ public final class PairingActivity extends Activity {
         tvResult.setText(text);
         if (kind == RESULT_OK) {
             tvResult.setBackgroundResource(R.drawable.bg_result_strip_ok);
-            tvResult.setTextColor(getResources().getColor(R.color.success, getTheme()));
+            tvResult.setTextColor(Prism.attrColor(this, R.attr.pbSuccess));
         } else if (kind == RESULT_ERR) {
             tvResult.setBackgroundResource(R.drawable.bg_result_strip_err);
-            tvResult.setTextColor(getResources().getColor(R.color.danger, getTheme()));
+            tvResult.setTextColor(Prism.attrColor(this, R.attr.pbError));
         } else {
             tvResult.setBackgroundResource(R.drawable.bg_result_strip);
-            tvResult.setTextColor(getResources().getColor(R.color.text_primary, getTheme()));
+            tvResult.setTextColor(Prism.attrColor(this, R.attr.pbTextPrimary));
         }
     }
 

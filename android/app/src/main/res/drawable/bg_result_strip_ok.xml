@@ -3,13 +3,13 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="@color/badge_ok_bg" />
+            <solid android:color="?attr/pbSuccessContainer" />
             <corners android:radius="12dp" />
         </shape>
     </item>
     <item android:gravity="left">
         <shape android:shape="rectangle">
-            <solid android:color="@color/success" />
+            <solid android:color="?attr/pbSuccess" />
             <size android:width="4dp" />
             <corners android:radius="2dp" />
         </shape>

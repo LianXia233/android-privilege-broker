@@ -2,6 +2,6 @@
 <!-- 状态灯：默认警告色圆点 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
-    <solid android:color="@color/warning" />
+    <solid android:color="?attr/pbWarning" />
     <size android:width="10dp" android:height="10dp" />
 </shape>

@@ -3,7 +3,7 @@
     android:id="@+id/dashScroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/window_bg"
+    android:background="?attr/pbSurfacePage"
     android:clipToPadding="false"
     android:fillViewport="true"
     android:overScrollMode="never"
@@ -41,7 +41,7 @@
                 android:contentDescription="@string/dash_refresh"
                 android:padding="9dp"
                 android:src="@drawable/ic_action_refresh"
-                android:tint="@color/text_primary" />
+                android:tint="?attr/pbTextPrimary" />
         </LinearLayout>
 
         <!-- 状态 hero 卡 -->
@@ -64,7 +64,7 @@
                     android:layout_width="18dp"
                     android:layout_height="18dp"
                     android:src="@drawable/ic_action_shield"
-                    android:tint="@color/text_secondary" />
+                    android:tint="?attr/pbTextSecondary" />
 
                 <TextView
                     style="@style/PbText.CardTitle"
@@ -85,7 +85,7 @@
                     android:paddingStart="10dp"
                     android:paddingEnd="10dp"
                     android:text="@string/status_checking"
-                    android:textColor="@color/pb_on_warning_container" />
+                    android:textColor="?attr/pbOnWarningContainer" />
             </LinearLayout>
 
             <LinearLayout
@@ -124,7 +124,7 @@
                         android:layout_marginTop="6dp"
                         android:maxLines="3"
                         android:ellipsize="end"
-                        android:textColor="@color/text_secondary" />
+                        android:textColor="?attr/pbTextSecondary" />
                 </LinearLayout>
 
                 <!-- 大圆操作钮：前往激活 / 刷新状态 -->
@@ -143,7 +143,7 @@
                         android:layout_height="34dp"
                         android:layout_gravity="center"
                         android:src="@drawable/ic_action_shield"
-                        android:tint="@color/on_brand" />
+                        android:tint="?attr/pbOnPrimary" />
                 </FrameLayout>
             </LinearLayout>
 
@@ -331,7 +331,7 @@
                     android:layout_width="18dp"
                     android:layout_height="18dp"
                     android:src="@drawable/ic_action_bolt"
-                    android:tint="@color/text_secondary" />
+                    android:tint="?attr/pbTextSecondary" />
 
                 <TextView
                     style="@style/PbText.CardTitle"
@@ -369,7 +369,7 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:src="@drawable/ic_action_trash"
-                    android:tint="@color/text_secondary" />
+                    android:tint="?attr/pbTextSecondary" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -404,7 +404,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:layout_marginStart="48dp"
-                android:background="@color/divider" />
+                android:background="?attr/pbDivider" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -417,7 +417,7 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:src="@drawable/ic_action_notification"
-                    android:tint="@color/text_secondary" />
+                    android:tint="?attr/pbTextSecondary" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -565,7 +565,7 @@
                         android:focusable="true"
                         android:padding="4dp"
                         android:text="@string/dash_clean_cache"
-                        android:textColor="@color/brand_primary" />
+                        android:textColor="?attr/pbPrimary" />
                 </LinearLayout>
 
                 <TextView
@@ -591,8 +591,8 @@
                     android:layout_marginTop="10dp"
                     android:max="100"
                     android:progress="0"
-                    android:progressBackgroundTint="@color/pb_inset"
-                    android:progressTint="@color/pb_primary" />
+                    android:progressBackgroundTint="?attr/pbSurfaceInset"
+                    android:progressTint="?attr/pbPrimary" />
             </LinearLayout>
         </LinearLayout>
 
@@ -617,7 +617,7 @@
                     android:layout_width="18dp"
                     android:layout_height="18dp"
                     android:src="@drawable/ic_action_memory"
-                    android:tint="@color/text_secondary" />
+                    android:tint="?attr/pbTextSecondary" />
 
                 <TextView
                     style="@style/PbText.CardTitle"
@@ -698,8 +698,8 @@
                 android:layout_marginTop="12dp"
                 android:max="100"
                 android:progress="0"
-                android:progressBackgroundTint="@color/pb_inset"
-                android:progressTint="@color/pb_primary" />
+                android:progressBackgroundTint="?attr/pbSurfaceInset"
+                android:progressTint="?attr/pbPrimary" />
         </LinearLayout>
 
         <!-- 安装与卸载操作 -->
@@ -729,14 +729,14 @@
                 android:clickable="true"
                 android:drawableStart="@drawable/ic_action_apk"
                 android:drawablePadding="8dp"
-                android:drawableTint="@color/on_brand"
+                android:drawableTint="?attr/pbOnPrimary"
                 android:focusable="true"
                 android:fontFamily="sans-serif-medium"
                 android:gravity="center"
                 android:paddingStart="18dp"
                 android:paddingEnd="18dp"
                 android:text="@string/btn_install"
-                android:textColor="@color/on_brand" />
+                android:textColor="?attr/pbOnPrimary" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -755,12 +755,12 @@
                     android:clickable="true"
                     android:drawableStart="@drawable/ic_action_uninstall"
                     android:drawablePadding="6dp"
-                    android:drawableTint="@color/text_primary"
+                    android:drawableTint="?attr/pbTextPrimary"
                     android:focusable="true"
                     android:fontFamily="sans-serif-medium"
                     android:gravity="center"
                     android:text="@string/btn_uninstall"
-                    android:textColor="@color/text_primary" />
+                    android:textColor="?attr/pbTextPrimary" />
 
                 <TextView
                     android:id="@+id/btnLaunch"
@@ -773,12 +773,12 @@
                     android:clickable="true"
                     android:drawableStart="@drawable/ic_action_launch"
                     android:drawablePadding="6dp"
-                    android:drawableTint="@color/text_primary"
+                    android:drawableTint="?attr/pbTextPrimary"
                     android:focusable="true"
                     android:fontFamily="sans-serif-medium"
                     android:gravity="center"
                     android:text="@string/btn_launch"
-                    android:textColor="@color/text_primary" />
+                    android:textColor="?attr/pbTextPrimary" />
             </LinearLayout>
         </LinearLayout>
 
@@ -815,7 +815,7 @@
                     android:focusable="true"
                     android:padding="4dp"
                     android:text="@string/dash_view_all"
-                    android:textColor="@color/brand_primary" />
+                    android:textColor="?attr/pbPrimary" />
             </LinearLayout>
 
             <LinearLayout

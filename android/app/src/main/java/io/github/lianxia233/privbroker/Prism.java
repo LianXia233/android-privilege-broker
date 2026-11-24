@@ -29,10 +29,10 @@ import android.widget.TextView;
 final class Prism {
     /** 与 prism_ui/color_scheme.dart 的 SurfaceLevel 一致。 */
     enum Surface {
-        PAGE(R.color.pb_page),
-        CARD(R.color.pb_card),
-        BLOCK(R.color.pb_block),
-        INSET(R.color.pb_inset);
+        PAGE(R.attr.pbSurfacePage),
+        CARD(R.attr.pbSurfaceCard),
+        BLOCK(R.attr.pbSurfaceBlock),
+        INSET(R.attr.pbSurfaceInset);
 
         final int colorRes;
 
@@ -65,8 +65,13 @@ final class Prism {
         return Math.round(v * c.getResources().getDisplayMetrics().density);
     }
 
-    static int color(Context c, int res) {
-        return c.getColor(res);
+    /** 兼容颜色资源与主题属性两种入参；属性 id 传给 getColor 会抛异常，回退到主题解析。 */
+    static int color(Context c, int resOrAttr) {
+        try {
+            return c.getColor(resOrAttr);
+        } catch (Throwable t) {
+            return attrColor(c, resOrAttr);
+        }
     }
 
     /**
@@ -84,7 +89,7 @@ final class Prism {
     }
 
     static int surfaceColor(Context c, Surface level) {
-        return c.getColor(level.colorRes);
+        return color(c, level.colorRes);
     }
 
     /** 带透明度的颜色，用于胶囊底的柔和主色底。 */
@@ -103,7 +108,7 @@ final class Prism {
     /** squircle 填充背景；card=true 时附带轻微 elevation。 */
     static SquircleDrawable fill(View v, int colorRes, float cornerDp) {
         SquircleDrawable d = new SquircleDrawable(dp(v.getContext(), cornerDp),
-                v.getContext().getColor(colorRes));
+                color(v.getContext(), colorRes));
         v.setBackground(d);
         v.setClipToOutline(false);
         return d;
@@ -112,26 +117,26 @@ final class Prism {
     static SquircleDrawable fillWithStroke(View v, int colorRes, int strokeRes,
                                            float cornerDp, float strokeDp) {
         SquircleDrawable d = new SquircleDrawable(dp(v.getContext(), cornerDp),
-                v.getContext().getColor(colorRes));
-        d.setStroke(dp(v.getContext(), strokeDp), v.getContext().getColor(strokeRes));
+                color(v.getContext(), colorRes));
+        d.setStroke(dp(v.getContext(), strokeDp), color(v.getContext(), strokeRes));
         v.setBackground(d);
         return d;
     }
 
     static void card(View v, float cornerDp) {
-        fill(v, R.color.pb_card, cornerDp);
+        fill(v, R.attr.pbSurfaceCard, cornerDp);
         v.setElevation(dp(v.getContext(), isNight(v.getContext()) ? 3 : 1.5f));
     }
 
     static void block(View v, float cornerDp) {
-        fill(v, R.color.pb_block, cornerDp);
+        fill(v, R.attr.pbSurfaceBlock, cornerDp);
     }
 
     /** 圆角水波纹：按下时只在内侧泛出浅色，不描边、不带方形阴影。 */
     static RippleDrawable ripple(Context c, float cornerDp) {
         SquircleDrawable mask = new SquircleDrawable(dp(c, cornerDp), Color.WHITE);
         return new RippleDrawable(
-                ColorStateList.valueOf(alpha(c.getColor(R.color.pb_primary), 0.18f)),
+                ColorStateList.valueOf(alpha(Prism.color(c, R.attr.pbPrimary), 0.18f)),
                 null, mask);
     }
 
@@ -287,8 +292,8 @@ final class Prism {
      * 亮色是浮层上一档的中性灰，暗色是 inset 再叠 8% 前景。
      */
     static int lensColor(Context c) {
-        int base = isNight(c) ? c.getColor(R.color.pb_inset) : c.getColor(R.color.pb_block);
-        return blend(base, c.getColor(R.color.pb_on_surface), 0.08f);
+        int base = isNight(c) ? Prism.color(c, R.attr.pbSurfaceInset) : Prism.color(c, R.attr.pbSurfaceBlock);
+        return blend(base, Prism.color(c, R.attr.pbTextPrimary), 0.08f);
     }
 
     /** 给悬浮 Dock 加底部安全区内边距。 */
@@ -320,12 +325,63 @@ final class Prism {
 
     static void text(TextView tv, float sizeSp, boolean medium, int colorRes) {
         tv.setTextSize(sizeSp);
-        tv.setTextColor(tv.getContext().getColor(colorRes));
+        tv.setTextColor(color(tv.getContext(), colorRes));
         tv.setLetterSpacing(0f);
         tv.setIncludeFontPadding(false);
         tv.setFontFeatureSettings("'tnum'");
         tv.setTypeface(android.graphics.Typeface.create(
                 medium ? "sans-serif-medium" : "sans-serif",
                 android.graphics.Typeface.NORMAL));
+    }
+
+    // ------------------------------------------------------------ 主题应用
+
+    static int seedStyle(Context c) {
+        int id = c.getResources().getIdentifier(
+                "PbSeed_" + UiPrefs.seed(c) + "_" + UiPrefs.colorStyle(c),
+                "style", c.getPackageName());
+        return id != 0 ? id : R.style.PbSeed_blue_vivid;
+    }
+
+    /**
+     * 在 {@code attachBaseContext} 里调用（super 之后）：把种子色板、
+     * 纯黑与字体覆盖层叠加到 Activity 主题上。
+     *
+     * <p>不用 {@code setTheme}：它在 super.onCreate 之后会被框架按清单主题
+     * 重新初始化，导致布局通胀时 {@code ?attr/pb*} 解析不到值（2.2.3 的启动
+     * 闪退）。叠加式 applyStyle 与窗口主题使用同一个 Theme 实例，稳定生效。</p>
+     */
+    static void applyTheme(android.app.Activity a) {
+        a.getTheme().applyStyle(seedStyle(a), true);
+        if (UiPrefs.pureBlack(a) && isNight(a)) {
+            a.getTheme().applyStyle(R.style.PbPureBlack, true);
+        }
+        switch (UiPrefs.font(a)) {
+            case "serif" -> a.getTheme().applyStyle(R.style.PbFontSerif, true);
+            case "mono" -> a.getTheme().applyStyle(R.style.PbFontMono, true);
+            case "condensed" -> a.getTheme().applyStyle(R.style.PbFontCondensed, true);
+            default -> {
+            }
+        }
+    }
+
+    static float glassAlpha(Context c) {
+        return switch (UiPrefs.glass(c)) {
+            case "standard" -> 0.86f;
+            case "ultra" -> 0.72f;
+            default -> 1f;
+        };
+    }
+
+    /** 文本缩放：override attachBaseContext 即可，随配置生效。 */
+    static Context wrap(Context base) {
+        float scale = UiPrefs.textScale(base);
+        if (scale <= 0f) {
+            return base;
+        }
+        android.content.res.Configuration cfg =
+                new android.content.res.Configuration(base.getResources().getConfiguration());
+        cfg.fontScale = scale;
+        return base.createConfigurationContext(cfg);
     }
 }

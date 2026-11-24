@@ -3,7 +3,7 @@
     android:id="@+id/shell"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/window_bg">
+    android:background="?attr/pbSurfacePage">
 
     <!-- 四个页面常驻，切换只做可见性与位移动画（PageSwitcher） -->
     <io.github.lianxia233.privbroker.PageSwitcher

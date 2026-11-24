@@ -3,7 +3,7 @@
     android:id="@+id/aboutScroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/window_bg"
+    android:background="?attr/pbSurfacePage"
     android:clipToPadding="false"
     android:fillViewport="true"
     android:overScrollMode="never"
@@ -67,7 +67,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
                     android:text="@string/about_tagline"
-                    android:textColor="@color/text_secondary" />
+                    android:textColor="?attr/pbTextSecondary" />
             </LinearLayout>
         </LinearLayout>
 
@@ -100,7 +100,7 @@
                 android:maxWidth="220dp"
                 android:maxLines="1"
                 android:ellipsize="middle"
-                android:textColor="@color/brand_primary" />
+                android:textColor="?attr/pbPrimary" />
         </LinearLayout>
 
         <TextView

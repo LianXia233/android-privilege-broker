@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:fitsSystemWindows="true"
-    android:background="@color/window_bg"
+    android:background="?attr/pbSurfacePage"
     android:paddingStart="16dp"
     android:paddingEnd="16dp"
     android:paddingTop="12dp"
@@ -25,7 +25,7 @@
             android:contentDescription="@string/picker_back"
             android:padding="8dp"
             android:src="@drawable/ic_action_back"
-            android:tint="@color/text_primary" />
+            android:tint="?attr/pbTextPrimary" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -40,14 +40,14 @@
                 android:text="@string/picker_title"
                 android:textSize="20sp"
                 android:textStyle="bold"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/picker_subtitle"
                 android:textSize="11sp"
-                android:textColor="@color/text_secondary"
+                android:textColor="?attr/pbTextSecondary"
                 android:layout_marginTop="2dp" />
         </LinearLayout>
 
@@ -62,7 +62,7 @@
             android:minHeight="0dp"
             android:stateListAnimator="@null"
             android:background="@drawable/btn_secondary"
-            android:textColor="@color/text_primary" />
+            android:textColor="?attr/pbTextPrimary" />
     </LinearLayout>
 
     <LinearLayout
@@ -92,7 +92,7 @@
                 android:minHeight="0dp"
                 android:stateListAnimator="@null"
                 android:background="@drawable/bg_filter_active"
-                android:textColor="@color/on_brand" />
+                android:textColor="?attr/pbOnPrimary" />
 
             <Space android:layout_width="6dp" android:layout_height="1dp" />
 
@@ -108,7 +108,7 @@
                 android:minHeight="0dp"
                 android:stateListAnimator="@null"
                 android:background="@drawable/btn_secondary"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
 
             <Space android:layout_width="6dp" android:layout_height="1dp" />
 
@@ -124,7 +124,7 @@
                 android:minHeight="0dp"
                 android:stateListAnimator="@null"
                 android:background="@drawable/btn_secondary"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/pbTextPrimary" />
         </LinearLayout>
 
         <EditText
@@ -133,8 +133,8 @@
             android:layout_height="42dp"
             android:hint="@string/picker_search_hint"
             android:textSize="13sp"
-            android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_muted"
+            android:textColor="?attr/pbTextPrimary"
+            android:textColorHint="?attr/pbTextMuted"
             android:background="@drawable/bg_input"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
@@ -148,7 +148,7 @@
             android:layout_height="wrap_content"
             android:text="@string/auth_system_tip"
             android:textSize="11sp"
-            android:textColor="@color/text_muted"
+            android:textColor="?attr/pbTextMuted"
             android:layout_marginTop="8dp" />
 
         <FrameLayout
@@ -174,7 +174,7 @@
                 android:gravity="center"
                 android:text="@string/picker_loading"
                 android:textSize="13sp"
-                android:textColor="@color/text_muted" />
+                android:textColor="?attr/pbTextMuted" />
         </FrameLayout>
     </LinearLayout>
 </LinearLayout>

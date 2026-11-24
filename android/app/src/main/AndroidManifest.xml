@@ -95,6 +95,12 @@
             android:exported="false"
             android:label="@string/setting_manage_auth" />
 
+        <!-- 主题页：预览缩略图 + 主题色/纯黑/玻璃/字体/字号 -->
+        <activity
+            android:name=".ThemeActivity"
+            android:exported="false"
+            android:label="@string/theme_page_title" />
+
         <!-- 卸载应用选择器：读取应用列表，按系统 / 用户应用筛选 -->
         <activity
             android:name=".AppPickerActivity"

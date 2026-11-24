@@ -22,7 +22,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/auth_dialog_title"
-        android:textColor="@color/text_primary"
+        android:textColor="?attr/pbTextPrimary"
         android:textSize="16sp"
         android:textStyle="bold" />
 
@@ -32,7 +32,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
         android:lineSpacingExtra="3dp"
-        android:textColor="@color/text_secondary"
+        android:textColor="?attr/pbTextSecondary"
         android:textSize="13sp" />
 
     <TextView
@@ -42,7 +42,7 @@
         android:layout_marginTop="6dp"
         android:ellipsize="middle"
         android:singleLine="true"
-        android:textColor="@color/text_muted"
+        android:textColor="?attr/pbTextMuted"
         android:textSize="11sp" />
 
     <CheckBox
@@ -52,7 +52,7 @@
         android:layout_marginTop="8dp"
         android:minHeight="40dp"
         android:text="@string/auth_remember"
-        android:textColor="@color/text_primary"
+        android:textColor="?attr/pbTextPrimary"
         android:textSize="13sp" />
 
     <LinearLayout
@@ -72,7 +72,7 @@
             android:stateListAnimator="@null"
             android:text="@string/auth_deny"
             android:textAllCaps="false"
-            android:textColor="@color/text_primary"
+            android:textColor="?attr/pbTextPrimary"
             android:textSize="14sp" />
 
         <Space
@@ -90,7 +90,7 @@
             android:stateListAnimator="@null"
             android:text="@string/auth_allow"
             android:textAllCaps="false"
-            android:textColor="@color/on_brand"
+            android:textColor="?attr/pbOnPrimary"
             android:textSize="14sp"
             android:textStyle="bold" />
     </LinearLayout>
@@ -101,6 +101,6 @@
         android:layout_marginTop="8dp"
         android:gravity="center"
         android:text="@string/auth_overlay_hint"
-        android:textColor="@color/text_muted"
+        android:textColor="?attr/pbTextMuted"
         android:textSize="11sp" />
 </LinearLayout>

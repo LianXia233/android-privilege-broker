@@ -98,7 +98,16 @@ final class SquircleDrawable extends Drawable {
     private void rebuild(RectF r) {
         bounds.set(r);
         path.reset();
-        float radius = Math.min(radiusPx, Math.min(r.width(), r.height()) / 2f);
+        float shortest = Math.min(r.width(), r.height());
+        // 满圆角（色板圆点 / 胶囊 / 开关轨道）：用标准圆弧。超椭圆在这种
+        // 比例下偏方，与 prism 的 AppShape.full 观感不一致。
+        if (radiusPx >= shortest / 2f - 0.5f) {
+            path.addRoundRect(r, shortest / 2f, shortest / 2f, Path.Direction.CW);
+            outlinePath.set(path);
+            dirty = false;
+            return;
+        }
+        float radius = Math.min(radiusPx, shortest / 2f);
         if (radius <= 0.01f) {
             path.addRect(r, Path.Direction.CW);
             outlinePath.set(path);

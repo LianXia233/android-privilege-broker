@@ -68,11 +68,12 @@ public final class NavigationDock extends LinearLayout {
         this.mode = mode;
         Context c = getContext();
         if (mode == FLOATING) {
-            Prism.fill(this, R.color.pb_card, 34f);
+            SquircleDrawable dockBg = Prism.fill(this, R.attr.pbSurfaceCard, 34f);
+            dockBg.setAlpha(Math.round(255 * Prism.glassAlpha(c)));
             setElevation(Prism.dp(c, 10));
             setPadding(Prism.dp(c, 4), Prism.dp(c, 4), Prism.dp(c, 4), Prism.dp(c, 4));
         } else {
-            Prism.fill(this, R.color.pb_floating, 0f);
+            Prism.fill(this, R.attr.pbSurfaceFloating, 0f);
             setElevation(0f);
             setPadding(0, Prism.dp(c, 4), 0, Prism.dp(c, 4));
         }
@@ -213,8 +214,8 @@ public final class NavigationDock extends LinearLayout {
 
         void apply(boolean active, boolean animate, int mode) {
             Context c = root.getContext();
-            int tint = c.getColor(active
-                    ? R.color.pb_primary : R.color.pb_on_surface_variant);
+            int tint = Prism.color(c, active
+                    ? R.attr.pbPrimary : R.attr.pbTextSecondary);
             icon.setColorFilter(tint);
             animateLabel(tint, animate);
 

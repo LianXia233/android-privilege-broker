@@ -3,7 +3,7 @@
     android:id="@+id/settingsScroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/window_bg"
+    android:background="?attr/pbSurfacePage"
     android:clipToPadding="false"
     android:fillViewport="true"
     android:overScrollMode="never"
@@ -40,6 +40,45 @@
             android:elevation="1dp"
             android:orientation="vertical"
             android:padding="16dp">
+
+            <LinearLayout
+                android:id="@+id/rowTheme"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:background="@drawable/pb_row_ripple"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/PbText.Subheadline"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="@string/theme_page_title" />
+
+                <TextView
+                    android:id="@+id/tvThemeSummary"
+                    style="@style/PbText.Caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp" />
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:rotation="180"
+                    android:src="@drawable/ic_action_back"
+                    android:tint="@color/text_muted" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginBottom="12dp"
+                android:background="@color/divider" />
 
             <TextView
                 style="@style/PbText.Subheadline"
@@ -142,7 +181,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp"
-                android:background="@color/divider" />
+                android:background="?attr/pbDivider" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -187,7 +226,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp"
-                android:background="@color/divider" />
+                android:background="?attr/pbDivider" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -219,7 +258,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp"
-                android:background="@color/divider" />
+                android:background="?attr/pbDivider" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -251,7 +290,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp"
-                android:background="@color/divider" />
+                android:background="?attr/pbDivider" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -332,7 +371,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:textColor="@color/danger"
+                        android:textColor="?attr/pbError"
                         android:visibility="gone" />
                 </LinearLayout>
 
@@ -347,7 +386,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp"
-                android:background="@color/divider" />
+                android:background="?attr/pbDivider" />
 
             <LinearLayout
                 android:id="@+id/rowManageAuth"
@@ -387,7 +426,7 @@
                     android:layout_height="20dp"
                     android:rotation="180"
                     android:src="@drawable/ic_action_back"
-                    android:tint="@color/text_muted" />
+                    android:tint="?attr/pbTextMuted" />
             </LinearLayout>
 
             <View
@@ -395,7 +434,7 @@
                 android:layout_height="1dp"
                 android:layout_marginStart="16dp"
                 android:layout_marginEnd="16dp"
-                android:background="@color/divider" />
+                android:background="?attr/pbDivider" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -435,8 +474,8 @@
                         android:inputType="text"
                         android:paddingStart="14dp"
                         android:paddingEnd="14dp"
-                        android:textColor="@color/text_primary"
-                        android:textColorHint="@color/text_muted"
+                        android:textColor="?attr/pbTextPrimary"
+                        android:textColorHint="?attr/pbTextMuted"
                         android:textSize="14sp" />
 
                     <TextView
@@ -453,7 +492,7 @@
                         android:paddingStart="18dp"
                         android:paddingEnd="18dp"
                         android:text="@string/setting_add"
-                        android:textColor="@color/brand_primary" />
+                        android:textColor="?attr/pbPrimary" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -474,7 +513,7 @@
                         android:focusable="true"
                         android:gravity="center"
                         android:text="@string/setting_revoke_all"
-                        android:textColor="@color/text_primary" />
+                        android:textColor="?attr/pbTextPrimary" />
 
                     <TextView
                         android:id="@+id/btnClear"
@@ -488,7 +527,7 @@
                         android:focusable="true"
                         android:gravity="center"
                         android:text="@string/setting_allow_clear"
-                        android:textColor="@color/text_primary" />
+                        android:textColor="?attr/pbTextPrimary" />
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>

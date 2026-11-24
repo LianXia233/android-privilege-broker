@@ -513,7 +513,7 @@ public final class WirelessPairingService extends Service {
     private Notification.Builder base() {
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_action_broker)
-                .setColor(getColor(R.color.brand_primary))
+                .setColor(Prism.color(this, R.attr.pbPrimary))
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOngoing(true);
@@ -557,7 +557,7 @@ public final class WirelessPairingService extends Service {
                 .setContentIntent(contentPi)
                 // 整条通知着色 + 品牌大图标，让输码通知在下拉列表里一眼可见。
                 .setColorized(true)
-                .setColor(getColor(R.color.brand_primary))
+                .setColor(Prism.color(this, R.attr.pbPrimary))
                 .setLargeIcon(Icon.createWithResource(this, R.drawable.ic_launcher_monochrome))
                 // 分层大文本：标题 / 步骤 / 说明，诊断摘要不再挤成一坨。
                 .setStyle(new Notification.BigTextStyle()

@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   配色令牌：布局 / drawable 从 @color/pb_* 迁移到 ?attr/pb* 后，
-  才能在运行时通过 setTheme() 切换色板（主题色、纯黑模式）。
+  才能在运行时通过 setTheme() + applyStyle() 切换色板。
 -->
 <resources>
     <attr name="pbPrimary" format="color" />
     <attr name="pbOnPrimary" format="color" />
     <attr name="pbPrimaryContainer" format="color" />
     <attr name="pbOnPrimaryContainer" format="color" />
+    <attr name="pbSecondaryContainer" format="color" />
+    <attr name="pbOnSecondaryContainer" format="color" />
 
     <attr name="pbSurfacePage" format="color" />
     <attr name="pbSurfaceCard" format="color" />
@@ -21,6 +23,13 @@
     <attr name="pbDivider" format="color" />
 
     <attr name="pbSuccess" format="color" />
+    <attr name="pbSuccessContainer" format="color" />
+    <attr name="pbOnSuccessContainer" format="color" />
     <attr name="pbError" format="color" />
     <attr name="pbWarning" format="color" />
+    <attr name="pbWarningContainer" format="color" />
+    <attr name="pbOnWarningContainer" format="color" />
+
+    <attr name="pbRipple" format="color" />
+    <attr name="pbFontFamily" format="string" />
 </resources>

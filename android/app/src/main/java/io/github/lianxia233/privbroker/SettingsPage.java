@@ -73,6 +73,14 @@ final class SettingsPage {
 
         Prism.padTopForStatusBar(root.findViewById(R.id.settingsContent));
 
+        TextView themeSummary = root.findViewById(R.id.tvThemeSummary);
+        if (themeSummary != null) {
+            themeSummary.setText(UiPrefs.seed(a).toUpperCase(java.util.Locale.ROOT)
+                    + " · " + UiPrefs.colorStyle(a));
+        }
+        Prism.press(root.findViewById(R.id.rowTheme),
+                () -> a.startActivity(new Intent(a, ThemeActivity.class)));
+
         TextView footer = root.findViewById(R.id.settingsFooter);
         footer.setText(a.getString(R.string.footer) + " · "
                 + a.getString(R.string.about_version, BuildInfo.versionName(a)));
@@ -256,7 +264,7 @@ final class SettingsPage {
         if (packages == null || packages.length() == 0) {
             TextView empty = new TextView(a);
             empty.setText(R.string.allow_empty);
-            Prism.text(empty, 13f, false, R.color.text_muted);
+            Prism.text(empty, 13f, false, R.attr.pbTextMuted);
             empty.setPadding(Prism.dp(a, 4), Prism.dp(a, 10),
                     Prism.dp(a, 4), Prism.dp(a, 4));
             list.addView(empty);
@@ -271,7 +279,7 @@ final class SettingsPage {
 
             TextView name = new TextView(a);
             name.setText(pkg);
-            Prism.text(name, 13f, false, R.color.text_secondary);
+            Prism.text(name, 13f, false, R.attr.pbTextSecondary);
             name.setMaxLines(1);
             name.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
             row.addView(name, new LinearLayout.LayoutParams(
@@ -279,7 +287,7 @@ final class SettingsPage {
 
             ImageView remove = new ImageView(a);
             remove.setImageResource(R.drawable.ic_action_trash);
-            remove.setColorFilter(a.getColor(R.color.text_muted));
+            remove.setColorFilter(Prism.color(a, R.attr.pbTextMuted));
             int size = Prism.dp(a, 32);
             LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(size, size);
             rlp.leftMargin = Prism.dp(a, 8);
