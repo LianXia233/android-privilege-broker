@@ -23,6 +23,24 @@
 
 ---
 
+## CI 维护记录 (2026-11-27)
+
+> **非发版条目**：仅记录流水线配置变更，不对应 `versionName` / `Cargo.toml` 版本。
+
+### 变更
+
+- `.github/workflows/build.yml`：发布步骤新增 `Prune old releases (keep latest only)`，
+  每次构建创建/覆盖本次 Release 后，删除其余所有 Release 并用 `--cleanup-tag`
+  一并删掉对应 git tag，仓库只保留最新一个 Release。
+- 新增 `concurrency: build-apk-${{ github.ref }}`（`cancel-in-progress: false`）：
+  同分支构建串行排队，避免两次构建并发时清理步骤互相删掉对方刚发布的产物；
+  排队不取消，保证每次 push 都有完整产物。
+- 单个 Release 删除失败只输出 `::warning::`，不让清理动作把已经成功的编译与发布判成失败；
+  残留会在下一次构建时再清一次。
+- 历史 Release 已按同一规则手工清理（保留最新一个），源码与产物命名未改动。
+
+---
+
 ## v2.2.7
 
 ### 修复：开启「成功后删除安装包」后一次也没删掉

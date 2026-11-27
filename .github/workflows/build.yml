@@ -18,6 +18,13 @@ on:
 permissions:
   contents: write
 
+# 同一分支串行构建：发布后的清理步骤以「本次构建的 Release」为准删除其余全部，
+# 两次构建并发时会互相删掉对方的产物（谁后完成谁是「最新」，无法稳定判断）。
+# 这里只排队不取消，保证任何一次 push 都能拿到完整产物。
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -83,6 +90,7 @@ jobs:
       # 每次构建默认发布到 Releases：tag 带 run_number 保证唯一，
       # 同名版本反复构建也不会因 tag 已存在而失败。发布用 gh CLI（runner 预装），
       # 不引入第三方 release action，避免再次出现 Node.js 运行时弃用警告。
+      # 发布后只保留本仓库最新一个 Release，历史版本由下一步统一清理。
       - name: Publish Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -97,6 +105,7 @@ jobs:
           TAG="v${VERSION}-build.${GITHUB_RUN_NUMBER}"
           NOTES="自动构建于 $(date -u +%Y-%m-%dT%H:%M:%SZ)，提交 ${GITHUB_SHA::7}。产物：PrivilegeBroker.apk"
           echo "RELEASE_TAG=$TAG VERSION=$VERSION APK_BYTES=$(stat -c %s PrivilegeBroker.apk)"
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             # 重跑同一 run 时 tag 已存在：覆盖上传资产即可，避免整次构建失败。
             gh release upload "$TAG" PrivilegeBroker.apk \
@@ -108,3 +117,26 @@ jobs:
               --title "Privilege Broker v${VERSION} build ${GITHUB_RUN_NUMBER}" \
               --notes "$NOTES"
           fi
+
+      # 只保留本次构建的 Release：先发布再清理，顺序不能反。
+      # 删除 Release 时用 --cleanup-tag 一并删掉对应 git tag，避免 tag 越积越多。
+      # 单个删除失败只告警不失败——旧 Release 残留不影响新产物，下次构建会再清一次。
+      - name: Prune old releases (keep latest only)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEEP="${RELEASE_TAG:?本次构建的 RELEASE_TAG 缺失，拒绝清理}"
+          echo "保留本次 Release：$KEEP；删除其余全部 Release 与 tag"
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName \
+            --jq '.[].tagName' | while IFS= read -r tag; do
+              if [[ -z "$tag" || "$tag" == "$KEEP" ]]; then
+                continue
+              fi
+              echo "删除 Release $tag"
+              gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag \
+                || echo "::warning::删除 $tag 失败，留待下次构建重试"
+            done
+          echo "=== 清理后剩余 Release ==="
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 10
