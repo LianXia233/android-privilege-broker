@@ -621,9 +621,29 @@ final class DashboardPage {
             }
             Notifier.finish(a, installLabel, false, ok,
                     outcome == null ? "" : outcome.optString("raw", ""), ok ? pkg : "");
-            toast(ok ? "安装成功" : "安装失败");
+            toast(installResultText(result, ok));
             refresh();
         });
+    }
+
+    /**
+     * 安装结果文案：开启删除开关时如实说明安装包是否被删掉。
+     *
+     * <p>删除结果在 {@code InstallOutcome.deleted_source} 上，与 pm 的
+     * {@code outcome} 是同一层的两个字段，不能去 {@code outcome} 里找。</p>
+     */
+    private String installResultText(JSONObject result, boolean ok) {
+        if (!ok) {
+            return "安装失败";
+        }
+        boolean deleted = result != null && result.optBoolean("deleted_source", false);
+        if (deleted) {
+            return "安装成功，已删除安装包";
+        }
+        if (BrokerBridge.deleteAfterEnabled()) {
+            return "安装成功，但安装包未能删除（详见记录）";
+        }
+        return "安装成功";
     }
 
     private void launchLast() {
@@ -646,7 +666,10 @@ final class DashboardPage {
         o.put("replace", true);
         o.put("grantRuntimePermissions", true);
         o.put("allowDowngrade", config != null && config.optBoolean("allowDowngrade", false));
-        o.put("deleteSourceAfter", false);
+        // 应用内入口同样交给 Rust 侧的统一执行点：安装成功后按开关删除来源
+        // 安装包（与外部静默链路共用 deleteSource 五级阶梯）。过去这里写死
+        // false，导致应用内安装永远不触发删除。
+        o.put("deleteSourceAfter", BrokerBridge.deleteAfterEnabled());
         o.put("skipConfirm", skipConfirm);
         return o;
     }

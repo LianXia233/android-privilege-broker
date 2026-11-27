@@ -4,7 +4,7 @@
 
 <div align="center">
 
-[![Latest Version](https://img.shields.io/badge/Release-v2.2.2-blue.svg?style=flat-square&logo=android)](https://github.com/LianXia233/android-privilege-broker/releases/latest)
+[![Latest Version](https://img.shields.io/badge/Release-v2.2.7-blue.svg?style=flat-square&logo=android)](https://github.com/LianXia233/android-privilege-broker/releases/latest)
 [![License](https://img.shields.io/badge/License-GPL--3.0-orange.svg?style=flat-square)](LICENSE)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/LianXia233/android-privilege-broker/build.yml?branch=main&style=flat-square&logo=github&label=Build)](https://github.com/LianXia233/android-privilege-broker/actions)
 
@@ -16,10 +16,38 @@
 
 | 分支 / 主版本 | 包含版本 | 演进重点与关键里程碑 |
 | :--- | :--- | :--- |
-| **v2.2.x 系列**<br/>*(当前维护)* | [v2.2.2](#v222) · [v2.2.1](#v221) · [v2.2.0](#v220) | **主题体系与视觉升级**：Theme Attribute 体系与 AMOLED 纯黑色板；**结构化审计日志**：展开追加全量结构化元数据；**界面复刻 FlClash**：M3 四层表面 / squircle 卡片 / 悬浮 Dock / 滑动·淡入切页；**删除安装包修复**：五级删除阶梯 + 大小与 SHA-256 校验，经自带无线调试授权（shell uid 2000）落地 |
+| **v2.2.x 系列**<br/>*(当前维护)* | [v2.2.7](#v227) · [v2.2.2](#v222) · [v2.2.1](#v221) · [v2.2.0](#v220) | **主题体系与视觉升级**：Theme Attribute 体系与 AMOLED 纯黑色板；**结构化审计日志**：展开追加全量结构化元数据；**界面复刻 FlClash**：M3 四层表面 / squircle 卡片 / 悬浮 Dock / 滑动·淡入切页；**删除安装包修复**：五级删除阶梯 + 大小与 SHA-256 校验，经自带无线调试授权（shell uid 2000）落地，2.2.7 修复脚本被协议层拒绝导致阶梯从未执行的问题 |
 | **v2.1.x 系列** | [v2.1.18](#v2118) · [v2.1.17](#v2117) · [v2.1.16](#v2116) · [v2.1.15](#v2115) · [v2.1.14](#v2114) · [v2.1.13](#v2113) · [v2.1.12](#v2112)<br/>[v2.1.11](#v2111) · [v2.1.10](#v2110) · [v2.1.9](#v219) · [v2.1.8](#v218) · [v2.1.7](#v217) · [v2.1.6](#v216)<br/>[v2.1.5](#v215) · [v2.1.4](#v214) · [v2.1.3](#v213) · [v2.1.2](#v212) · [v2.1.1](#v211) · [v2.1.0](#v210) | **高可用与真机调优**：修复失败降级与指示器开关；ash read 优化规避 6 秒超时；幻影进程监控关闭；端点自愈重拉与挑战响应握手鉴权 |
 | **v2.0.x 系列** | [v2.0.0](#v200) | **重构自研特权架构**：全新包名 `io.github.lianxia233.privbroker`，全面转向自主 Broker（Shell uid 2000 唯一后端），引入 12 个 Rust Crate 组成的 Tokio 特权服务与免电脑无线配对 |
 | **v1.0.x 系列**<br/>*(历史版本)* | [v1.0.4](#v104) · [v1.0.3](#v103) · [v1.0.2](#v102) · [v1.0.1](#v101) · [v1.0.0](#v100) | **早期架构探索**：零窗口静默技术落地、MIUI 结果忽略窗口避让、多格式分片解包与本地日志系统构建 |
+
+---
+
+## v2.2.7
+
+### 修复：开启「成功后删除安装包」后一次也没删掉
+
+- **根因**：删除阶梯的 shell 脚本是以 Java 文本块（多行）传入的**单个 argv 元素**，而
+  `broker-protocol` 的 `validate_exec` 会拒绝任何含 `\n` / `\r` 的 argv（防止把多条命令拼进一个参数）。
+  请求在特权代理侧被判为 `INVALID_REQUEST`，客户端只能拿到 `exit -1`；于是「按路径删除 / content query /
+  content delete / 内容指纹」这几级在真正执行前就全部失败，日志固定显示「特权代理删除失败 (exit -1)」。
+- **修复**：删除脚本全部压成单行（`;` 串联，位置参数传递方式不变），shell 改为绝对路径
+  `/system/bin/sh` 并显式导出 `PATH`；五级阶梯恢复执行。真机实测：外部调用与应用内「选择安装包并安装」
+  两条链路都能在核对大小 / SHA-256 后删掉原包。
+- **诊断**：`deleteSource` 的失败原因改为携带特权侧 `stderr` / `stdout` 摘要，不再只有无上下文的
+  `exit -1`；协议拒绝、权限不足、大小不符、文件已不存在等原因一眼可辨。
+- **应用内路径接入统一执行点**：仪表盘安装改为把 `deleteSourceAfter` 传为开关值，由 Rust 在安装成功后
+  调用同一个 `deleteSource`；此前该字段硬编码 `false`，应用内安装永远不会删除。安装日志会追加
+  「已删除来源安装包」或「删除安装包失败：<原因>」，结果气泡同步显示。
+- **删除阶段自愈**：安装结束时特权代理可能已被 HyperOS 回收，删除遇到链路失败会重拉代理一次再试；
+  文件层面的失败不重拉，也不会把已经成功的安装改判为失败。
+- **安全边界（真机验证）**：安装失败、开关关闭时绝不删除原文件；删除失败不影响安装结果。
+
+### 工程
+- 新增 `platform::DeleteResult` 与 4 条 `installer-core` 单测，覆盖「开关开启即删除」「删除失败只记录」
+  「桥接异常记录原因」「安装失败绝不删除」。
+- 版本号升至 `2.2.7`（versionCode 33）；`Cargo.toml`、`Cargo.lock`、`build.gradle.kts` 与 README 徽章同步。
+- README 的 minSdk 描述与 `build.gradle.kts` 对齐为 30（Android 11+）。
 
 ---
 

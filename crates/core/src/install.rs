@@ -22,6 +22,10 @@ pub struct InstallOutcome {
     pub session_id: Option<i64>,
     pub stages: Vec<Progress>,
     pub deleted_source: bool,
+    /// 开启「成功后删除安装包」时，未能删除的来源及原因。
+    /// 空表示所有来源都按预期处理完毕；非空会一并写进安装日志，便于用户自查。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub delete_failures: Vec<String>,
 }
 
 pub(crate) fn require_authorization(b: &dyn PlatformBridge) -> Result<()> {
@@ -155,6 +159,18 @@ pub fn execute_with_context(
             entry.detail = logbook::truncate(&out.outcome.raw, logbook::DETAIL_LIMIT);
             entry.stages = out.stages.iter().map(|s| s.stage.clone()).collect();
             entry.session_id = out.session_id;
+            // 删除安装包是安装成功后的附带动作：成功与失败都写进同一条日志，
+            // 用户才能在「记录」页直接确认原文件到底有没有被删掉。
+            if out.deleted_source {
+                entry.detail.push_str("\n已删除来源安装包");
+            }
+            if !out.delete_failures.is_empty() {
+                entry.detail.push_str(&format!(
+                    "\n删除安装包失败：{}",
+                    out.delete_failures.join("；")
+                ));
+            }
+            entry.detail = logbook::truncate(&entry.detail, logbook::DETAIL_LIMIT);
         }
         Err(e) => {
             entry.ok = false;
@@ -259,14 +275,22 @@ fn execute_inner(
     stages.push(Progress { stage: "commit".into(), index: total - 1, total });
 
     let mut deleted_source = false;
+    let mut delete_failures: Vec<String> = Vec::new();
     if outcome.ok && opts.delete_source_after {
         let mut seen = Vec::new();
         for p in &plan_data.parts {
             if let Some(u) = stdin_uri(p) {
                 if !seen.contains(&u) {
                     seen.push(u.clone());
-                    if platform::delete_source(b, &u).unwrap_or(false) {
-                        deleted_source = true;
+                    match platform::delete_source(b, &u) {
+                        Ok(r) if r.deleted => deleted_source = true,
+                        // 删除失败不能反过来把「安装成功」判成失败：安装已经落地，
+                        // 这里只如实记录原因，由日志与 UI 提示用户。
+                        Ok(r) => delete_failures.push(format!(
+                            "{u}: {}",
+                            if r.reason.is_empty() { "未能删除" } else { r.reason.as_str() }
+                        )),
+                        Err(e) => delete_failures.push(format!("{u}: {e}")),
                     }
                 }
             }
@@ -274,7 +298,13 @@ fn execute_inner(
     }
     platform::publish_progress(b, "done", total, total);
 
-    Ok(InstallOutcome { outcome, session_id: Some(session), stages, deleted_source })
+    Ok(InstallOutcome {
+        outcome,
+        session_id: Some(session),
+        stages,
+        deleted_source,
+        delete_failures,
+    })
 }
 
 /// 供 UI 展示的计划摘要（不参与执行决策）。
@@ -381,6 +411,81 @@ mod tests {
             label_hint: None,
             requires_confirmation: false,
         }
+    }
+
+    fn delete_after_options() -> InstallOptions {
+        InstallOptions { delete_source_after: true, ..Default::default() }
+    }
+
+    fn queue_successful_install(b: &MockBridge) {
+        b.push("exec", json!({"code":0,"stdout":"Success: created install session [777]","stderr":""}));
+        b.push("exec", json!({"code":0,"stdout":"Success: streamed 10 bytes","stderr":""}));
+        b.push("exec", json!({"code":0,"stdout":"Success","stderr":""}));
+    }
+
+    #[test]
+    fn execute_deletes_source_when_opted_in() {
+        let b = MockBridge::new();
+        for _ in 0..2 { authorized(&b); }
+        queue_successful_install(&b);
+        b.push("deleteSource", json!({
+            "deleted": true, "path": "/storage/emulated/0/Download/a.apk", "via": "shell-path"
+        }));
+        let ctx = OpContext { label: "a.apk".into(), source: "ui".into(), ..Default::default() };
+        let out = execute_with_context(&b, &sample_plan(), &delete_after_options(), &ctx).unwrap();
+        assert!(out.outcome.ok);
+        assert!(out.deleted_source, "开启开关后应删除来源安装包");
+        assert!(out.delete_failures.is_empty());
+        assert!(
+            b.calls().iter().any(|(m, a)| m == "deleteSource" && a["uri"] == "content://a"),
+            "必须把来源 URI 交给删除执行点"
+        );
+        let (_, a) = b.calls().into_iter().find(|(m, _)| m == "logAppend").unwrap();
+        assert!(a["detail"].as_str().unwrap().contains("已删除来源安装包"));
+    }
+
+    #[test]
+    fn execute_keeps_install_success_but_reports_delete_failure() {
+        let b = MockBridge::new();
+        for _ in 0..2 { authorized(&b); }
+        queue_successful_install(&b);
+        b.push("deleteSource", json!({"deleted": false, "reason": "特权代理无权删除该文件"}));
+        let ctx = OpContext { label: "a.apk".into(), source: "ui".into(), ..Default::default() };
+        let out = execute_with_context(&b, &sample_plan(), &delete_after_options(), &ctx).unwrap();
+        // 删除失败不能把已经落地的安装判成失败，只如实记录原因。
+        assert!(out.outcome.ok);
+        assert!(!out.deleted_source);
+        assert_eq!(out.delete_failures.len(), 1);
+        assert!(out.delete_failures[0].contains("特权代理无权删除该文件"));
+        let (_, a) = b.calls().into_iter().find(|(m, _)| m == "logAppend").unwrap();
+        let detail = a["detail"].as_str().unwrap();
+        assert!(detail.contains("删除安装包失败"));
+        assert!(detail.contains("特权代理无权删除该文件"));
+    }
+
+    #[test]
+    fn execute_records_bridge_error_as_delete_failure() {
+        let b = MockBridge::new();
+        for _ in 0..2 { authorized(&b); }
+        queue_successful_install(&b);
+        b.push("deleteSource", json!({"error": "无法连接特权代理"}));
+        let out = execute(&b, &sample_plan(), &delete_after_options()).unwrap();
+        assert!(out.outcome.ok);
+        assert!(!out.deleted_source);
+        assert_eq!(out.delete_failures.len(), 1);
+        assert!(out.delete_failures[0].contains("无法连接特权代理"));
+    }
+
+    #[test]
+    fn execute_does_not_delete_source_when_install_failed() {
+        let b = MockBridge::new();
+        for _ in 0..2 { authorized(&b); }
+        b.push("exec", json!({"code":0,"stdout":"Success: created install session [777]","stderr":""}));
+        b.push("exec", json!({"code":0,"stdout":"Success: streamed 10 bytes","stderr":""}));
+        b.push("exec", json!({"code":1,"stdout":"","stderr":"Failure [INSTALL_FAILED_ALREADY_EXISTS]"}));
+        let out = execute(&b, &sample_plan(), &delete_after_options()).unwrap();
+        assert!(!out.outcome.ok);
+        assert_eq!(b.call_count("deleteSource"), 0, "安装失败时绝不能删除安装包");
     }
 
     #[test]

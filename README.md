@@ -14,11 +14,11 @@
 
 <p align="center">
   <a href="https://lianxia233.github.io/android-privilege-broker/"><img src="https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-007AFF.svg?style=flat-square&logo=googlechrome&logoColor=white" alt="GitHub Pages" /></a>
-  <a href="https://github.com/LianXia233/android-privilege-broker/releases/latest"><img src="https://img.shields.io/badge/Release-v2.2.5-blue.svg?style=flat-square&logo=android" alt="Release Version" /></a>
+  <a href="https://github.com/LianXia233/android-privilege-broker/releases/latest"><img src="https://img.shields.io/badge/Release-v2.2.7-blue.svg?style=flat-square&logo=android" alt="Release Version" /></a>
   <a href="https://github.com/LianXia233/android-privilege-broker/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/LianXia233/android-privilege-broker/build.yml?branch=main&style=flat-square&logo=github&label=Build" alt="CI Status" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-orange.svg?style=flat-square" alt="License" /></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-2021%20(12%20Crates)-DEA584.svg?style=flat-square&logo=rust&logoColor=white" alt="Rust" /></a>
-  <a href="https://developer.android.com/about/versions/16"><img src="https://img.shields.io/badge/Android-minSdk%2029%20(10%2B)%20%7C%20targetSdk%2036-3DDC84.svg?style=flat-square&logo=android&logoColor=white" alt="Android SDK" /></a>
+  <a href="https://developer.android.com/about/versions/16"><img src="https://img.shields.io/badge/Android-minSdk%2030%20(11%2B)%20%7C%20targetSdk%2036-3DDC84.svg?style=flat-square&logo=android&logoColor=white" alt="Android SDK" /></a>
   <img src="https://img.shields.io/badge/Page%20Size-16KB%20Aligned-success.svg?style=flat-square" alt="16KB Aligned" />
   <img src="https://img.shields.io/badge/Backend-ADB%20Shell%20(uid%202000)-8A2BE2.svg?style=flat-square" alt="Backend" />
 </p>
@@ -42,12 +42,12 @@
 | :--- | :--- |
 | **官方主页** | 🌐 [lianxia233.github.io/android-privilege-broker](https://lianxia233.github.io/android-privilege-broker/)（纯白现代化设计，在线特性与移动端交互体验） |
 | **应用包名** | `io.github.lianxia233.privbroker`（v2.0.0 起启用全新包名，与历史版本不互通） |
-| **系统兼容** | minSdk **29**（Android 10+）/ targetSdk **36**（Android 16）/ compileSdk **36**，核心机制覆盖向下适配 |
+| **系统兼容** | minSdk **30**（Android 11+）/ targetSdk **36**（Android 16）/ compileSdk **36**，核心机制覆盖向下适配 |
 | **特权边界** | 自主 Broker，**ADB Shell / uid 2000 唯一后端**；零 Root 依赖，不引入任何第三方特权框架 |
 | **架构组成** | 纯业务逻辑在 `installer-core`（Rust，host 可单测）；特权执行在独立 `broker-server`（Rust + Tokio，12 个 crate）；无线链路在 `broker-wireless` |
 | **产物交付** | 全 ABI 支持（`arm64-v8a` / `armeabi-v7a` / `x86` / `x86_64`）、**16KB 内存页对齐**、v1+v2 签名 |
 | **开源许可** | **GNU General Public License v3.0（GPL-3.0-only）**，详见 [LICENSE](LICENSE) |
-| **当前版本** | **2.2.5**（versionCode 31）；完整演进历史参见 [CHANGELOG.md](CHANGELOG.md) |
+| **当前版本** | **2.2.7**（versionCode 33）；完整演进历史参见 [CHANGELOG.md](CHANGELOG.md) |
 
 ---
 

@@ -132,9 +132,26 @@ pub fn read_bytes(b: &dyn PlatformBridge, stdin: &StdinSource, limit: usize) -> 
     crate::util::hex_decode(hex)
 }
 
-pub fn delete_source(b: &dyn PlatformBridge, uri: &str) -> Result<bool> {
+/// 「成功后删除安装包」的执行结果。
+///
+/// 平台侧的五级阶梯会把「是否删掉、删的是哪个文件、哪一级生效、失败原因」
+/// 一并回传；Rust 侧只如实记录，不需要知道具体阶梯。
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct DeleteResult {
+    pub deleted: bool,
+    pub path: String,
+    pub via: String,
+    pub reason: String,
+}
+
+pub fn delete_source(b: &dyn PlatformBridge, uri: &str) -> Result<DeleteResult> {
     let v = checked("deleteSource", b.call("deleteSource", &json!({ "uri": uri }))?)?;
-    Ok(v.get("deleted").and_then(Value::as_bool).unwrap_or(false))
+    Ok(DeleteResult {
+        deleted: v.get("deleted").and_then(Value::as_bool).unwrap_or(false),
+        path: field_str(&v, "path").to_string(),
+        via: field_str(&v, "via").to_string(),
+        reason: field_str(&v, "reason").to_string(),
+    })
 }
 
 /// 把配置读写也走同一个桥（避免在 Rust 侧引入文件 I/O 差异）。

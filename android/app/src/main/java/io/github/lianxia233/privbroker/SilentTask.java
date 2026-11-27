@@ -38,6 +38,8 @@ final class SilentTask implements Runnable {
     private boolean autoOpen = false;
     private boolean deleteAfter = false;
     private boolean allowDowngrade = false;
+    /** 删除阶段是否已经为一次链路失败重拉过代理：只在第一次失败时重拉，避免每个文件都等 20 秒。 */
+    private boolean deleteRevived = false;
 
     private SilentTask(Context app, boolean uninstall, List<String> uris, List<String> sources,
                        String targetPackage, String caller, String label) {
@@ -458,20 +460,59 @@ final class SilentTask implements Runnable {
         List<String> failures = new java.util.ArrayList<>();
         for (String u : targets) {
             try {
-                String resp = BrokerBridge.call("deleteSource",
-                        new JSONObject().put("uri", u).toString());
-                JSONObject o = resp == null ? null : new JSONObject(resp);
+                JSONObject o = deleteSource(u);
                 if (o != null && o.optBoolean("deleted", false)) {
                     deleted++;
                     continue;
                 }
                 String reason = o == null ? "桥接未返回结果" : o.optString("reason", "");
+                if (reason.isEmpty() && o != null) {
+                    reason = o.optString("error", "");
+                }
                 failures.add(reason.isEmpty() ? "原因未知" : reason);
             } catch (Throwable t) {
                 failures.add(String.valueOf(t));
             }
         }
         recordDelete(deleted, failures);
+    }
+
+    /**
+     * 删除一个来源 URI；链路类失败时自动重拉代理再试一次。
+     *
+     * <p>删除发生在安装成功之后：HyperOS 常在安装结束后回收特权代理，
+     * 这时 {@code deleteSource} 会因为连不上而失败。若直接把这种失败报给
+     * 用户，「自动删除」就会表现为时好时坏。链路失败与「文件删不掉」是两回事，
+     * 只有前者值得重拉一次（阻塞约 20 秒）。</p>
+     */
+    private JSONObject deleteSource(String uri) throws Exception {
+        JSONObject o = callDelete(uri);
+        if (deleteNeedsRevive(o) && !deleteRevived) {
+            deleteRevived = true;
+            if (reviveBroker()) {
+                o = callDelete(uri);
+            }
+        }
+        return o;
+    }
+
+    private JSONObject callDelete(String uri) throws Exception {
+        String resp = BrokerBridge.call("deleteSource",
+                new JSONObject().put("uri", uri).toString());
+        return resp == null ? null : new JSONObject(resp);
+    }
+
+    /** 只有「代理连不上 / 握手被拒」才值得重拉；文件本身删不掉重拉也没用。 */
+    private boolean deleteNeedsRevive(JSONObject o) {
+        if (o == null) {
+            return true;
+        }
+        if (!o.optString("error", "").isEmpty()) {
+            return true;
+        }
+        String reason = o.optString("reason", "");
+        return reason.contains("无法连接") || reason.contains("连接已关闭")
+                || reason.contains("握手失败") || reason.contains("代理不可用");
     }
 
     /** 无论删除成败都写一条日志：这是用户可验证的唯一凭据。 */

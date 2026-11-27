@@ -440,54 +440,60 @@ public final class BrokerBridge {
 
         // 2) shell 按已知路径删除
         if (!deleted && !path.isEmpty()) {
-            int code = shellRm(path, size, sha);
-            if (code == 0) {
+            ShellRun rm = shellRm(path, size, sha);
+            if (rm.code == 0) {
                 deleted = true;
                 via = "shell-path";
             } else {
-                reason = reasonOf(code);
-                if (code == 15 && (path.contains("/Android/data/")
+                reason = reasonOf(rm.code, rm.diagnostic());
+                if (rm.code == 15 && (path.contains("/Android/data/")
                         || path.contains("/Android/obb/"))) {
-                    reason += "；该目录自 Android 11 起受系统保护，shell 也无法越过";
+                    reason += "；该目录自 Android 11 起受系统保护，普通应用与 shell 都无法越过";
                 }
             }
         }
 
         // 3) shell 取 _data 后删除
         if (!deleted && !uriStr.isEmpty()) {
-            String queried = shellQueryDataPath(uriStr);
-            if (queried != null && !queried.isEmpty() && !queried.equals(path)) {
-                int code = shellRm(queried, size, sha);
-                if (code == 0) {
+            ShellRun query = shellQueryDataPath(uriStr);
+            String queried = firstPathOf(query);
+            if (queried != null && !queried.equals(path)) {
+                ShellRun rm = shellRm(queried, size, sha);
+                if (rm.code == 0) {
                     deleted = true;
                     via = "shell-data";
                     path = queried;
                 } else if (reason.isEmpty()) {
-                    reason = reasonOf(code);
+                    reason = reasonOf(rm.code, rm.diagnostic());
                 }
+            } else if (reason.isEmpty() && query.code != 0) {
+                reason = reasonOf(query.code, query.diagnostic());
             }
         }
 
         // 4) shell 按 URI 删除（MediaProvider 系）
         if (!deleted && uriStr.startsWith("content://")) {
-            int code = shellContentDelete(uriStr);
-            if (code == 0) {
+            ShellRun rm = shellContentDelete(uriStr);
+            if (rm.code == 0) {
                 deleted = true;
                 via = "shell-content";
             } else if (reason.isEmpty()) {
-                reason = reasonOf(code);
+                reason = reasonOf(rm.code, rm.diagnostic());
             }
         }
 
         // 5) 内容指纹定位
         if (!deleted && size > 0 && !name.isEmpty() && !sha.isEmpty()) {
-            String found = shellFindAndDelete(name, size, sha);
+            ShellRun find = shellFindAndDelete(name, size, sha);
+            String found = deletedPathOf(find);
             if (found != null) {
                 deleted = true;
                 via = "shell-find";
                 path = found;
             } else if (reason.isEmpty()) {
-                reason = "按名称与内容指纹未找到可删除的文件";
+                reason = find.code == 22
+                        ? reasonOf(22, "")
+                        : reasonOf(find.code, find.diagnostic());
             }
         }
 
@@ -559,129 +565,147 @@ public final class BrokerBridge {
         }
     }
 
+    /**
+     * 特权侧 shell 的绝对路径。
+     *
+     * <p>不用裸 `sh`：特权进程继承的环境不一定有可用的 PATH，找不到程序时
+     * `exec` 直接失败，调用方只能看到一个没有上下文的 exit -1。</p>
+     */
+    private static final String SHELL = "/system/bin/sh";
+
+    /**
+     * 所有删除脚本都必须压成单行。
+     *
+     * <p>{@code broker-protocol::message::Envelope::validate_exec} 会拒绝任何
+     * 含 {@code \n} / {@code \r} 的 argv 元素（防止把多个命令拼进同一个参数），
+     * 多行脚本在特权代理侧被判定为 {@code INVALID_REQUEST}，客户端只会拿到
+     * exit -1 —— 这正是 2.2.x 里「五级删除阶梯一次也没真正跑起来」的根因。
+     * 逻辑仍用位置参数传递（{@code sh -c script sh <args>}），只是用 ';'
+     * 串成一行。</p>
+     */
+    private static final String PATH_PREFIX =
+            "export PATH=/system/bin:/system/xbin:$PATH;";
+
     /** 删除前核对大小与内容哈希；核对不过绝不删。 */
-    private static final String RM_SCRIPT = """
-            f="$1"; want="$2"; hash="$3"
-            [ -e "$f" ] || exit 11
-            if [ -n "$want" ] && [ "$want" != "-1" ]; then
-              got=$(stat -c %s "$f" 2>/dev/null) || exit 12
-              [ "$got" = "$want" ] || exit 13
-            fi
-            if [ -n "$hash" ]; then
-              if command -v sha256sum >/dev/null 2>&1; then
-                got=$(sha256sum "$f" 2>/dev/null | cut -d' ' -f1)
-              else
-                got=$(toybox sha256sum "$f" 2>/dev/null | cut -d' ' -f1)
-              fi
-              [ "$got" = "$hash" ] || exit 14
-            fi
-            rm -f "$f" || exit 15
-            printf '%s\\n' "$f"
-            exit 0
-            """;
+    private static final String RM_SCRIPT = PATH_PREFIX
+            + "f=\"$1\"; want=\"$2\"; hash=\"$3\"; "
+            + "[ -e \"$f\" ] || exit 11; "
+            + "if [ -n \"$want\" ] && [ \"$want\" != \"-1\" ]; then "
+            + "got=$(stat -c %s \"$f\" 2>/dev/null) || exit 12; "
+            + "[ \"$got\" = \"$want\" ] || exit 13; fi; "
+            + "if [ -n \"$hash\" ]; then "
+            + "if command -v sha256sum >/dev/null 2>&1; then "
+            + "got=$(sha256sum \"$f\" 2>/dev/null | cut -d' ' -f1); "
+            + "else got=$(toybox sha256sum \"$f\" 2>/dev/null | cut -d' ' -f1); fi; "
+            + "[ \"$got\" = \"$hash\" ] || exit 14; fi; "
+            + "rm -f \"$f\" || exit 15; printf '%s\\n' \"$f\"; exit 0";
 
     /** 在 /storage 下按名称 + 大小筛候选，再用 SHA-256 确认是同一个文件才删。 */
-    private static final String FIND_SCRIPT = """
-            name="$1"; want="$2"; hash="$3"
-            [ -n "$name" ] && [ -n "$hash" ] || exit 20
-            command -v sha256sum >/dev/null 2>&1 || exit 21
-            hits=$(find /storage -maxdepth 8 -type f -name "$name" -size "${want}c" 2>/dev/null | head -n 5)
-            [ -n "$hits" ] || exit 22
-            printf '%s\\n' "$hits" | while IFS= read -r f; do
-              got=$(sha256sum "$f" 2>/dev/null | cut -d' ' -f1)
-              if [ "$got" = "$hash" ]; then
-                rm -f "$f" && printf 'DELETED %s\\n' "$f"
-              fi
-            done
-            """;
+    private static final String FIND_SCRIPT = PATH_PREFIX
+            + "name=\"$1\"; want=\"$2\"; hash=\"$3\"; "
+            + "[ -n \"$name\" ] && [ -n \"$hash\" ] || exit 20; "
+            + "command -v sha256sum >/dev/null 2>&1 || exit 21; "
+            + "hits=$(find /storage -maxdepth 8 -type f -name \"$name\" -size \"${want}c\" 2>/dev/null | head -n 5); "
+            + "[ -n \"$hits\" ] || exit 22; "
+            + "printf '%s\\n' \"$hits\" | while IFS= read -r f; do "
+            + "got=$(sha256sum \"$f\" 2>/dev/null | cut -d' ' -f1); "
+            + "if [ \"$got\" = \"$hash\" ]; then rm -f \"$f\" && printf 'DELETED %s\\n' \"$f\"; fi; done";
 
-    private static final String CONTENT_DATA_SCRIPT = """
-            content query --uri "$1" --projection _data 2>/dev/null \\
-              | sed -n 's/.*_data=\\(.*\\)$/\\1/p' | head -n 1
-            """;
+    private static final String CONTENT_DATA_SCRIPT = PATH_PREFIX
+            + "content query --uri \"$1\" --projection _data 2>/dev/null "
+            + "| sed -n 's/.*_data=\\(.*\\)$/\\1/p' | head -n 1";
 
-    private static final String CONTENT_DELETE_SCRIPT = """
-            out=$(content delete --uri "$1" 2>&1) || exit 31
-            case "$out" in *0\\ rows*) exit 32 ;; esac
-            printf '%s\\n' "$out"
-            """;
+    private static final String CONTENT_DELETE_SCRIPT = PATH_PREFIX
+            + "out=$(content delete --uri \"$1\" 2>&1) || exit 31; "
+            + "case \"$out\" in *0\\ rows*) exit 32 ;; esac; printf '%s\\n' \"$out\"";
 
-    private static int shellRm(String path, long size, String sha) {
+    /** 一次特权 shell 调用的结果：退出码与两路输出分开保留，便于如实回传失败原因。 */
+    private static final class ShellRun {
+        final int code;
+        final String stdout;
+        final String stderr;
+
+        ShellRun(int code, String stdout, String stderr) {
+            this.code = code;
+            this.stdout = stdout == null ? "" : stdout;
+            this.stderr = stderr == null ? "" : stderr;
+        }
+
+        /** 面向日志的一行诊断：优先 stderr（协议拒绝、权限错误都在这里）。 */
+        String diagnostic() {
+            String e = stderr.trim();
+            String o = stdout.trim();
+            if (e.isEmpty()) {
+                return o;
+            }
+            return o.isEmpty() ? e : e + " / " + o;
+        }
+    }
+
+    private static ShellRun runScript(String script, long timeoutMs, String... args) {
+        try {
+            JSONArray argv = new JSONArray()
+                    .put(SHELL).put("-c").put(script).put("sh");
+            for (String a : args) {
+                argv.put(a == null ? "" : a);
+            }
+            JSONObject r = exec(new JSONObject()
+                    .put("argv", argv)
+                    .put("timeoutMs", timeoutMs));
+            return new ShellRun(r.optInt("code", -1),
+                    r.optString("stdout", ""), r.optString("stderr", ""));
+        } catch (Throwable t) {
+            Log.w(TAG, "shell exec failed", t);
+            return new ShellRun(-1, "", String.valueOf(t));
+        }
+    }
+
+    private static ShellRun shellRm(String path, long size, String sha) {
         if (path == null || !path.startsWith("/")) {
-            return -1;
+            return new ShellRun(-1, "", "删除路径不是绝对路径: " + path);
         }
-        try {
-            JSONArray argv = new JSONArray()
-                    .put("sh").put("-c").put(RM_SCRIPT).put("sh")
-                    .put(path)
-                    .put(size > 0 ? String.valueOf(size) : "")
-                    .put(sha == null ? "" : sha);
-            JSONObject r = exec(new JSONObject()
-                    .put("argv", argv)
-                    .put("timeoutMs", 300_000L));
-            return r.optInt("code", -1);
-        } catch (Throwable t) {
-            Log.w(TAG, "shellRm", t);
-            return -1;
-        }
+        return runScript(RM_SCRIPT, 300_000L,
+                path,
+                size > 0 ? String.valueOf(size) : "",
+                sha == null ? "" : sha);
     }
 
-    private static String shellQueryDataPath(String uri) {
-        try {
-            JSONArray argv = new JSONArray()
-                    .put("sh").put("-c").put(CONTENT_DATA_SCRIPT).put("sh").put(uri);
-            JSONObject r = exec(new JSONObject()
-                    .put("argv", argv)
-                    .put("timeoutMs", 30_000L));
-            String out = r.optString("stdout", "").trim();
-            if (out.isEmpty()) {
-                return null;
+    private static ShellRun shellQueryDataPath(String uri) {
+        return runScript(CONTENT_DATA_SCRIPT, 30_000L, uri);
+    }
+
+    private static String firstPathOf(ShellRun r) {
+        String out = r.stdout.trim();
+        if (out.isEmpty()) {
+            return null;
+        }
+        String first = out.split("\\R")[0].trim();
+        return first.startsWith("/") ? first : null;
+    }
+
+    private static ShellRun shellContentDelete(String uri) {
+        return runScript(CONTENT_DELETE_SCRIPT, 30_000L, uri);
+    }
+
+    private static ShellRun shellFindAndDelete(String name, long size, String sha) {
+        return runScript(FIND_SCRIPT, 300_000L, name, String.valueOf(size), sha);
+    }
+
+    /** 从 FIND_SCRIPT 的 stdout 里取出成功删除的路径。 */
+    private static String deletedPathOf(ShellRun r) {
+        for (String line : r.stdout.split("\\R")) {
+            String s = line.trim();
+            if (s.startsWith("DELETED ")) {
+                return s.substring("DELETED ".length()).trim();
             }
-            String first = out.split("\\R")[0].trim();
-            return first.startsWith("/") ? first : null;
-        } catch (Throwable t) {
-            return null;
         }
+        return null;
     }
 
-    private static int shellContentDelete(String uri) {
-        try {
-            JSONArray argv = new JSONArray()
-                    .put("sh").put("-c").put(CONTENT_DELETE_SCRIPT).put("sh").put(uri);
-            JSONObject r = exec(new JSONObject()
-                    .put("argv", argv)
-                    .put("timeoutMs", 30_000L));
-            return r.optInt("code", -1);
-        } catch (Throwable t) {
-            return -1;
-        }
-    }
-
-    private static String shellFindAndDelete(String name, long size, String sha) {
-        try {
-            JSONArray argv = new JSONArray()
-                    .put("sh").put("-c").put(FIND_SCRIPT).put("sh")
-                    .put(name).put(String.valueOf(size)).put(sha);
-            JSONObject r = exec(new JSONObject()
-                    .put("argv", argv)
-                    .put("timeoutMs", 300_000L));
-            String out = r.optString("stdout", "");
-            for (String line : out.split("\\R")) {
-                String s = line.trim();
-                if (s.startsWith("DELETED ")) {
-                    return s.substring("DELETED ".length()).trim();
-                }
-            }
-            return null;
-        } catch (Throwable t) {
-            return null;
-        }
-    }
-
-    private static String reasonOf(int code) {
-        return switch (code) {
+    private static String reasonOf(int code, String detail) {
+        String base = switch (code) {
             case 0 -> "";
-            case 11 -> "文件已不存在";
+            case 11 -> "文件已不存在（可能已被其它应用删除）";
             case 12 -> "读取文件大小失败";
             case 13 -> "文件大小与安装包不一致，已放弃删除（避免误删）";
             case 14 -> "文件内容与安装包不一致，已放弃删除（避免误删）";
@@ -691,8 +715,17 @@ public final class BrokerBridge {
             case 22 -> "未找到同名同大小的文件";
             case 31 -> "content delete 执行失败";
             case 32 -> "content delete 未删除任何记录";
+            case -1 -> "特权代理未执行删除命令（协议校验未通过或代理不可用）";
             default -> "特权代理删除失败 (exit " + code + ")";
         };
+        String d = detail == null ? "" : detail.trim().replace('\n', ' ');
+        if (d.isEmpty()) {
+            return base;
+        }
+        if (d.length() > 180) {
+            d = d.substring(0, 180) + "…";
+        }
+        return base + "：" + d;
     }
 
     /**
